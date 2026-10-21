@@ -9,8 +9,8 @@ using Material.Icons.Avalonia;
 namespace TradingHub.App;
 
 /// <summary>
-/// Utilidades para armar las vistas en código con los tokens del sistema de diseño
-/// (Styles/TradingHubTheme.axaml). Así no hay colores ni tamaños "a mano" desparramados.
+/// Utilities for building the views in code with the design system's tokens
+/// (Styles/TradingHubTheme.axaml). That way there are no hand-rolled colors or sizes scattered around.
 /// </summary>
 internal static class Ui
 {
@@ -45,7 +45,7 @@ internal static class Ui
     public static IBrush Warn => Brush("WarnBrush");
     public static IBrush Focus => Brush("FocusBrush");
 
-    /// <summary>Aplica una acción y devuelve el mismo objeto (para armar vistas en una expresión).</summary>
+    /// <summary>Applies an action and returns the same object (to build views in a single expression).</summary>
     public static T Also<T>(this T c, Action<T> a)
     {
         a(c);
@@ -78,7 +78,7 @@ internal static class Ui
     public static TextBlock Muted(string text) => Text(text, "muted");
     public static TextBlock Faint(string text) => Text(text, "faint", "small");
 
-    /// <summary>Fila horizontal; los hijos sin alineación propia quedan centrados verticalmente.</summary>
+    /// <summary>Horizontal row; the children with no alignment of their own end up vertically centered.</summary>
     public static StackPanel H(double spacing, params Control[] children)
     {
         var p = new StackPanel { Orientation = Orientation.Horizontal, Spacing = spacing };
@@ -113,7 +113,7 @@ internal static class Ui
         return b;
     }
 
-    /// <summary>Botón con ícono y texto.</summary>
+    /// <summary>Button with an icon and text.</summary>
     public static Button Button(string text, MaterialIconKind? kind, Action onClick, params string[] classes)
     {
         object content = kind is { } k ? H(7, Icon(k, 16), new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center }) : text;
@@ -124,13 +124,13 @@ internal static class Ui
     }
 
     /// <summary>
-    /// Confirmación en un globito con aire: el texto (y un título opcional), «Cancelar» y la acción, en rojo si es
-    /// destructiva. Todos los «¿seguro?» de la app usan este.
+    /// Confirmation in a roomy little popup: the text (and an optional title), "Cancel" and the action, in red if it is
+    /// destructive. Every "are you sure? " in the app uses this one.
     /// </summary>
     public static Flyout ConfirmFlyout(string text, string action, Action onConfirm, bool danger = true, string? title = null)
     {
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        var cancel = new Button { Content = "Cancelar", MinWidth = 84, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var cancel = new Button { Content = "Cancel", MinWidth = 84, HorizontalContentAlignment = HorizontalAlignment.Center };
         cancel.Click += (_, _) => flyout.Hide();
         var ok = new Button { Content = action, MinWidth = 84, HorizontalContentAlignment = HorizontalAlignment.Center };
         ok.Classes.Add(danger ? "danger" : "primary");
@@ -148,7 +148,7 @@ internal static class Ui
         return flyout;
     }
 
-    /// <summary>Etiqueta con un punto de color (estado de conexión, etc.).</summary>
+    /// <summary>Label with a colored dot (connection status, etc.).</summary>
     public static Border Pill(string text, IBrush dot, out TextBlock label)
     {
         label = new TextBlock { Text = text, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = Text1 };
@@ -157,9 +157,9 @@ internal static class Ui
     }
 
     /// <summary>
-    /// Llena un selector de cuentas sin romperlo: rehace la lista solo si cambió (nunca con la lista abierta)
-    /// y después marca la elegida. Las cuentas reales van con su color; el resto con el del tema
-    /// (un Foreground nulo dejaba el texto invisible salvo al pasar el mouse).
+    /// Fills an account picker without breaking it: it rebuilds the list only if it changed (never with the list open)
+    /// and then marks the chosen one. The real accounts get their own color; the rest the theme's
+    /// (a null Foreground left the text invisible except when hovering the mouse).
     /// </summary>
     public static void SyncAccounts(ComboBox box, IReadOnlyList<Services.AccountOption> accounts, string selectedId, IBrush? realBrush = null)
     {
@@ -180,7 +180,7 @@ internal static class Ui
         if (want != null && !ReferenceEquals(box.SelectedItem, want)) box.SelectedItem = want;
     }
 
-    /// <summary>Campo de formulario: etiqueta arriba, control abajo y ayuda opcional.</summary>
+    /// <summary>Form field: label above, control below and optional help text.</summary>
     public static Control Field(string label, Control control, string? help = null)
     {
         var v = V(5, Text(label, "muted", "small"), control);
@@ -188,7 +188,7 @@ internal static class Ui
         return v;
     }
 
-    /// <summary>Fila de controles del mismo ancho con un espacio real entre ellos.</summary>
+    /// <summary>Row of controls of the same width with real spacing between them.</summary>
     public static Grid Row(double gap, params Control[] children)
     {
         var g = new Grid();
@@ -213,7 +213,7 @@ internal static class Ui
             ? new Border { Width = 1, Margin = new Thickness(10, 6) }.Classes("divider")
             : new Border { Height = 1, Margin = new Thickness(0, 6) }.Classes("divider");
 
-    /// <summary>Control segmentado (un grupo de opciones excluyentes).</summary>
+    /// <summary>Segmented control (a group of mutually exclusive options).</summary>
     public sealed class Segmented<T> : Border
     {
         private readonly List<(T Value, ToggleButton Button)> _items = new();
@@ -249,7 +249,7 @@ internal static class Ui
             _updating = false;
         }
 
-        /// <summary>Como un clic: marca la opción y avisa (Select solo la marca).</summary>
+        /// <summary>Like a click: it selects the option and reports it (Select only selects it).</summary>
         public void Choose(T value)
         {
             Select(value);
@@ -262,9 +262,9 @@ internal static class Ui
     public static string Ago(DateTime utc)
     {
         var d = DateTime.UtcNow - utc;
-        if (d.TotalSeconds < 60) return "recién";
-        if (d.TotalMinutes < 60) return $"hace {(int)d.TotalMinutes} min";
-        if (d.TotalHours < 24) return $"hace {(int)d.TotalHours} h";
-        return $"hace {(int)d.TotalDays} días";
+        if (d.TotalSeconds < 60) return "just now";
+        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes} min ago";
+        if (d.TotalHours < 24) return $"{(int)d.TotalHours} h ago";
+        return $"{(int)d.TotalDays} days ago";
     }
 }

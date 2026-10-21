@@ -3,8 +3,8 @@ using SkiaSharp;
 namespace TradingHub.Charting;
 
 /// <summary>
-/// Colores del gráfico. Los valores por defecto salen de la plantilla "Dark footprint"
-/// que usabas en ATAS (fondo azul noche, bid rojo 232,69,72, ask verde 73,209,73...).
+/// Chart colors. The default values come from the "Dark footprint" template
+/// you used in ATAS (midnight blue background, bid red 232,69,72, ask green 73,209,73...).
 /// </summary>
 public sealed class ChartTheme
 {
@@ -35,7 +35,7 @@ public sealed class ChartTheme
     public SKColor ImbalanceAsk { get; set; } = new(0, 255, 140);
     public SKColor ImbalanceBid { get; set; } = new(255, 70, 90);
 
-    // modo combinado
+    // combined mode
     public SKColor LadderPositive { get; set; } = new(18, 92, 150);
     public SKColor LadderNegative { get; set; } = new(150, 38, 38);
     public SKColor LadderText { get; set; } = new(150, 158, 172);
@@ -57,7 +57,7 @@ public sealed class ChartTheme
     public SKColor PositionLong { get; set; } = new(73, 209, 73);
     public SKColor PositionShort { get; set; } = new(232, 69, 72);
 
-    /// <summary>Línea de la entrada a la salida de una operación que ganó / perdió.</summary>
+    /// <summary>Entry-to-exit line of a trade that won / lost.</summary>
     public SKColor TradeWin { get; set; } = new(73, 209, 73, 215);
 
     public SKColor TradeLoss { get; set; } = new(232, 69, 72, 215);
@@ -70,7 +70,7 @@ public sealed class ChartTheme
 
     public static ChartTheme Dark { get; } = new();
 
-    /// <summary>Modo claro: fondo blanco, textos oscuros, velas y footprint con colores que se leen sobre blanco.</summary>
+    /// <summary>Light mode: white background, dark texts, candles and footprint with colors that read on white.</summary>
     public static ChartTheme Light { get; } = new()
     {
         BackgroundTop = new(255, 255, 255),
@@ -119,14 +119,14 @@ public sealed class ChartTheme
         TradeLoss = new(220, 58, 66),
     };
 
-    /// <summary>Base de todos los gráficos (oscura o clara según el modo de la app); los colores propios van encima.</summary>
+    /// <summary>Base for every chart (dark or light depending on the app's mode); the custom colors go on top.</summary>
     public static ChartTheme Base { get; set; } = Dark;
 
-    /// <summary>Colores que se pueden cambiar en cada gráfico (por el nombre de la propiedad).</summary>
+    /// <summary>Colors that can be changed on each chart (by the property name).</summary>
     public static IReadOnlyList<System.Reflection.PropertyInfo> ColorProperties { get; } =
         typeof(ChartTheme).GetProperties().Where(p => p.PropertyType == typeof(SKColor) && p.CanWrite).ToList();
 
-    /// <summary>El tema de siempre con los colores propios de un gráfico encima.</summary>
+    /// <summary>The usual theme with a chart's own colors on top.</summary>
     public static ChartTheme With(IReadOnlyDictionary<string, uint>? colors)
     {
         if (colors == null || colors.Count == 0) return Base;
@@ -136,7 +136,7 @@ public sealed class ChartTheme
         return t;
     }
 
-    /// <summary>Color por defecto de una propiedad (ARGB).</summary>
+    /// <summary>Default color of a property (ARGB).</summary>
     public static uint DefaultOf(string property) =>
         ColorProperties.FirstOrDefault(p => p.Name == property)?.GetValue(Base) is SKColor c ? (uint)c : 0;
 }

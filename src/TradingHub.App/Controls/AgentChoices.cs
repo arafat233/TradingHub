@@ -2,7 +2,7 @@ using Avalonia.Controls;
 
 namespace TradingHub.App.Controls;
 
-/// <summary>Modelos de Claude y niveles de esfuerzo para los agentes, y el combo para elegirlos.</summary>
+/// <summary>Claude models and effort levels for the agents, plus the combo box to pick them.</summary>
 internal static class AgentChoices
 {
     internal static readonly (string Id, string Label)[] Models =
@@ -12,7 +12,7 @@ internal static class AgentChoices
 
     internal static readonly (string Id, string Label)[] Efforts =
     {
-        ("low", "Bajo"), ("medium", "Medio"), ("high", "Alto"), ("xhigh", "Extra"), ("max", "Máximo"),
+        ("low", "Low"), ("medium", "Medium"), ("high", "High"), ("xhigh", "Extra"), ("max", "Maximum"),
     };
 
     internal static ComboBox Combo((string Id, string Label)[] options, string current, Action<string> changed, double width = 150)

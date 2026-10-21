@@ -32,7 +32,7 @@ public enum OrderStatus
     Rejected,
 }
 
-/// <summary>Instrumento visto por el módulo de trading.</summary>
+/// <summary>Instrument as seen by the trading module.</summary>
 public class Security
 {
     public string Code { get; set; } = "";
@@ -45,11 +45,11 @@ public class Security
     public override string ToString() => SecurityId;
 }
 
-/// <summary>Cuenta de trading (en esta plataforma, la cuenta simulada).</summary>
+/// <summary>Trading account (on this platform, the simulated account).</summary>
 public class Portfolio
 {
     public string AccountID { get; set; } = "SIM";
-    public string Name { get; set; } = "Cuenta simulada";
+    public string Name { get; set; } = "Simulated account";
     public decimal BeginBalance { get; set; } = 10_000m;
     public decimal Balance { get; set; } = 10_000m;
     public decimal RealizedPnL { get; set; }
@@ -63,7 +63,7 @@ public class Portfolio
     public decimal OpenPnL => UnrealizedPnL;
     public decimal ClosedPnL => RealizedPnL;
 
-    /// <summary>Si la cuenta es de un replay.</summary>
+    /// <summary>Whether the account belongs to a replay.</summary>
     public bool IsReplay() => AccountID.StartsWith("REPLAY", StringComparison.OrdinalIgnoreCase);
 
     public override string ToString() => AccountID;
@@ -89,10 +89,10 @@ public class Order
     public string Comment { get; set; } = "";
     public long Priority { get; set; }
 
-    /// <summary>Solo puede reducir la posición (stops y objetivos).</summary>
+    /// <summary>It can only reduce the position (stops and targets).</summary>
     public bool ReduceOnly { get; set; }
 
-    /// <summary>Volumen total de la orden.</summary>
+    /// <summary>Total volume of the order.</summary>
     public decimal Volume => QuantityToFill;
     public decimal Filled => QuantityToFill - Unfilled;
     public bool Canceled => Status == OrderStatus.Canceled;
@@ -100,7 +100,7 @@ public class Order
     public override string ToString() => $"#{Id} {Direction} {Type} {QuantityToFill} @ {(Type == OrderTypes.Stop ? TriggerPrice : Price)} [{Status}]";
 }
 
-/// <summary>Una ejecución propia.</summary>
+/// <summary>One of your own fills.</summary>
 public class MyTrade
 {
     private static long _nextId;
@@ -115,19 +115,19 @@ public class MyTrade
     public DateTime Time { get; set; } = DateTime.UtcNow;
     public decimal Commission { get; set; }
 
-    /// <summary>PnL realizado por esta ejecución (si cerró posición).</summary>
+    /// <summary>PnL realized by this fill (if it closed position).</summary>
     public decimal RealizedPnL { get; set; }
 
     public override string ToString() => $"{OrderDirection} {Volume} @ {Price} {Time:HH:mm:ss}";
 }
 
-/// <summary>Posición neta en un instrumento.</summary>
+/// <summary>Net position in an instrument.</summary>
 public class Position
 {
     public Security Security { get; set; } = new();
     public Portfolio Portfolio { get; set; } = new();
 
-    /// <summary>Volumen con signo (+ comprado, − vendido).</summary>
+    /// <summary>Signed volume (+ bought, - sold).</summary>
     public decimal Volume { get; set; }
     public decimal AveragePrice { get; set; }
     public decimal RealizedPnL { get; set; }
@@ -136,12 +136,12 @@ public class Position
     public decimal Commission { get; set; }
     public bool IsFlat => Volume == 0;
 
-    public override string ToString() => IsFlat ? "Sin posición" : $"{(Volume > 0 ? "LARGO" : "CORTO")} {Math.Abs(Volume)} @ {AveragePrice}";
+    public override string ToString() => IsFlat ? "Flat" : $"{(Volume > 0 ? "LONG" : "SHORT")} {Math.Abs(Volume)} @ {AveragePrice}";
 }
 
 /// <summary>
-/// Gestor de trading que ven los indicadores y la UI (órdenes, posición, ejecuciones).
-/// La implementación concreta es el broker simulado.
+/// Trading manager the indicators and the UI see (orders, position, fills).
+/// The concrete implementation is the simulated broker.
 /// </summary>
 public class TradingManager
 {
@@ -169,7 +169,7 @@ public class TradingManager
     protected void RaisePositionChanged(Position p) => PositionChanged?.Invoke(p);
 }
 
-/// <summary>Monedas para mostrar valores en dinero.</summary>
+/// <summary>Currencies for showing money values.</summary>
 public enum MoneyCurrency
 {
     USD,
@@ -185,7 +185,7 @@ public enum MoneyCurrency
     ETH,
 }
 
-/// <summary>Factor de conversión volumen→dinero.</summary>
+/// <summary>Volume-to-money conversion factor.</summary>
 public class Valuation
 {
     public decimal Factor { get; set; } = 1m;

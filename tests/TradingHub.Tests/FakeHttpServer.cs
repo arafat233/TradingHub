@@ -5,8 +5,8 @@ using System.Text;
 namespace TradingHub.Tests;
 
 /// <summary>
-/// Servidor HTTP/WebSocket de mentira en 127.0.0.1 para probar conexiones sin cuentas reales: cada prueba define qué
-/// responde a cada pedido y qué hace con cada WebSocket. Guarda lo que recibió para verificarlo.
+/// Fake HTTP/WebSocket server on 127.0.0.1 for testing connections without real accounts: each test defines what
+/// it answers to each request and what it does with each WebSocket. It records what it received so it can be verified.
 /// </summary>
 internal sealed class FakeHttpServer : IDisposable
 {
@@ -39,16 +39,16 @@ internal sealed class FakeHttpServer : IDisposable
     public string Http => $"http://127.0.0.1:{Port}";
     public string Ws => $"ws://127.0.0.1:{Port}";
 
-    /// <summary>Pedido HTTP: método, ruta con query, encabezados, cuerpo → (código, cuerpo, tipo).</summary>
+    /// <summary>HTTP request: method, path with query, headers, body -> (code, body, type).</summary>
     public Func<FakeRequest, (int Status, string Body)>? OnHttp { get; set; }
 
-    /// <summary>Respuesta en streaming (por ejemplo precios de OANDA): escribe líneas mientras quiera.</summary>
+    /// <summary>Streaming response (for example OANDA prices): it writes lines for as long as it wants.</summary>
     public Func<FakeRequest, Stream, CancellationToken, Task>? OnStream { get; set; }
 
-    /// <summary>Qué rutas responden en streaming.</summary>
+    /// <summary>Which routes answer in streaming mode.</summary>
     public Func<string, bool> IsStream { get; set; } = _ => false;
 
-    /// <summary>WebSocket: ruta y el socket ya aceptado.</summary>
+    /// <summary>WebSocket: route and the already accepted socket.</summary>
     public Func<string, WebSocket, CancellationToken, Task>? OnSocket { get; set; }
 
     public List<FakeRequest> Requests { get; } = new();
@@ -108,7 +108,7 @@ internal sealed class FakeHttpServer : IDisposable
         }
         catch
         {
-            // el cliente se fue
+            // the client left
         }
     }
 
@@ -138,7 +138,7 @@ internal sealed class FakeHttpServer : IDisposable
         }
         catch
         {
-            // ya cerrado
+            // already closed
         }
     }
 }

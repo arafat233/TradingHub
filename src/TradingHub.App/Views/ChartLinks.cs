@@ -8,26 +8,26 @@ using TradingHub.App.Services;
 namespace TradingHub.App.Views;
 
 /// <summary>
-/// Grupos de vinculación por color (como en TradingView/ATAS): los gráficos con el mismo color comparten
-/// instrumento, período y cruz del cursor (cada cosa se puede apagar).
+/// Link groups by color (as in TradingView/ATAS): the charts with the same color share
+/// instrument, period and crosshair (each one can be switched off).
 /// </summary>
 internal static class ChartLinks
 {
     public static readonly (int Id, string Name, Color Color)[] Groups =
     {
-        (1, "Rojo", Color.FromRgb(240, 82, 90)),
-        (2, "Verde", Color.FromRgb(38, 194, 129)),
-        (3, "Azul", Color.FromRgb(59, 130, 246)),
-        (4, "Amarillo", Color.FromRgb(234, 179, 8)),
-        (5, "Violeta", Color.FromRgb(168, 85, 247)),
-        (6, "Naranja", Color.FromRgb(249, 115, 22)),
+        (1, "Red", Color.FromRgb(240, 82, 90)),
+        (2, "Green", Color.FromRgb(38, 194, 129)),
+        (3, "Blue", Color.FromRgb(59, 130, 246)),
+        (4, "Yellow", Color.FromRgb(234, 179, 8)),
+        (5, "Purple", Color.FromRgb(168, 85, 247)),
+        (6, "Orange", Color.FromRgb(249, 115, 22)),
     };
 
     public static Color? ColorOf(int group) => Groups.FirstOrDefault(g => g.Id == group) is { Id: > 0 } g ? g.Color : null;
 
-    public static string NameOf(int group) => Groups.FirstOrDefault(g => g.Id == group).Name ?? "Sin vincular";
+    public static string NameOf(int group) => Groups.FirstOrDefault(g => g.Id == group).Name ?? "Not linked";
 
-    /// <summary>Cuadradito de color para menús y botones.</summary>
+    /// <summary>Little color square for menus and buttons.</summary>
     public static Control Swatch(Color? color, double size = 11) => new Border
     {
         Width = size,
@@ -41,8 +41,8 @@ internal static class ChartLinks
 }
 
 /// <summary>
-/// Botón del color de vinculación de un gráfico: va en la esquina de la barrita del gráfico y en la barra
-/// de herramientas. Abre un menú con los colores y qué se sincroniza.
+/// A chart's link color button: it goes in the corner of the chart's little bar and in the
+/// toolbar. It opens a menu with the colors and what is synchronized.
 /// </summary>
 internal sealed class LinkButton : Button
 {
@@ -80,8 +80,8 @@ internal sealed class LinkButton : Button
         _chain.IsVisible = color == null;
         if (color is { } c) _square.Background = new SolidColorBrush(c);
         ToolTip.SetTip(this, color == null
-            ? "Vincular con otros gráficos por color (instrumento, período y cursor)"
-            : $"Vinculado al grupo {ChartLinks.NameOf(g).ToLowerInvariant()}: clic para cambiar");
+            ? "Link with other charts by color (instrument, period and crosshair)"
+            : $"Linked to the {ChartLinks.NameOf(g).ToLowerInvariant()} group: click to change");
     }
 
     private void ShowMenu()
@@ -90,12 +90,12 @@ internal sealed class LinkButton : Button
         if (chart == null) return;
         var s = _host.Services.Settings;
         var menu = new MenuFlyout();
-        menu.Items.Add(new MenuItem { Header = "Vincular con otros gráficos", IsEnabled = false });
+        menu.Items.Add(new MenuItem { Header = "Link with other charts", IsEnabled = false });
 
         void Add(int id, string name, Color? color)
         {
             int n = _host.ChartsInGroup(id).Count(c => !ReferenceEquals(c, chart));
-            string header = id == 0 ? name : n > 0 ? $"{name}  ·  {n} gráfico{(n > 1 ? "s" : "")}" : name;
+            string header = id == 0 ? name : n > 0 ? $"{name}  ·  {n} chart{(n > 1 ? "s" : "")}" : name;
             var item = new MenuItem
             {
                 Header = header + (chart.LinkGroup == id ? "   ✓" : ""),
@@ -105,10 +105,10 @@ internal sealed class LinkButton : Button
             menu.Items.Add(item);
         }
 
-        Add(0, "Sin vincular", null);
+        Add(0, "Not linked", null);
         foreach (var (id, name, color) in ChartLinks.Groups) Add(id, name, color);
         menu.Items.Add(new Separator());
-        menu.Items.Add(new MenuItem { Header = "Qué se sincroniza en el grupo", IsEnabled = false });
+        menu.Items.Add(new MenuItem { Header = "What gets synced in the group", IsEnabled = false });
 
         void Toggle(string text, Func<bool> get, Action<bool> set)
         {
@@ -121,9 +121,9 @@ internal sealed class LinkButton : Button
             menu.Items.Add(item);
         }
 
-        Toggle("Instrumento", () => s.LinkSymbol, v => s.LinkSymbol = v);
-        Toggle("Período", () => s.LinkPeriod, v => s.LinkPeriod = v);
-        Toggle("Cruz del cursor", () => s.LinkCrosshair, v => s.LinkCrosshair = v);
+        Toggle("Instrument", () => s.LinkSymbol, v => s.LinkSymbol = v);
+        Toggle("Period", () => s.LinkPeriod, v => s.LinkPeriod = v);
+        Toggle("Crosshair", () => s.LinkCrosshair, v => s.LinkCrosshair = v);
         menu.ShowAt(this);
     }
 }

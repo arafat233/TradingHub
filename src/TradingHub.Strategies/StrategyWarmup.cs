@@ -4,17 +4,17 @@ using TradingHub.Market;
 namespace TradingHub.Strategies;
 
 /// <summary>
-/// Calentamiento de una estrategia: cuántas velas tarda en tener listos (IsReady) los indicadores que crea en OnInit, y
-/// cuáles son (con su período). No cuenta lo que lea a mano de Bars ni los indicadores que cree fuera de OnInit.
+/// Warm-up of a strategy: how many candles it takes for the indicators it creates in OnInit to be ready (IsReady), and
+/// which ones they are (with their period). It does not count what it reads from Bars by hand or indicators created outside OnInit.
 /// </summary>
 public sealed record StrategyWarmup(int Bars, IReadOnlyList<string> Indicators, bool Complete, string? Error)
 {
-    /// <summary>Tope de velas que se prueban (más que esto queda como incompleto).</summary>
+    /// <summary>Cap on the candles that are tried (more than this is reported as incomplete).</summary>
     public const int MaxBars = 5000;
 
     /// <summary>
-    /// Arranca la estrategia sin operar (solo OnInit) y le pasa velas inventadas a sus indicadores hasta que están todos
-    /// listos. Con <paramref name="parameters"/> mide con esos valores; los que falten quedan por defecto.
+    /// Starts the strategy without trading (OnInit only) and feeds its indicators made-up candles until they are all
+    /// ready. With <paramref name="parameters"/> it measures with those values; the missing ones stay at their defaults.
     /// </summary>
     public static StrategyWarmup Measure(Type type, IReadOnlyDictionary<string, object?>? parameters = null, string period = "M15")
     {
@@ -43,14 +43,14 @@ public sealed record StrategyWarmup(int Bars, IReadOnlyList<string> Indicators, 
         }
     }
 
-    /// <summary>Entorno mínimo para medir: velas que suben y bajan, sin órdenes.</summary>
+    /// <summary>Minimal environment for measuring: candles that rise and fall, with no orders.</summary>
     private sealed class ProbeHost(ChartPeriod period) : IStrategyHost
     {
         private static readonly DateTime T0 = new(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private readonly BarSeries _bars = new();
         private DateTime _time = T0;
 
-        public Instrument Instrument { get; } = new() { Symbol = "PRUEBA", FeedId = "calentamiento", TickSize = 0.25m, VolumeStep = 1m, PointValue = 1m };
+        public Instrument Instrument { get; } = new() { Symbol = "TEST", FeedId = "warmup", TickSize = 0.25m, VolumeStep = 1m, PointValue = 1m };
         public ChartPeriod Period => period;
         public BarSeries Bars => _bars;
         public Bar? FormingBar => null;
@@ -65,7 +65,7 @@ public sealed record StrategyWarmup(int Bars, IReadOnlyList<string> Indicators, 
         public IReadOnlyList<StrategyOrder> ActiveOrders => Array.Empty<StrategyOrder>();
         public bool IsBacktest => true;
 
-        /// <summary>Agrega una vela (precios que oscilan, con volumen de los dos lados).</summary>
+        /// <summary>Adds a candle (oscillating prices, with volume on both sides).</summary>
         public void Next()
         {
             var step = period.IsTimeBased ? period.ApproxDuration : TimeSpan.FromMinutes(1);

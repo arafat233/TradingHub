@@ -4,12 +4,12 @@ using TradingHub.Strategies;
 
 namespace TradingHub.Tests;
 
-/// <summary>El período de las velas como un parámetro más del optimizador y del walk-forward.</summary>
+/// <summary>The candle period as one more parameter of the optimizer and the walk-forward.</summary>
 public class OptimizationPeriodTests
 {
     private static readonly Instrument Inst = new() { Symbol = "TEST", FeedId = "test", TickSize = 1m, VolumeStep = 1m, PointValue = 1m };
 
-    /// <summary>Días de operaciones con ráfagas en el mismo segundo, una onda lenta y ruido.</summary>
+    /// <summary>Days of trades with bursts in the same second, a slow wave and noise.</summary>
     private static TickData Data(int days, int seed = 5)
     {
         var rnd = new Random(seed);
@@ -35,7 +35,7 @@ public class OptimizationPeriodTests
         CommissionPercent = 0, SlippageTicks = 0, InitialCapital = 100_000,
     };
 
-    /// <summary>Compra al romper el máximo de N velas y sale a las 3 velas.</summary>
+    /// <summary>Buys on breaking the high of N candles and exits after 3 candles.</summary>
     private sealed class Breakout : Strategy
     {
         [Parameter, Optimize(6, 12, 6)]
@@ -58,12 +58,12 @@ public class OptimizationPeriodTests
     }
 
     private static List<ParameterRange> Ranges(params string[] periods) =>
-        new() { new ParameterRange { Name = nameof(Breakout.Channel), Label = "Canal", Enabled = true, Min = 6, Max = 12, Step = 6, IsInteger = true }, ParameterRange.Periods(periods) };
+        new() { new ParameterRange { Name = nameof(Breakout.Channel), Label = "Channel", Enabled = true, Min = 6, Max = 12, Step = 6, IsInteger = true }, ParameterRange.Periods(periods) };
 
     [Fact]
-    public void Los_periodos_quedan_validos_ordenados_y_sin_repetir()
+    public void The_periods_end_up_valid_sorted_and_without_repeats()
     {
-        var r = ParameterRange.Periods(new[] { "H1", "m5", "M15", "cualquiera", "M5", "D1" });
+        var r = ParameterRange.Periods(new[] { "H1", "m5", "M15", "nonsense", "M5", "D1" });
         Assert.Equal(new[] { "M5", "M15", "H1", "Daily" }, r.Choices);
         Assert.Equal(4, r.Count);
         Assert.Equal(1, ParameterRange.Periods(new[] { "H1" }, enabled: false).Count);
@@ -72,7 +72,7 @@ public class OptimizationPeriodTests
     }
 
     [Fact]
-    public void El_optimizador_prueba_cada_combinacion_en_cada_periodo()
+    public void The_optimizer_tests_every_combination_on_every_period()
     {
         var data = Data(3);
         var res = Optimizer.Optimize(() => new Breakout(), new(), Ranges("M5", "M15", "H1"), data, Settings(data), FitnessMetric.NetProfit, 0, null, CancellationToken.None);
@@ -80,14 +80,14 @@ public class OptimizationPeriodTests
         Assert.Equal(6, res.Rows.Count);
         Assert.Equal(new[] { "H1", "M15", "M5" }, res.Rows.Select(r => (string)r.Parameters[ParameterRange.PeriodName]!).Distinct().OrderBy(p => p));
 
-        // el mismo canal en velas más chicas da más operaciones: cada combinación corrió en su período
+        // the same channel on smaller candles gives more trades: each combination ran on its own period
         int Trades(string period) => res.Rows.First(r => (string)r.Parameters[ParameterRange.PeriodName]! == period && Equals(r.Parameters[nameof(Breakout.Channel)], 6)).Metrics.TotalTrades;
         Assert.True(Trades("M5") > Trades("M15") && Trades("M15") > Trades("H1"), $"{Trades("M5")} {Trades("M15")} {Trades("H1")}");
         Assert.Equal(Trades("M15"), new BacktestEngine(new Breakout(), data, Settings(data)).Run().Metrics.TotalTrades);
     }
 
     [Fact]
-    public void Sin_el_periodo_tildado_se_usa_el_del_backtest()
+    public void Without_the_period_ticked_the_backtests_one_is_used()
     {
         var data = Data(2);
         var ranges = Ranges("M5", "H1");
@@ -98,7 +98,7 @@ public class OptimizationPeriodTests
     }
 
     [Fact]
-    public void El_walk_forward_elige_el_periodo_en_cada_ventana()
+    public void The_walk_forward_picks_the_period_in_each_window()
     {
         var data = Data(8);
         var res = Optimizer.WalkForward(() => new Breakout(), new(), Ranges("M15", "H1"), data, Settings(data), FitnessMetric.NetProfit, 3, 1, false, 0, null, CancellationToken.None,
@@ -106,11 +106,11 @@ public class OptimizationPeriodTests
         Assert.Equal(4, res.Evaluated);
         Assert.NotEmpty(res.Windows);
         Assert.All(res.Windows, w => Assert.Contains((string)w.BestParameters[ParameterRange.PeriodName]!, new[] { "M15", "H1" }));
-        Assert.True(res.Compression < 1, "con períodos de tiempo se juntan los ticks repetidos");
+        Assert.True(res.Compression < 1, "with time periods the repeated ticks are merged");
     }
 
     [Fact]
-    public void Con_un_periodo_de_ticks_no_se_juntan_los_ticks()
+    public void With_a_tick_period_the_ticks_are_not_merged()
     {
         var data = Data(6);
         var res = Optimizer.WalkForward(() => new Breakout(), new(), Ranges("M15", "Tick500"), data, Settings(data), FitnessMetric.NetProfit, 3, 1, false, 0, null, CancellationToken.None,

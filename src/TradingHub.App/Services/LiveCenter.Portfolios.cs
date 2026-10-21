@@ -5,8 +5,8 @@ namespace TradingHub.App.Services;
 internal sealed partial class LiveCenter
 {
     /// <summary>
-    /// Los portafolios: el automático (todas las que corren en vivo sin un portafolio tuyo) y los que armaste. El
-    /// automático se crea solo la primera vez que hay estrategias corriendo sin portafolio y guarda su configuración.
+    /// The portfolios: the automatic one (every strategy running live with no portfolio of yours) and the ones you built. The
+    /// automatic one is created on its own the first time there are strategies running with no portfolio, and it stores its configuration.
     /// </summary>
     public List<LivePortfolioView> Portfolios(List<LiveEntry>? entries = null)
     {
@@ -20,7 +20,7 @@ internal sealed partial class LiveCenter
         {
             if (auto == null)
             {
-                auto = new LivePortfolioDef { Id = LivePortfolioDef.AutoId, Auto = true, Name = "Automático · todas en vivo" };
+                auto = new LivePortfolioDef { Id = LivePortfolioDef.AutoId, Auto = true, Name = "Automatic · all live" };
                 defs.Insert(0, auto);
                 LiveStore.SavePortfolios(defs);
             }
@@ -34,7 +34,7 @@ internal sealed partial class LiveCenter
         return res;
     }
 
-    /// <summary>Guarda (crea o actualiza) un portafolio. Una estrategia está en un solo portafolio tuyo a la vez.</summary>
+    /// <summary>Stores (creates or updates) a portfolio. A strategy is in a single portfolio of yours at a time.</summary>
     public void SavePortfolio(LivePortfolioDef def)
     {
         var defs = LiveStore.LoadPortfolios();
@@ -49,7 +49,7 @@ internal sealed partial class LiveCenter
         foreach (var key in def.Members) SetPortfolio(key, def.Id);
     }
 
-    /// <summary>Saca un portafolio (sus estrategias siguen corriendo y pasan al automático).</summary>
+    /// <summary>Removes a portfolio (its strategies keep running and move to the automatic one).</summary>
     public void DeletePortfolio(string id)
     {
         var defs = LiveStore.LoadPortfolios();
@@ -60,7 +60,7 @@ internal sealed partial class LiveCenter
         foreach (var key in def.Members) SetPortfolio(key, null);
     }
 
-    /// <summary>Asigna una estrategia a un portafolio (null = ninguno: queda en el automático).</summary>
+    /// <summary>Assigns a strategy to a portfolio (null = none: it stays in the automatic one).</summary>
     public void Assign(string key, string? portfolioId)
     {
         var defs = LiveStore.LoadPortfolios();
@@ -78,7 +78,7 @@ internal sealed partial class LiveCenter
         _svc.SaveLiveState();
     }
 
-    /// <summary>Arranca todas las detenidas del portafolio (las bloqueadas no: las maneja quien las lanzó).</summary>
+    /// <summary>Starts every stopped strategy of the portfolio (not the locked ones: whoever launched them manages those).</summary>
     public async Task<List<string>> StartAllAsync(LivePortfolioView p)
     {
         var errors = new List<string>();
@@ -91,15 +91,15 @@ internal sealed partial class LiveCenter
         return errors;
     }
 
-    /// <summary>Detiene todas las del portafolio (opcionalmente cerrando sus posiciones).</summary>
+    /// <summary>Stops every strategy of the portfolio (optionally closing their positions).</summary>
     public async Task StopAllAsync(LivePortfolioView p, bool close)
     {
         foreach (var m in p.Members.Where(m => m.Running && !m.Locked)) await StopAsync(m, close);
     }
 
     /// <summary>
-    /// Números del portafolio con las operaciones cerradas de cada estrategia: resultado diario de cada una, correlación
-    /// entre ellas, curva conjunta y métricas (de cada una y del total), desde que arrancó la primera.
+    /// Portfolio numbers from each strategy's closed trades: the daily result of each one, the correlation
+    /// between them, the joint curve and the metrics (of each one and of the total), since the first one started.
     /// </summary>
     public static PortfolioResult Analyze(LivePortfolioView p)
     {
@@ -119,7 +119,7 @@ internal sealed partial class LiveCenter
         decimal capital = p.Def.Capital > 0 ? p.Def.Capital : 25_000m;
         var res = PortfolioAnalyzer.Analyze(comps, capital);
 
-        // curva operación por operación: el drawdown dentro de un día con muchas operaciones también cuenta (la diaria lo esconde)
+        // trade-by-trade curve: a drawdown inside a day with many trades counts too (the daily one hides it)
         bool crypto = comps.All(c => c.Settings.FeedId.StartsWith("binance", StringComparison.Ordinal) || c.Settings.FeedId.StartsWith("bybit", StringComparison.Ordinal) || c.Settings.FeedId == "sim");
         var all = comps.SelectMany(c => c.Trades).OrderBy(t => t.ExitTime).ToList();
         var sharpe = res.Metrics.SharpeRatio;
@@ -138,7 +138,7 @@ internal sealed partial class LiveCenter
         return res;
     }
 
-    /// <summary>Curva de capital al cierre de cada operación.</summary>
+    /// <summary>Equity curve at the close of each trade.</summary>
     private static List<EquityPoint> TradeCurve(IReadOnlyList<ClosedTrade> trades, DateTime from, decimal capital)
     {
         var curve = new List<EquityPoint> { new(trades.Count > 0 && trades[0].ExitTime < from ? trades[0].ExitTime : from, capital, 0) };

@@ -4,7 +4,7 @@ using SkiaSharp;
 
 namespace TradingHub.Rendering.Tools
 {
-    /// <summary>Fuente para dibujar desde indicadores. El tamaño está en puntos (como GDI+: 9pt ≈ 12px).</summary>
+    /// <summary>Font for drawing from indicators. The size is in points (as in GDI+: 9pt ~ 12px).</summary>
     public class RenderFont
     {
         public RenderFont(string fontFamily, float size, FontStyle style = FontStyle.Regular)
@@ -32,13 +32,13 @@ namespace TradingHub.Rendering.Tools
         public bool Underline => (Style & FontStyle.Underline) != 0;
         public bool Strikeout => (Style & FontStyle.Strikeout) != 0;
 
-        /// <summary>Tamaño en píxeles lógicos.</summary>
+        /// <summary>Size in logical pixels.</summary>
         public float PixelSize => Size * 96f / 72f;
 
         public override string ToString() => $"{FontFamily} {Size}";
     }
 
-    /// <summary>Lápiz para líneas y bordes.</summary>
+    /// <summary>Pen for lines and borders.</summary>
     public class RenderPen
     {
         public RenderPen(Color color, float width = 1f, DashStyle dashStyle = DashStyle.Solid)
@@ -65,7 +65,7 @@ namespace TradingHub.Rendering.Tools
         public RenderPen Clone() => new(Color, Width, DashStyle) { DashPattern = DashPattern };
     }
 
-    /// <summary>Formato de texto (alineación horizontal y vertical dentro de un rectángulo).</summary>
+    /// <summary>Text format (horizontal and vertical alignment inside a rectangle).</summary>
     public class RenderStringFormat
     {
         public StringAlignment Alignment { get; set; } = StringAlignment.Near;
@@ -80,7 +80,7 @@ namespace TradingHub.Rendering.Tools
 
 namespace TradingHub.Rendering.Context
 {
-    /// <summary>Capas de dibujo en las que un indicador puede pintar.</summary>
+    /// <summary>Drawing layers an indicator can paint on.</summary>
     [Flags]
     public enum DrawingLayouts
     {
@@ -123,7 +123,7 @@ namespace TradingHub.Rendering.Control
         Command = 8,
     }
 
-    /// <summary>Evento de mouse sobre el gráfico (coordenadas en píxeles del gráfico).</summary>
+    /// <summary>Mouse event over the chart (coordinates in chart pixels).</summary>
     public class RenderControlMouseEventArgs : EventArgs
     {
         public RenderControlMouseEventArgs(int x, int y, RenderControlMouseButtons button, int clicks = 1, int delta = 0)
@@ -148,7 +148,7 @@ namespace TradingHub.Rendering.Control
 
 namespace TradingHub.Rendering
 {
-    /// <summary>Cursores estándar que un indicador puede pedir.</summary>
+    /// <summary>Standard cursors an indicator can ask for.</summary>
     public enum StdCursor
     {
         Arrow,

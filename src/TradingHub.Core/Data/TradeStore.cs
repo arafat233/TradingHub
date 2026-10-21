@@ -3,10 +3,10 @@ using TradingHub.Market;
 namespace TradingHub.Data;
 
 /// <summary>
-/// Almacén columnar en memoria de todas las operaciones de un instrumento (historia + vivo).
-/// Las velas de cualquier período se reconstruyen desde acá en milisegundos, así que cambiar
-/// de 1m a 5m o de velas de tiempo a velas de rango no requiere volver a descargar nada.
-/// Solo se usa desde el hilo de UI.
+/// Columnar in-memory store of every trade of an instrument (history + live).
+/// The candles of any period are rebuilt from here in milliseconds, so switching
+/// from 1m to 5m or from time candles to range candles requires no re-downloading.
+/// It is used from the UI thread only.
 /// </summary>
 public sealed class TradeStore
 {
@@ -75,7 +75,7 @@ public sealed class TradeStore
         return new Trade(ch.Ids[o], new DateTime(ch.Times[o], DateTimeKind.Utc), _instrument.FromTicks(ch.Prices[o]), ch.Volumes[o], (TradeSide)ch.Sides[o]);
     }
 
-    /// <summary>Primer índice con tiempo &gt;= time (búsqueda binaria).</summary>
+    /// <summary>First index with time &gt;= time (binary search).</summary>
     public int LowerBound(DateTime time)
     {
         long t = time.Ticks;
@@ -88,6 +88,6 @@ public sealed class TradeStore
         return lo;
     }
 
-    /// <summary>Estimación de memoria usada (bytes).</summary>
+    /// <summary>Estimate of the memory used (bytes).</summary>
     public long MemoryBytes => (long)_chunks.Count * ChunkSize * (8 + 8 + 8 + 16 + 1);
 }

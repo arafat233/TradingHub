@@ -4,25 +4,25 @@ using TradingHub.Indicators;
 
 namespace TradingHub.Charting;
 
-/// <summary>Estado de navegación del gráfico (zoom horizontal, desplazamiento, escala de precios).</summary>
+/// <summary>Chart navigation state (horizontal zoom, scroll, price scale).</summary>
 public sealed class ChartViewport
 {
-    /// <summary>Ancho de cada barra en píxeles (incluye el espacio entre barras).</summary>
+    /// <summary>Width of each bar in pixels (includes the gap between bars).</summary>
     public double BarWidth { get; set; } = 90;
 
-    /// <summary>Cuántas barras está desplazado hacia atrás respecto del borde derecho (0 = sigue el vivo).</summary>
+    /// <summary>How many bars it is scrolled back from the right edge (0 = it follows the live feed).</summary>
     public double ScrollBars { get; set; }
 
-    /// <summary>Espacio vacío a la derecha de la última barra, en píxeles.</summary>
+    /// <summary>Empty space to the right of the last bar, in pixels.</summary>
     public double RightMarginPx { get; set; } = 70;
 
-    /// <summary>Barras vacías a la derecha de la última (derivado de RightMarginPx).</summary>
+    /// <summary>Empty bars to the right of the last one (derived from RightMarginPx).</summary>
     public int RightMarginBars => Math.Max(1, (int)Math.Ceiling(RightMarginPx / Math.Max(1, BarWidth)));
 
-    /// <summary>Escala de precios automática.</summary>
+    /// <summary>Automatic price scale.</summary>
     public bool AutoScale { get; set; } = true;
 
-    /// <summary>Precios de los bordes cuando la escala es manual.</summary>
+    /// <summary>Prices of the edges when the scale is manual.</summary>
     public double PriceTop { get; set; }
     public double PriceBottom { get; set; }
 
@@ -34,7 +34,7 @@ public sealed class ChartViewport
     public ChartViewport Clone() => (ChartViewport)MemberwiseClone();
 }
 
-/// <summary>Distribución del gráfico calculada en cada cuadro.</summary>
+/// <summary>Chart layout computed on every frame.</summary>
 public sealed class ChartLayout
 {
     public const float PriceAxisWidth = 78;
@@ -56,20 +56,20 @@ public sealed class ChartLayout
     public int FirstVisible { get; set; }
     public int LastVisible { get; set; }
 
-    /// <summary>Filas base agrupadas por fila visible del footprint (lo decide el renderer según el zoom).</summary>
+    /// <summary>Base rows grouped by visible footprint row (the renderer decides it based on the zoom).</summary>
     public int FootprintRowFactor { get; set; } = 1;
 
-    /// <summary>Centro X de una barra (puede estar fuera de la pantalla o en el futuro).</summary>
+    /// <summary>Center X of a bar (it can be off screen or in the future).</summary>
     public float CenterX(int bar) =>
         (float)(Plot.Right - (Count - 1 - bar + RightMarginBars - ScrollBars + 0.5) * BarWidth);
 
     public float CenterX(double bar) =>
         (float)(Plot.Right - (Count - 1 - bar + RightMarginBars - ScrollBars + 0.5) * BarWidth);
 
-    /// <summary>Borde izquierdo del espacio de una barra.</summary>
+    /// <summary>Left edge of a bar's slot.</summary>
     public float LeftX(int bar) => CenterX(bar) - (float)(BarWidth / 2);
 
-    /// <summary>Barra bajo una coordenada X (puede ser &lt; 0 o &gt;= Count).</summary>
+    /// <summary>Bar under an X coordinate (it can be &lt; 0 or &gt;= Count).</summary>
     public int BarAt(float x) => (int)Math.Floor(BarAtExact(x) + 0.5);
 
     public double BarAtExact(float x) => Count - 1 + RightMarginBars - ScrollBars + 0.5 - (Plot.Right - x) / BarWidth;
@@ -77,7 +77,7 @@ public sealed class ChartLayout
     public PanelLayout? PanelAt(float y) => Panels.FirstOrDefault(p => y >= p.Rect.Top && y <= p.Rect.Bottom);
 }
 
-/// <summary>Un panel (el de precio o uno de indicadores) con su escala vertical.</summary>
+/// <summary>A panel (the price one or an indicator one) with its vertical scale.</summary>
 public sealed class PanelLayout : IChartContainer
 {
     public PanelLayout(ChartLayout chart, SKRect rect, bool isPrice)
@@ -91,14 +91,14 @@ public sealed class PanelLayout : IChartContainer
     public SKRect Rect { get; }
     public bool IsPrice { get; }
 
-    /// <summary>Valor en el borde superior / inferior.</summary>
+    /// <summary>Value at the top / bottom edge.</summary>
     public double Top { get; set; } = 1;
     public double Bottom { get; set; }
 
-    /// <summary>Tamaño de fila (panel de precio).</summary>
+    /// <summary>Row size (price panel).</summary>
     public decimal RowSize { get; set; } = 1m;
 
-    /// <summary>Panel de indicadores (null en el de precio).</summary>
+    /// <summary>Indicator panel (null on the price one).</summary>
     public SubPanel? SubPanel { get; set; }
 
     public double Range => Top - Bottom == 0 ? 1 : Top - Bottom;
@@ -109,10 +109,10 @@ public sealed class PanelLayout : IChartContainer
 
     public double ValueAt(float y) => Top - (y - Rect.Top) / Rect.Height * Range;
 
-    /// <summary>Alto en píxeles de una fila de precio.</summary>
+    /// <summary>Height in pixels of a price row.</summary>
     public double RowHeight => (double)RowSize / Range * Rect.Height;
 
-    // ------------------------------------------------------------- IChartContainer (para indicadores)
+    // ------------------------------------------------------------- IChartContainer (for indicators)
 
     Rectangle IChartContainer.Region => new((int)Rect.Left, (int)Rect.Top, (int)Rect.Width, (int)Rect.Height);
     public Rectangle RelativeRegion => new(0, 0, (int)Rect.Width, (int)Rect.Height);
@@ -134,13 +134,13 @@ public sealed class PanelLayout : IChartContainer
     public int GetYByPrice(decimal price, bool isStartOfPrice = true)
     {
         var main = Chart.Main;
-        // los precios de nivel (múltiplos del paso de fila) se ubican en el centro visual de su fila
+        // level prices (multiples of the row step) are placed at the visual center of their row
         float y = RowCenterOf != null && price % main.RowSize == 0 ? main.Y(RowCenterOf(price)) : main.Y(price);
         if (isStartOfPrice) y -= (float)(main.RowHeight / 2);
         return (int)Math.Round(y);
     }
 
-    /// <summary>Convierte un precio de nivel al centro de su fila (lo asigna el renderer).</summary>
+    /// <summary>Converts a level price to the center of its row (the renderer assigns it).</summary>
     public Func<decimal, decimal>? RowCenterOf { get; set; }
 
     public decimal GetPriceByY(int y) => (decimal)Chart.Main.ValueAt(y);

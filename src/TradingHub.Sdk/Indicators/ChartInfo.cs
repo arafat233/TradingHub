@@ -4,31 +4,31 @@ using TradingHub.Rendering.Tools;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Un panel del gráfico (el de precio o uno de indicador) con sus conversiones de coordenadas.</summary>
+    /// <summary>A chart panel (the price one or an indicator one) with its coordinate conversions.</summary>
     public interface IChartContainer
     {
-        /// <summary>Rectángulo del panel en píxeles del gráfico.</summary>
+        /// <summary>Panel rectangle in chart pixels.</summary>
         Rectangle Region { get; }
 
-        /// <summary>Rectángulo relativo al propio panel (origen 0,0).</summary>
+        /// <summary>Rectangle relative to the panel itself (origin 0,0).</summary>
         Rectangle RelativeRegion { get; }
 
         int BarsWidth { get; }
         int BarSpacing { get; }
 
-        /// <summary>Paso de precio por fila (tick efectivo).</summary>
+        /// <summary>Price step per row (effective tick).</summary>
         decimal Step { get; }
 
-        /// <summary>Alto en píxeles de una fila de precio.</summary>
+        /// <summary>Height in pixels of a price row.</summary>
         decimal PriceRowHeight { get; }
 
         int TotalBars { get; }
 
-        /// <summary>Precio en el borde superior / inferior visible (panel de precio).</summary>
+        /// <summary>Price at the visible top / bottom edge (price panel).</summary>
         decimal High { get; }
         decimal Low { get; }
 
-        /// <summary>Rango de valores visible (paneles de indicador).</summary>
+        /// <summary>Visible value range (indicator panels).</summary>
         decimal Minimum { get; }
         decimal Maximum { get; }
 
@@ -43,7 +43,7 @@ namespace TradingHub.Indicators
         decimal GetValueByY(int y);
     }
 
-    /// <summary>Colores del tema del gráfico.</summary>
+    /// <summary>Colors of the chart's theme.</summary>
     public class ColorsStore
     {
         public Color UpCandleColor { get; set; } = Color.FromArgb(255, 73, 209, 73);
@@ -92,7 +92,7 @@ namespace TradingHub.Indicators
         public TimeSpan EndTime { get; set; }
     }
 
-    /// <summary>Información del gráfico en el que corre un indicador.</summary>
+    /// <summary>Information about the chart an indicator runs on.</summary>
     public class ChartInfo
     {
         private readonly Func<IChartContainer> _price;
@@ -105,17 +105,17 @@ namespace TradingHub.Indicators
         public IChartContainer PriceChartContainer => _price();
         public IChartContainer ChartContainer => _price();
 
-        /// <summary>Rectángulo de todo el gráfico.</summary>
+        /// <summary>Rectangle of the whole chart.</summary>
         public Rectangle Region { get; set; }
 
-        /// <summary>Código del período: M5, H1, Daily, 1000 (ticks)...</summary>
+        /// <summary>Period code: M5, H1, Daily, 1000 (ticks)...</summary>
         public string TimeFrame { get; set; } = "M1";
 
-        /// <summary>Duración de una vela si el gráfico es por tiempo (cero si no).</summary>
+        /// <summary>Duration of a candle if the chart is time based (zero if not).</summary>
         public TimeSpan GetTimeFrameTypeChartPeriod() =>
             TradingHub.Data.ChartPeriod.TryParse(TimeFrame, out var p) && p.IsTimeBased ? p.ApproxDuration : TimeSpan.Zero;
 
-        /// <summary>Tipo de gráfico: "TimeFrame", "Seconds", "Tick", "Volume", "Range", "Delta", "Renko".</summary>
+        /// <summary>Chart type: "TimeFrame", "Seconds", "Tick", "Volume", "Range", "Delta", "Renko".</summary>
         public string ChartType { get; set; } = "TimeFrame";
 
         public ChartVisualModes ChartVisualMode { get; set; } = ChartVisualModes.Candles;
@@ -124,7 +124,7 @@ namespace TradingHub.Indicators
 
         public RenderFont PriceAxisFont { get; set; } = new("Arial", 9);
 
-        /// <summary>Formato de precios para string.Format (ej. "{0:0.00}").</summary>
+        /// <summary>Price format for string.Format (e.g. "{0:0.00}").</summary>
         public string StringFormat { get; set; } = "{0:0.00}";
 
         public float DpiX { get; set; } = 96f;
@@ -135,7 +135,7 @@ namespace TradingHub.Indicators
 
         public IEnumerable<TradingSessionDescription> TradingSessionDescriptions { get; set; } = Array.Empty<TradingSessionDescription>();
 
-        /// <summary>Decimales de volumen a mostrar (cripto usa fracciones).</summary>
+        /// <summary>Volume decimals to show (crypto uses fractions).</summary>
         public int VolumeDecimals { get; set; }
 
         public int GetXByBar(int bar, bool isStartOfBar = true) => PriceChartContainer.GetXByBar(bar, isStartOfBar);
@@ -144,13 +144,13 @@ namespace TradingHub.Indicators
 
         public string GetPriceString(decimal price) => string.Format(System.Globalization.CultureInfo.InvariantCulture, StringFormat, price);
 
-        /// <summary>Formatea un volumen de forma compacta (1.2K, 3.4M) si es grande.</summary>
+        /// <summary>Formats a volume compactly (1.2K, 3.4M) if it is large.</summary>
         public string TryGetMinimizedVolumeString(decimal volume) => VolumeFormat.Compact(volume, VolumeDecimals);
 
         public string TryGetMinimizedVolumeString(decimal volume, decimal price) => VolumeFormat.Compact(volume, VolumeDecimals);
     }
 
-    /// <summary>Formato compacto de volúmenes (usado por el footprint y los indicadores).</summary>
+    /// <summary>Compact volume format (used by the footprint and the indicators).</summary>
     public static class VolumeFormat
     {
         private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -169,28 +169,28 @@ namespace TradingHub.Indicators
         }
     }
 
-    /// <summary>Constantes de paneles.</summary>
+    /// <summary>Panel constants.</summary>
     public static class IndicatorDataProvider
     {
         public const string CandlesPanel = "Chart";
         public const string NewPanel = "NewPanel";
     }
 
-    /// <summary>Categorías de indicadores (para el listado de la UI).</summary>
+    /// <summary>Indicator categories (for the UI listing).</summary>
     public static class IndicatorCategories
     {
-        public const string VolumeOrderFlow = "Volumen / Order flow";
-        public const string OrderBook = "Libro de órdenes";
+        public const string VolumeOrderFlow = "Volume / Order flow";
+        public const string OrderBook = "Order book";
         public const string Trading = "Trading";
-        public const string Samples = "Ejemplos";
-        public const string Trend = "Tendencia";
-        public const string Oscillators = "Osciladores";
-        public const string Levels = "Niveles";
-        public const string Other = "Otros";
-        public const string Custom = "Personalizados";
+        public const string Samples = "Samples";
+        public const string Trend = "Trend";
+        public const string Oscillators = "Oscillators";
+        public const string Levels = "Levels";
+        public const string Other = "Other";
+        public const string Custom = "Custom";
     }
 
-    /// <summary>Colores por defecto (paleta estándar).</summary>
+    /// <summary>Default colors (standard palette).</summary>
     public static class DefaultColors
     {
         public static Color Aqua => Color.Aqua;

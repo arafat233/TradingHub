@@ -2,7 +2,7 @@ using TradingHub.Data;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Volumen en un nivel de precio de una vela (una fila del footprint).</summary>
+    /// <summary>Volume at one price level of a candle (one footprint row).</summary>
     public class PriceVolumeInfo
     {
         public decimal Price { get; set; }
@@ -12,7 +12,7 @@ namespace TradingHub.Indicators
         public decimal Between { get; set; }
         public decimal Ticks { get; set; }
 
-        /// <summary>"Tiempo" en el nivel (en Trading Hub, cantidad de operaciones como aproximación).</summary>
+        /// <summary>"Time" at the level (in Trading Hub, the number of trades as an approximation).</summary>
         public int Time { get; set; }
 
         public decimal Delta => Ask - Bid;
@@ -31,7 +31,7 @@ namespace TradingHub.Indicators
         public override string ToString() => $"{Price}: {Bid} x {Ask}";
     }
 
-    /// <summary>Área de valor de una vela o perfil.</summary>
+    /// <summary>Value area of a candle or profile.</summary>
     public sealed class ValueArea
     {
         public decimal ValueAreaHigh { get; set; }
@@ -40,8 +40,8 @@ namespace TradingHub.Indicators
     }
 
     /// <summary>
-    /// Vela tal como la ven los indicadores (API compatible con la de ATAS).
-    /// Envuelve una vela del núcleo y convierte filas/ticks a precios.
+    /// Candle as the indicators see it (API compatible with ATAS's).
+    /// It wraps a core candle and converts rows/ticks to prices.
     /// </summary>
     public class IndicatorCandle
     {
@@ -92,14 +92,14 @@ namespace TradingHub.Indicators
             Time = d.Trades,
         };
 
-        /// <summary>Nivel de precio exacto (o null si no hubo operaciones ahí).</summary>
+        /// <summary>Exact price level (or null if there were no trades there).</summary>
         public PriceVolumeInfo GetPriceVolumeInfo(decimal price)
         {
             long row = _series.PriceToRow(price);
             return _c.Levels.TryGet(row, out var d) ? Make(row, d) : null;
         }
 
-        /// <summary>Igual que <see cref="GetPriceVolumeInfo(decimal)"/> pero reutilizando un objeto (sin asignar memoria).</summary>
+        /// <summary>Same as <see cref="GetPriceVolumeInfo(decimal)"/> but reusing an object (no memory allocated).</summary>
         public PriceVolumeInfo GetPriceVolumeInfo(decimal price, PriceVolumeInfo reuse)
         {
             long row = _series.PriceToRow(price);
@@ -115,7 +115,7 @@ namespace TradingHub.Indicators
             return reuse;
         }
 
-        /// <summary>VWAP de la vela (precio promedio ponderado por volumen).</summary>
+        /// <summary>Candle VWAP (volume weighted average price).</summary>
         public decimal VWAP
         {
             get
@@ -131,7 +131,7 @@ namespace TradingHub.Indicators
             }
         }
 
-        /// <summary>Área de valor (70%) y POC.</summary>
+        /// <summary>Value area (70%) and POC.</summary>
         public ValueArea ValueArea
         {
             get
@@ -142,19 +142,19 @@ namespace TradingHub.Indicators
             }
         }
 
-        /// <summary>Nivel donde más tiempo estuvo el precio (aproximado por cantidad de operaciones).</summary>
+        /// <summary>Level the price spent the most time at (approximated by the number of trades).</summary>
         public PriceVolumeInfo MaxTimePriceInfo => MaxTickPriceInfo;
 
-        /// <summary>Todos los niveles con operaciones, de menor a mayor precio.</summary>
+        /// <summary>Every level with trades, from the lowest price to the highest.</summary>
         public IEnumerable<PriceVolumeInfo> GetAllPriceLevels()
         {
             foreach (var (row, d) in _c.Levels.Enumerate()) yield return Make(row, d);
         }
 
-        /// <summary>Niveles ordenados por precio (lista materializada).</summary>
+        /// <summary>Levels sorted by price (materialized list).</summary>
         public List<PriceVolumeInfo> GetAllPriceLevelsList() => GetAllPriceLevels().ToList();
 
-        /// <summary>POC de la vela (nivel con más volumen).</summary>
+        /// <summary>POC of the candle (level with the most volume).</summary>
         public PriceVolumeInfo MaxVolumePriceInfo
         {
             get
@@ -189,7 +189,7 @@ namespace TradingHub.Indicators
             return bestV == decimal.MinValue ? null : Make(best, bestD);
         }
 
-        /// <summary>Área de valor (70% del volumen por defecto) alrededor del POC.</summary>
+        /// <summary>Value area (70% of the volume by default) around the POC.</summary>
         public (decimal High, decimal Low) GetValueArea(decimal percent = 70m)
         {
             var levels = _c.Levels;

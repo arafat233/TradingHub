@@ -2,7 +2,7 @@ using TradingHub.Data;
 
 namespace TradingHub.Tests;
 
-/// <summary>Los períodos que se escriben a mano (en el backtester, el laboratorio o un gráfico).</summary>
+/// <summary>The periods written by hand (in the backtester, the lab or a chart).</summary>
 public class ChartPeriodTests
 {
     [Theory]
@@ -33,7 +33,7 @@ public class ChartPeriodTests
     [InlineData("Delta300", PeriodType.Delta, 300)]
     [InlineData("Renko10", PeriodType.Renko, 10)]
     [InlineData(" D1 ", PeriodType.Days, 1)]
-    public void Se_entiende_como_se_escriba(string code, PeriodType type, decimal value)
+    public void It_is_understood_however_it_is_written(string code, PeriodType type, decimal value)
     {
         Assert.True(ChartPeriod.TryParse(code, out var p), code);
         Assert.Equal(new ChartPeriod(type, value), p);
@@ -43,11 +43,11 @@ public class ChartPeriodTests
     [InlineData("")]
     [InlineData("X5")]
     [InlineData("M0")]
-    [InlineData("diez minutos")]
-    public void Lo_que_no_es_un_periodo_no_pasa(string code) => Assert.False(ChartPeriod.TryParse(code, out _));
+    [InlineData("ten minutes")]
+    public void What_is_not_a_period_does_not_pass(string code) => Assert.False(ChartPeriod.TryParse(code, out _));
 
     [Fact]
-    public void Los_codigos_guardados_vuelven_a_leerse_igual()
+    public void The_stored_codes_read_back_the_same()
     {
         foreach (var p in new[] { ChartPeriod.M1, ChartPeriod.H4, ChartPeriod.D1, new ChartPeriod(PeriodType.Weeks, 1), new ChartPeriod(PeriodType.Months, 3), new ChartPeriod(PeriodType.Tick, 233) })
         {

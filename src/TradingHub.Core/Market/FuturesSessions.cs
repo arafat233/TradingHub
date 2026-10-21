@@ -1,8 +1,8 @@
 namespace TradingHub.Market;
 
 /// <summary>
-/// Horario de Globex (CME), donde operan los futuros de Rithmic (ES, NQ, CL, GC…): de domingo 17:00 a viernes 16:00
-/// hora de Chicago, con una pausa diaria de 16:00 a 17:00. No conoce los feriados.
+/// Globex (CME) schedule, where the Rithmic futures trade (ES, NQ, CL, GC…): from Sunday 17:00 to Friday 16:00
+/// Chicago time, with a daily break from 16:00 to 17:00. It does not know about holidays.
 /// </summary>
 public static class FuturesSessions
 {
@@ -34,14 +34,14 @@ public static class FuturesSessions
         };
     }
 
-    /// <summary>Próxima apertura de Globex (UTC); si está abierto, ahora.</summary>
+    /// <summary>Next Globex open (UTC); if it is open, now.</summary>
     public static DateTime NextGlobexOpen(DateTime utc)
     {
         utc = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
         if (!IsGlobexClosed(utc)) return utc;
         var ct = TimeZoneInfo.ConvertTimeFromUtc(utc, Chicago);
         var day = ct.Date;
-        // la apertura es a las 17:00 de un domingo a jueves; el viernes y el sábado se salta al domingo
+        // the open is at 17:00 from Sunday to Thursday; on Friday and Saturday it skips to Sunday
         while (true)
         {
             var open = day + Open;

@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace TradingHub.Scripting;
 
-/// <summary>Un error o advertencia de compilación.</summary>
+/// <summary>A compilation error or warning.</summary>
 public sealed record ScriptDiagnostic(string File, int Line, int Column, string Severity, string Id, string Message)
 {
     public override string ToString() => $"{Path.GetFileName(File)}({Line},{Column}): {Severity} {Id}: {Message}";
@@ -21,9 +21,9 @@ public sealed class ScriptCompileResult
 }
 
 /// <summary>
-/// Compila indicadores en C# en tiempo de ejecución (Roslyn), igual que ATAS compila los suyos.
-/// Acepta código escrito para ATAS: traduce sus namespaces (ATAS.Indicators, OFT.Rendering...)
-/// a los de Trading Hub, que tienen la misma API.
+/// Compiles C# indicators at run time (Roslyn), just as ATAS compiles its own.
+/// It accepts code written for ATAS: it translates its namespaces (ATAS.Indicators, OFT.Rendering...)
+/// to Trading Hub's, which have the same API.
 /// </summary>
 public sealed class ScriptCompiler
 {
@@ -60,7 +60,7 @@ public sealed class ScriptCompiler
         global using CrossPens = TradingHub.Common.UniversalPens;
         """;
 
-    /// <summary>Adapta el código escrito para ATAS a los namespaces de Trading Hub.</summary>
+    /// <summary>Adapts code written for ATAS to Trading Hub's namespaces.</summary>
     public static string Preprocess(string source)
     {
         foreach (var (p, r) in NamespaceMap) source = p.Replace(source, r);
@@ -89,7 +89,7 @@ public sealed class ScriptCompiler
         return refs;
     }
 
-    /// <summary>Compila archivos .cs en un ensamblado cargado en memoria (descargable).</summary>
+    /// <summary>Compiles .cs files into an assembly loaded in memory (unloadable).</summary>
     public ScriptCompileResult Compile(IReadOnlyList<string> files, string assemblyName)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -104,7 +104,7 @@ public sealed class ScriptCompiler
             }
             catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
             {
-                continue; // se borró entre que se listó la carpeta y se leyó: queda afuera (quien vigila la carpeta vuelve a compilar)
+                continue; // it was deleted between listing the folder and reading it: it is left out (whoever watches the folder compiles again)
             }
 
             var text = Preprocess(source);
@@ -126,7 +126,7 @@ public sealed class ScriptCompiler
             {
                 var span = d.Location.GetLineSpan();
                 return new ScriptDiagnostic(span.Path ?? "", span.StartLinePosition.Line + 1, span.StartLinePosition.Character + 1,
-                    d.Severity == DiagnosticSeverity.Error ? "error" : "advertencia", d.Id, d.GetMessage(System.Globalization.CultureInfo.GetCultureInfo("es")));
+                    d.Severity == DiagnosticSeverity.Error ? "error" : "warning", d.Id, d.GetMessage(System.Globalization.CultureInfo.GetCultureInfo("en")));
             })
             .ToList();
 

@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace TradingHub.Trading;
 
-/// <summary>Una ejecución de una cuenta: lo que queda guardado para el historial y las estadísticas.</summary>
+/// <summary>A fill of an account: what is stored for the history and the statistics.</summary>
 public sealed record AccountFill(
     string Id,
     DateTime Time,
@@ -14,7 +14,7 @@ public sealed record AccountFill(
     decimal Commission = 0,
     string OrderId = "");
 
-/// <summary>Operación completa: desde que se abre la posición hasta que vuelve a cero (o se da vuelta).</summary>
+/// <summary>Complete trade: from the position opening until it goes back to zero (or reverses).</summary>
 public sealed record AccountTrade(
     string Symbol,
     bool IsLong,
@@ -30,7 +30,7 @@ public sealed record AccountTrade(
     public TimeSpan Duration => CloseTime - OpenTime;
 }
 
-/// <summary>Lo que sale de recorrer las ejecuciones: operaciones cerradas y cada resultado realizado (también los parciales).</summary>
+/// <summary>What comes out of walking the fills: closed trades and each realized result (partials included).</summary>
 public sealed record RoundTripResult(
     List<AccountTrade> Trades,
     List<(DateTime Time, decimal Net)> Realized,
@@ -40,8 +40,8 @@ public sealed record RoundTripResult(
 public static class RoundTrips
 {
     /// <summary>
-    /// Arma las operaciones cerradas a partir de las ejecuciones, con precio promedio: sumar a la posición
-    /// promedia la entrada, reducirla realiza resultado, y darla vuelta cierra una operación y abre otra.
+    /// Builds the closed trades from the fills, using the average price: adding to the position
+    /// averages the entry, reducing it realizes a result, and reversing it closes one trade and opens another.
     /// </summary>
     public static RoundTripResult Analyze(IEnumerable<AccountFill> fills)
     {
@@ -93,7 +93,7 @@ public static class RoundTrips
                     entryValue += f.Price * q;
                     entryQty += q;
                     comm += c;
-                    // la comisión de entrada se descuenta al pagarla
+                    // the entry commission is deducted when it is paid
                     if (c != 0)
                     {
                         realized.Add((f.Time, -c));
@@ -111,8 +111,8 @@ public static class RoundTrips
 }
 
 /// <summary>
-/// Historial de ejecuciones por cuenta, guardado en disco (un JSON por línea) para que el saldo, las órdenes
-/// ejecutadas y las estadísticas sobrevivan al cerrar Trading Hub.
+/// Fill history per account, stored on disk (one JSON per line) so the balance, the filled
+/// orders and the statistics survive closing Trading Hub.
 /// </summary>
 public sealed class AccountJournal
 {
@@ -127,7 +127,7 @@ public sealed class AccountJournal
         Directory.CreateDirectory(dir);
     }
 
-    /// <summary>Cambió el historial de una cuenta (id de la cuenta). Puede llegar desde otros hilos.</summary>
+    /// <summary>An account's history changed (account id). It can arrive from other threads.</summary>
     public event Action<string>? Changed;
 
     private string FileOf(string account) =>
@@ -149,7 +149,7 @@ public sealed class AccountJournal
                 }
                 catch (JsonException)
                 {
-                    // línea cortada (por ejemplo si se cerró justo al escribir): se saltea
+                    // truncated line (for example if it closed right while writing): it is skipped
                 }
             }
         }
@@ -159,7 +159,7 @@ public sealed class AccountJournal
         return list;
     }
 
-    /// <summary>Cuántas ejecuciones tiene la cuenta (para saber si cambió sin copiar la lista).</summary>
+    /// <summary>How many fills the account has (to know whether it changed without copying the list).</summary>
     public int CountOf(string account)
     {
         lock (_gate) return Load(account).Count;
@@ -170,7 +170,7 @@ public sealed class AccountJournal
         lock (_gate) return Load(account).ToList();
     }
 
-    /// <summary>Guarda una ejecución (las repetidas, con el mismo id, se ignoran).</summary>
+    /// <summary>Stores a fill (repeated ones, with the same id, are ignored).</summary>
     public bool Add(string account, AccountFill fill)
     {
         lock (_gate)
@@ -185,7 +185,7 @@ public sealed class AccountJournal
         return true;
     }
 
-    /// <summary>Empieza de cero (el archivo anterior queda guardado aparte, no se borra).</summary>
+    /// <summary>Starts from scratch (the previous file is kept aside, not deleted).</summary>
     public void Restart(string account)
     {
         lock (_gate)

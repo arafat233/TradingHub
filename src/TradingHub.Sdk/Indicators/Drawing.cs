@@ -6,7 +6,7 @@ using TradingHub.Common;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Línea horizontal fija en un panel (niveles 30/70 del RSI, cero del MACD...).</summary>
+    /// <summary>Horizontal line fixed on a panel (the RSI's 30/70 levels, the MACD's zero...).</summary>
     public class LineSeries : INotifyPropertyChanged
     {
         private decimal _value;
@@ -34,11 +34,11 @@ namespace TradingHub.Indicators
         [Browsable(false)]
         public string Name { get; set; }
 
-        /// <summary>Clave de la descripción (localización).</summary>
+        /// <summary>Key of the description (localization).</summary>
         [Browsable(false)]
         public string DescriptionKey { get; set; }
 
-        [Display(Name = "Valor", Order = 10)]
+        [Display(Name = "Value", Order = 10)]
         public decimal Value
         {
             get => _value;
@@ -52,21 +52,21 @@ namespace TradingHub.Indicators
             set => Set(ref _color, value);
         }
 
-        [Display(Name = "Grosor", Order = 30)]
+        [Display(Name = "Width", Order = 30)]
         public int Width
         {
             get => _width;
             set => Set(ref _width, Math.Max(1, value));
         }
 
-        [Display(Name = "Estilo", Order = 40)]
+        [Display(Name = "Style", Order = 40)]
         public LineDashStyle LineDashStyle
         {
             get => _lineDashStyle;
             set => Set(ref _lineDashStyle, value);
         }
 
-        [Display(Name = "Incluir en escala", Order = 50)]
+        [Display(Name = "Include in scale", Order = 50)]
         public bool UseScale
         {
             get => _useScale;
@@ -103,7 +103,7 @@ namespace TradingHub.Indicators
 
 namespace TradingHub.Indicators.Drawing
 {
-    /// <summary>Línea horizontal que nace en una barra y se extiende hasta que el precio la toca.</summary>
+    /// <summary>Horizontal line that starts on a bar and extends until the price touches it.</summary>
     public class LineTillTouch : TrendLine
     {
         public LineTillTouch(int bar, decimal price, UniversalPen pen, int length = 0)
@@ -112,16 +112,16 @@ namespace TradingHub.Indicators.Drawing
             Length = length;
         }
 
-        /// <summary>Largo máximo en barras (0 = sin límite).</summary>
+        /// <summary>Maximum length in bars (0 = no limit).</summary>
         public int Length { get; set; }
 
-        /// <summary>Si ya fue tocada por el precio.</summary>
+        /// <summary>Whether it has already been touched by the price.</summary>
         public bool Finished { get; set; }
 
         public object Context { get; set; }
     }
 
-    /// <summary>Línea de tendencia entre dos puntos (barra, precio).</summary>
+    /// <summary>Trend line between two points (bar, price).</summary>
     public class TrendLine
     {
         public TrendLine(int firstBar, decimal firstPrice, int secondBar, decimal secondPrice, UniversalPen pen)
@@ -139,13 +139,13 @@ namespace TradingHub.Indicators.Drawing
         public decimal SecondPrice { get; set; }
         public UniversalPen Pen { get; set; }
 
-        /// <summary>Si se extiende indefinidamente hacia la derecha.</summary>
+        /// <summary>Whether it extends indefinitely to the right.</summary>
         public bool IsRay { get; set; }
 
         public Color Color => Pen?.Color ?? Color.Gray;
     }
 
-    /// <summary>Rectángulo entre dos puntos (barra, precio).</summary>
+    /// <summary>Rectangle between two points (bar, price).</summary>
     public class DrawingRectangle
     {
         public DrawingRectangle(int firstBar, decimal firstPrice, int secondBar, decimal secondPrice, UniversalPen pen, UniversalSolidBrush brush)
@@ -166,7 +166,7 @@ namespace TradingHub.Indicators.Drawing
         public UniversalSolidBrush Brush { get; set; }
     }
 
-    /// <summary>Texto anclado a una barra y un precio.</summary>
+    /// <summary>Text anchored to a bar and a price.</summary>
     public class DrawingText
     {
         public enum TextAlign

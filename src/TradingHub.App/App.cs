@@ -35,7 +35,7 @@ public sealed class App : Application
             var main = new MainWindow(Services);
             desktop.MainWindow = main;
             desktop.ShutdownRequested += (_, _) => Services.Shutdown();
-            // el ícono en la barra de menú de la Mac (cerrar la ventana deja a Trading Hub corriendo ahí)
+            // the icon in the Mac menu bar (closing the window leaves Trading Hub running there)
             TradingHub.App.Services.MenuBar.Install(this, Services, main);
         }
 

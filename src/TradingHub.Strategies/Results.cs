@@ -2,17 +2,17 @@ using System.Text.Json.Serialization;
 
 namespace TradingHub.Strategies;
 
-/// <summary>Cómo se llenan las órdenes límite en la simulación.</summary>
+/// <summary>How limit orders are filled in the simulation.</summary>
 public enum LimitFillMode
 {
-    /// <summary>Solo si el precio opera del otro lado del límite (conservador).</summary>
+    /// <summary>Only if the price trades through the other side of the limit (conservative).</summary>
     TradeThrough,
 
-    /// <summary>Apenas el precio toca el límite (optimista).</summary>
+    /// <summary>As soon as the price touches the limit (optimistic).</summary>
     Touch,
 }
 
-/// <summary>Configuración de una corrida.</summary>
+/// <summary>Configuration of a run.</summary>
 public sealed class BacktestSettings
 {
     public string FeedId { get; set; } = "";
@@ -22,30 +22,30 @@ public sealed class BacktestSettings
     public string Period { get; set; } = "M5";
     public decimal InitialCapital { get; set; } = 10_000m;
 
-    /// <summary>Comisión fija por unidad/contrato y por lado.</summary>
+    /// <summary>Fixed commission per unit/contract and per side.</summary>
     public decimal CommissionPerUnit { get; set; }
 
-    /// <summary>Comisión porcentual sobre el nominal, por lado (ej. 0.04 = 0,04 %).</summary>
+    /// <summary>Percentage commission on the notional, per side (e.g. 0.04 = 0.04%).</summary>
     public decimal CommissionPercent { get; set; } = 0.04m;
 
-    /// <summary>Deslizamiento en ticks de las órdenes a mercado y stops.</summary>
+    /// <summary>Slippage in ticks of market orders and stops.</summary>
     public int SlippageTicks { get; set; } = 1;
 
     public LimitFillMode LimitFill { get; set; } = LimitFillMode.TradeThrough;
 
-    /// <summary>Zona horaria de la sesión (null = UTC).</summary>
+    /// <summary>Session time zone (null = UTC).</summary>
     public string? TimeZoneId { get; set; }
 
-    /// <summary>Hora de inicio de la sesión en esa zona.</summary>
+    /// <summary>Session start time in that zone.</summary>
     public TimeSpan SessionStart { get; set; }
 
-    /// <summary>Cerrar la posición abierta al final del backtest.</summary>
+    /// <summary>Close the open position at the end of the backtest.</summary>
     public bool CloseAtEnd { get; set; } = true;
 
     public BacktestSettings Clone() => (BacktestSettings)MemberwiseClone();
 }
 
-/// <summary>Una operación cerrada (entrada + salida).</summary>
+/// <summary>A closed trade (entry + exit).</summary>
 public sealed record ClosedTrade(
     int Number,
     bool IsLong,
@@ -65,28 +65,28 @@ public sealed record ClosedTrade(
     public decimal NetPnl => Pnl - Commission;
 
     /// <summary>
-    /// Cómo venía el mercado al entrar (últimas 24 horas, con las velas que veía la estrategia): eficiencia de la tendencia
-    /// de los cierres por hora (0 = rango puro, 1 = tendencia limpia; una caminata al azar da ~0,2). null si no hay datos.
+    /// How the market had been on entry (last 24 hours, with the candles the strategy could see): trend efficiency
+    /// of the hourly closes (0 = pure range, 1 = clean trend; a random walk gives ~0.2). null if there is no data.
     /// </summary>
     public double? EntryTrend { get; init; }
 
-    /// <summary>Volatilidad al entrar: desvío de los retornos por hora de las últimas 24 horas, en %.</summary>
+    /// <summary>Volatility on entry: standard deviation of the hourly returns of the last 24 hours, in %.</summary>
     public double? EntryVolatility { get; init; }
 
-    /// <summary>Percentil de esa volatilidad entre la del último mes (0 = la más baja, 100 = la más alta).</summary>
+    /// <summary>Percentile of that volatility among the last month's (0 = the lowest, 100 = the highest).</summary>
     public double? EntryVolatilityRank { get; init; }
 
-    /// <summary>Hacia dónde se había movido el mercado en las 24 horas previas a la entrada (1 subía, -1 bajaba).</summary>
+    /// <summary>Which way the market had moved in the 24 hours before the entry (1 rising, -1 falling).</summary>
     public int? EntryMarketDirection { get; init; }
 }
 
-/// <summary>Una posición abierta (lado, cantidad, precio promedio y desde cuándo).</summary>
+/// <summary>An open position (side, quantity, average price and since when).</summary>
 public sealed record OpenPosition(bool IsLong, decimal Quantity, decimal AveragePrice, DateTime EntryTime);
 
-/// <summary>Un punto de la curva de capital.</summary>
+/// <summary>A point on the equity curve.</summary>
 public readonly record struct EquityPoint(DateTime Time, decimal Equity, decimal Drawdown);
 
-/// <summary>Métricas de rendimiento.</summary>
+/// <summary>Performance metrics.</summary>
 public sealed class PerformanceMetrics
 {
     public decimal NetProfit { get; set; }
@@ -118,7 +118,7 @@ public sealed class PerformanceMetrics
     public decimal ExposurePercent { get; set; }
     public decimal Expectancy { get; set; }
 
-    /// <summary>Valor de la métrica elegida para optimizar.</summary>
+    /// <summary>Value of the metric chosen to optimize.</summary>
     public double Fitness(FitnessMetric m) => m switch
     {
         FitnessMetric.ProfitFactor => TotalTrades == 0 ? 0 : (double)Math.Min(ProfitFactor, 100),
@@ -175,7 +175,7 @@ public sealed class PerformanceMetrics
         m.ReturnPercent = capital > 0 ? 100 * m.NetProfit / capital : 0;
         m.ExposurePercent = totalBars > 0 ? 100m * barsInMarket / totalBars : 0;
 
-        // drawdown sobre la curva de capital
+        // drawdown over the equity curve
         decimal peak = capital, maxDd = 0, maxDdPct = 0;
         foreach (var e in equity)
         {
@@ -189,8 +189,8 @@ public sealed class PerformanceMetrics
         m.MaxDrawdownPercent = 100 * maxDdPct;
         m.RecoveryFactor = maxDd > 0 ? m.NetProfit / maxDd : m.NetProfit > 0 ? 999 : 0;
 
-        // Sharpe y Sortino con retornos diarios. Por debajo del capital inicial el retorno se mide sobre el capital: con
-        // la cuenta en negativo (o casi en cero) dividir por el saldo da vuelta el signo (ganar parecía perder) o explota
+        // Sharpe and Sortino with daily returns. Below the initial capital the return is measured on the capital: with
+        // the account negative (or near zero) dividing by the balance flips the sign (winning looked like losing) or blows up
         var daily = new List<double>();
         if (equity.Count > 1)
         {
@@ -239,7 +239,7 @@ public enum FitnessMetric
     Expectancy,
 }
 
-/// <summary>Resultado de un backtest.</summary>
+/// <summary>Result of a backtest.</summary>
 public sealed class BacktestResult
 {
     public string Strategy { get; set; } = "";
@@ -254,12 +254,12 @@ public sealed class BacktestResult
     public double Seconds { get; set; }
     public string? Error { get; set; }
 
-    /// <summary>Posición que quedó abierta al final (solo sin «cerrar al final»; la usa el gráfico para seguirla en vivo).</summary>
+    /// <summary>Position left open at the end (only without "close at the end"; the chart uses it to keep managing it live).</summary>
     [JsonIgnore] public OpenPosition? OpenPosition { get; set; }
 
     [JsonIgnore] public bool Ok => Error == null;
 
-    /// <summary>Reduce la curva de capital a como mucho N puntos (para guardar y dibujar).</summary>
+    /// <summary>Reduces the equity curve to at most N points (to store and draw).</summary>
     public static List<EquityPoint> Downsample(IReadOnlyList<EquityPoint> points, int max)
     {
         if (points.Count <= max) return points.ToList();
@@ -267,7 +267,7 @@ public sealed class BacktestResult
         double step = points.Count / (double)max;
         for (int i = 0; i < max; i++)
         {
-            // conserva el peor punto de cada tramo para no esconder drawdowns
+            // it keeps the worst point of each stretch so drawdowns are not hidden
             int a = (int)(i * step), b = Math.Min(points.Count, (int)((i + 1) * step));
             var worst = points[a];
             for (int k = a; k < b; k++)

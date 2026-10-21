@@ -3,10 +3,10 @@
         xmlns:mi="using:Material.Icons.Avalonia">
 
   <!--
-    Sistema de diseño de Trading Hub.
-    Tokens: fondos en capas (Bg0 → Bg4), líneas, textos, acento ámbar (la llama de la vela)
-    y azul para foco/selección. Los nombres de recursos de Fluent se sobrescriben acá para que
-    todos los controles estándar tomen el mismo lenguaje visual.
+    Trading Hub design system.
+    Tokens: layered backgrounds (Bg0 -> Bg4), lines, texts, amber accent (the candle flame)
+    and blue for focus/selection. Fluent's resource names are overridden here so
+    every standard control picks up the same visual language.
   -->
   <Styles.Resources>
     <ResourceDictionary>
@@ -55,7 +55,7 @@
       <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
       <CornerRadius x:Key="OverlayCornerRadius">10</CornerRadius>
 
-      <!-- ============ Fluent: botones ============ -->
+      <!-- ============ Fluent: buttons ============ -->
       <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource Bg3}" />
       <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource Bg4}" />
       <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#2B374C" />
@@ -82,7 +82,7 @@
       <SolidColorBrush x:Key="ToggleButtonBorderBrushChecked" Color="#66F2B53A" />
       <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPointerOver" Color="#88F2B53A" />
 
-      <!-- ============ Fluent: entradas ============ -->
+      <!-- ============ Fluent: inputs ============ -->
       <SolidColorBrush x:Key="TextControlBackground" Color="{StaticResource InputBg}" />
       <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{StaticResource InputBg}" />
       <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{StaticResource InputBg}" />
@@ -109,7 +109,7 @@
       <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#443D8BFD" />
       <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="{StaticResource Text1}" />
 
-      <!-- ============ Fluent: listas, pestañas, menús ============ -->
+      <!-- ============ Fluent: lists, tabs, menus ============ -->
       <SolidColorBrush x:Key="ListBoxItemBackgroundPointerOver" Color="{StaticResource Bg3}" />
       <SolidColorBrush x:Key="ListBoxItemBackgroundPressed" Color="{StaticResource Bg4}" />
       <SolidColorBrush x:Key="ListBoxItemBackgroundSelected" Color="#2A3D8BFD" />
@@ -252,7 +252,7 @@
     <Setter Property="Background" Value="{StaticResource LineBrush}" />
   </Style>
 
-  <!-- ============ Botones ============ -->
+  <!-- ============ Buttons ============ -->
   <Style Selector="Button, ToggleButton, RepeatButton">
     <Setter Property="Padding" Value="11,5" />
     <Setter Property="MinHeight" Value="30" />
@@ -317,7 +317,7 @@
     <Setter Property="Foreground" Value="White" />
   </Style>
 
-  <!-- Chart Trader: órdenes límite en el libro (más suaves que las de mercado) -->
+  <!-- Chart Trader: limit orders in the book (softer than the market ones) -->
   <Style Selector="Button.buy-soft">
     <Setter Property="Background" Value="{StaticResource BuySoftBg}" />
     <Setter Property="Foreground" Value="{StaticResource BuySoftFg}" />
@@ -337,7 +337,7 @@
     <Setter Property="Foreground" Value="{StaticResource SoftHoverFg}" />
   </Style>
 
-  <!-- barra de dibujos de cada gráfico (compacta, como ATAS) -->
+  <!-- each chart's drawing toolbar (compact, like ATAS) -->
   <Style Selector="ToggleButton.tool">
     <Setter Property="Padding" Value="0" />
     <Setter Property="Width" Value="30" />
@@ -379,7 +379,7 @@
     <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
   </Style>
 
-  <!-- Segmentos (períodos, modos) -->
+  <!-- Segments (periods, modes) -->
   <Style Selector="ToggleButton.seg">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -401,7 +401,7 @@
     <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
   </Style>
 
-  <!-- Navegación en la barra de título -->
+  <!-- Navigation in the title bar -->
   <Style Selector="ToggleButton.nav">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -424,7 +424,7 @@
     <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
   </Style>
 
-  <!-- ============ Entradas ============ -->
+  <!-- ============ Inputs ============ -->
   <Style Selector="TextBox">
     <Setter Property="MinHeight" Value="30" />
     <Setter Property="Padding" Value="9,5" />
@@ -437,7 +437,7 @@
     <Setter Property="CornerRadius" Value="6" />
     <Setter Property="FontSize" Value="12.5" />
   </Style>
-  <!-- el último botón del spinner tenía el fondo cuadrado y tapaba la curva del borde (la esquina quedaba en punta) -->
+  <!-- the spinner's last button had a square background and covered the border's curve (the corner ended up sharp) -->
   <Style Selector="ButtonSpinner /template/ RepeatButton#PART_DecreaseButton /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="CornerRadius" Value="0,5,5,0" />
   </Style>
@@ -447,7 +447,7 @@
     <Setter Property="FontSize" Value="12.5" />
   </Style>
 
-  <!-- ============ Listas ============ -->
+  <!-- ============ Lists ============ -->
   <Style Selector="ListBox">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -462,11 +462,11 @@
     <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
 
-  <!-- ============ Pestañas de gráficos ============ -->
+  <!-- ============ Chart tabs ============ -->
   <Style Selector="TabControl">
     <Setter Property="Padding" Value="0" />
   </Style>
-  <!-- con una sola pestaña la tira de pestañas sobra: cada gráfico ya muestra su nombre en su barrita -->
+  <!-- with a single tab the tab strip is redundant: each chart already shows its name in its little bar -->
   <Style Selector="TabControl.single /template/ ItemsPresenter#PART_ItemsPresenter">
     <Setter Property="IsVisible" Value="False" />
   </Style>
@@ -477,7 +477,7 @@
     <Setter Property="FontWeight" Value="Medium" />
   </Style>
 
-  <!-- ============ Menús y tooltips ============ -->
+  <!-- ============ Menus and tooltips ============ -->
   <Style Selector="MenuItem">
     <Setter Property="Padding" Value="10,6" />
     <Setter Property="FontSize" Value="12.5" />

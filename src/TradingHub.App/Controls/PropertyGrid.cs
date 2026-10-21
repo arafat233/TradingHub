@@ -16,9 +16,9 @@ using DColor = System.Drawing.Color;
 namespace TradingHub.App.Controls;
 
 /// <summary>
-/// Editor de propiedades genérico: arma los controles a partir de los atributos [Display], [Range],
-/// [Browsable], [Tab] y [VisibleWhen] (los mismos que usan los indicadores de ATAS).
-/// Los cambios se aplican en el momento.
+/// Generic property editor: it builds the controls from the [Display], [Range],
+/// [Browsable], [Tab] and [VisibleWhen] attributes (the same ones the ATAS indicators use).
+/// The changes are applied immediately.
 /// </summary>
 public sealed class PropertyGrid : UserControl
 {
@@ -26,7 +26,7 @@ public sealed class PropertyGrid : UserControl
     private object? _target;
     private readonly List<(PropertyInfo Prop, Control Row, VisibleWhenAttribute[] Conditions, object Owner)> _rows = new();
 
-    /// <summary>Títulos de grupo con sus filas: un título sin filas visibles se oculta.</summary>
+    /// <summary>Group headings with their rows: a heading with no visible rows is hidden.</summary>
     private readonly List<(TextBlock Header, List<Control> Rows)> _headers = new();
 
     public PropertyGrid()
@@ -34,10 +34,10 @@ public sealed class PropertyGrid : UserControl
         Content = new ScrollViewer { Content = _root, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
     }
 
-    /// <summary>Se dispara después de cada cambio.</summary>
+    /// <summary>Raised after each change.</summary>
     public event Action? Changed;
 
-    /// <summary>Propiedades a omitir (por nombre).</summary>
+    /// <summary>Properties to skip (by name).</summary>
     public HashSet<string> Exclude { get; } = new();
 
     public object? Target
@@ -87,7 +87,7 @@ public sealed class PropertyGrid : UserControl
         UpdateVisibility();
     }
 
-    // ------------------------------------------------------------------ reflexión
+    // ------------------------------------------------------------------ reflection
 
     public static IEnumerable<PropertyInfo> EditableProperties(Type t)
     {
@@ -150,13 +150,13 @@ public sealed class PropertyGrid : UserControl
     {
         var f = value.GetType().GetField(value.ToString()!);
         var d = f?.GetCustomAttribute<DisplayAttribute>();
-        // también [Description] (los filtros de contexto de las estrategias lo usan)
+        // also [Description] (the strategies' context filters use it)
         string fallback = f?.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description ?? value.ToString()!;
         try { return d?.GetName() ?? fallback; }
         catch { return d?.Name ?? fallback; }
     }
 
-    // ------------------------------------------------------------------ filas
+    // ------------------------------------------------------------------ rows
 
     private void AddRow(Panel parent, object owner, PropertyInfo p, int depth)
     {
@@ -207,7 +207,7 @@ public sealed class PropertyGrid : UserControl
         }
         catch (Exception ex)
         {
-            TradingHub.Common.Logging.LoggingExtensions.LogWarn(this, $"No se pudo cambiar {p.Name}: {ex.InnerException?.Message ?? ex.Message}");
+            TradingHub.Common.Logging.LoggingExtensions.LogWarn(this, $"Could not change {p.Name}: {ex.InnerException?.Message ?? ex.Message}");
         }
     }
 
@@ -241,7 +241,7 @@ public sealed class PropertyGrid : UserControl
             return cb;
         }
 
-        // colores guardados como ARGB (uint): antes que los números, si no aparecían como una caja con un número
+        // colors stored as ARGB (uint): before the numbers, otherwise they showed up as a box with a number
         if ((t == typeof(uint?) || t == typeof(uint)) && p.Name.EndsWith("Color", StringComparison.Ordinal))
         {
             var current = value is uint u ? DColor.FromArgb(unchecked((int)u)) : DColor.Empty;
@@ -270,7 +270,7 @@ public sealed class PropertyGrid : UserControl
                 }
                 catch
                 {
-                    // rango inválido: sin límites
+                    // invalid range: no limits
                 }
             }
             else num.Minimum = decimal.MinValue;
@@ -279,7 +279,7 @@ public sealed class PropertyGrid : UserControl
             {
                 if (e.NewValue == null) return;
                 try { Set(owner, p, Convert.ChangeType(e.NewValue.Value, nt ?? t, CultureInfo.InvariantCulture)); }
-                catch { /* fuera de rango del tipo */ }
+                catch { /* outside the type's range */ }
             };
             return num;
         }
@@ -341,7 +341,7 @@ public sealed class PropertyGrid : UserControl
             return tb;
         }
 
-        // filtros: activado + valor
+        // filters: enabled + value
         if (value != null && IsFilter(t, out var valueProp))
         {
             var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
@@ -363,7 +363,7 @@ public sealed class PropertyGrid : UserControl
             return panel;
         }
 
-        // objetos anidados (lápices, fuentes, configuraciones)
+        // nested objects (pens, fonts, settings)
         if (value != null && IsComplex(t))
         {
             var inner = new StackPanel { Spacing = 2, Margin = new Thickness(8, 2, 0, 4) };
@@ -431,7 +431,7 @@ public sealed class PropertyGrid : UserControl
         var flyoutContent = new StackPanel { Spacing = 8, Margin = new Thickness(12), Children = { view } };
         if (allowAuto)
         {
-            var auto = new Button { Content = "Automático (color del tema)" };
+            var auto = new Button { Content = "Automatic (theme color)" };
             auto.Click += (_, _) =>
             {
                 swatch.Background = Brushes.Transparent;
@@ -451,7 +451,7 @@ public sealed class PropertyGrid : UserControl
     {
         var visibleSeries = ind.DataSeries.Where(s => !s.IsHidden).ToList();
         if (visibleSeries.Count == 0 && ind.LineSeries.Count == 0) return;
-        _root.Children.Add(new TextBlock { Text = "Series (colores y estilo)", FontWeight = FontWeight.SemiBold, Foreground = Ui.Text1, Margin = new Thickness(0, 12, 0, 2) });
+        _root.Children.Add(new TextBlock { Text = "Series (colors and style)", FontWeight = FontWeight.SemiBold, Foreground = Ui.Text1, Margin = new Thickness(0, 12, 0, 2) });
         foreach (var s in visibleSeries)
         {
             var inner = new StackPanel { Spacing = 2, Margin = new Thickness(8, 2, 0, 4) };
@@ -464,7 +464,7 @@ public sealed class PropertyGrid : UserControl
         {
             var inner = new StackPanel { Spacing = 2, Margin = new Thickness(8, 2, 0, 4) };
             foreach (var p in EditableProperties(ls.GetType())) AddRow(inner, ls, p, 1);
-            _root.Children.Add(new Expander { Header = "Nivel: " + ls.Name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch });
+            _root.Children.Add(new Expander { Header = "Level: " + ls.Name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch });
         }
     }
 }

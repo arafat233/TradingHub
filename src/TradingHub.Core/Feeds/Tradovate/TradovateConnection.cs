@@ -9,41 +9,41 @@ using TradingHub.Market;
 
 namespace TradingHub.Feeds.Tradovate;
 
-/// <summary>Conexión de Tradovate (API oficial): usuario y contraseña de Tradovate más la API key (CID y secret).</summary>
+/// <summary>Tradovate connection (official API): Tradovate user and password plus the API key (CID and secret).</summary>
 public sealed class TradovateSettings
 {
-    /// <summary>Cuenta real (live.tradovateapi.com); si no, demo.</summary>
+    /// <summary>Real account (live.tradovateapi.com); otherwise, demo.</summary>
     public bool Live { get; set; }
     public string User { get; set; } = "";
     public string Password { get; set; } = "";
 
-    /// <summary>API key de Tradovate (Settings → API Access): CID y secret.</summary>
+    /// <summary>Tradovate API key (Settings -> API Access): CID and secret.</summary>
     public string Cid { get; set; } = "";
     public string Sec { get; set; } = "";
     public string AppId { get; set; } = "TradingHub";
     public string AppVersion { get; set; } = "1.0";
 
-    /// <summary>Id fijo de este equipo (Tradovate limita la cantidad de dispositivos).</summary>
+    /// <summary>Fixed id of this machine (Tradovate limits the number of devices).</summary>
     public string DeviceId { get; set; } = "";
 
-    /// <summary>Productos para el buscador (contrato del mes de cada uno).</summary>
+    /// <summary>Products for the search box (front-month contract of each one).</summary>
     public List<string> Products { get; set; } = new() { "ES", "NQ", "MES", "MNQ", "YM", "MYM", "RTY", "M2K", "CL", "MCL", "GC", "MGC" };
 
-    /// <summary>Servidores alternativos (pruebas).</summary>
+    /// <summary>Alternative servers (tests).</summary>
     public string? RestUrl { get; set; }
     public string? UserSocketUrl { get; set; }
     public string? MdSocketUrl { get; set; }
 }
 
-/// <summary>Error de la API de Tradovate.</summary>
+/// <summary>Tradovate API error.</summary>
 public sealed class TradovateException(string message, int status = 0) : Exception(message)
 {
     public int Status { get; } = status;
 }
 
 /// <summary>
-/// Una conexión por perfil a Tradovate: un solo token (cada login abre una sesión y Tradovate deja dos), renovado antes
-/// de que venza; REST para órdenes y consultas; y dos WebSocket compartidos: datos de mercado (md) y la cuenta (user).
+/// One connection per profile to Tradovate: a single token (each login opens a session and Tradovate allows two), renewed before
+/// it expires; REST for orders and queries; and two shared WebSockets: market data (md) and the account (user).
 /// </summary>
 public sealed class TradovateConnection : IDisposable
 {
@@ -68,8 +68,8 @@ public sealed class TradovateConnection : IDisposable
     private string UserSocketUrl => Settings.UserSocketUrl ?? (Settings.Live ? "wss://live.tradovateapi.com/v1/websocket" : "wss://demo.tradovateapi.com/v1/websocket");
     private string MdSocketUrl => Settings.MdSocketUrl ?? "wss://md.tradovateapi.com/v1/websocket";
 
-    public TradovateSocket Md => _mdSocket ??= new TradovateSocket(MdSocketUrl, ct => MdTokenAsync(ct), "datos de Tradovate");
-    public TradovateSocket User => _userSocket ??= new TradovateSocket(UserSocketUrl, ct => AccessTokenAsync(ct), "cuenta de Tradovate");
+    public TradovateSocket Md => _mdSocket ??= new TradovateSocket(MdSocketUrl, ct => MdTokenAsync(ct), "Tradovate data");
+    public TradovateSocket User => _userSocket ??= new TradovateSocket(UserSocketUrl, ct => AccessTokenAsync(ct), "Tradovate account");
 
     // ===================================================================== token
 
@@ -92,7 +92,7 @@ public sealed class TradovateConnection : IDisposable
         try
         {
             if (_access != null && DateTime.UtcNow < _expires.AddMinutes(-10)) return;
-            // renovar no abre otra sesión; pedir uno nuevo sí (y Tradovate corta la más vieja si hay más de dos)
+            // renewing does not open another session; asking for a new one does (and Tradovate cuts the oldest if there are more than two)
             if (_access != null && DateTime.UtcNow < _expires)
             {
                 try
@@ -104,7 +104,7 @@ public sealed class TradovateConnection : IDisposable
                 }
                 catch (HttpRequestException)
                 {
-                    // se pide uno nuevo
+                    // a new one is requested
                 }
             }
 
@@ -120,7 +120,7 @@ public sealed class TradovateConnection : IDisposable
     {
         var s = Settings;
         if (string.IsNullOrWhiteSpace(s.User) || string.IsNullOrEmpty(s.Password))
-            throw new TradovateException("Faltan el usuario y la contraseña de Tradovate.");
+            throw new TradovateException("The Tradovate user and password are missing.");
         var body = new JsonObject
         {
             ["name"] = s.User.Trim(),
@@ -134,15 +134,15 @@ public sealed class TradovateConnection : IDisposable
         using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
         using var resp = await _http.PostAsync(RestBase + "/auth/accesstokenrequest", content, ct).ConfigureAwait(false);
         var text = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode) throw new TradovateException($"Tradovate respondió {(int)resp.StatusCode} al iniciar sesión: {Short(text)}", (int)resp.StatusCode);
+        if (!resp.IsSuccessStatusCode) throw new TradovateException($"Tradovate replied {(int)resp.StatusCode} on sign-in: {Short(text)}", (int)resp.StatusCode);
         if (!ReadToken(text, renew: false))
         {
             using var doc = JsonDocument.Parse(text);
             var root = doc.RootElement;
             if (root.TryGetProperty("p-ticket", out _))
-                throw new TradovateException("Tradovate pide esperar o resolver un captcha por demasiados intentos: entrá una vez desde la web de Tradovate y volvé a probar en unos minutos.");
+                throw new TradovateException("Tradovate is asking you to wait or solve a captcha after too many attempts: sign in once from the Tradovate website and try again in a few minutes.");
             string err = root.TryGetProperty("errorText", out var e) ? e.GetString() ?? "" : "";
-            throw new TradovateException(err.Length > 0 ? "Tradovate: " + err : "Tradovate no devolvió el token (revisá usuario, contraseña, CID y secret).");
+            throw new TradovateException(err.Length > 0 ? "Tradovate: " + err : "Tradovate did not return the token (check user, password, CID and secret).");
         }
     }
 
@@ -183,7 +183,7 @@ public sealed class TradovateConnection : IDisposable
             var text = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized && attempt == 0)
             {
-                _access = null; // vencido o cortado: uno nuevo
+                _access = null; // expired or dropped: a new one
                 continue;
             }
 
@@ -193,28 +193,28 @@ public sealed class TradovateConnection : IDisposable
                 continue;
             }
 
-            if (!resp.IsSuccessStatusCode) throw new TradovateException($"Tradovate respondió {(int)resp.StatusCode}: {Short(text)}", (int)resp.StatusCode);
+            if (!resp.IsSuccessStatusCode) throw new TradovateException($"Tradovate replied {(int)resp.StatusCode}: {Short(text)}", (int)resp.StatusCode);
             using var doc = JsonDocument.Parse(text.Length == 0 ? "null" : text);
             return doc.RootElement.Clone();
         }
     }
 
-    // ===================================================================== contratos
+    // ===================================================================== contracts
 
-    /// <summary>Contrato del mes de un producto (ES → ESZ6) con su id, en una fecha.</summary>
+    /// <summary>Front-month contract of a product (ES -> ESZ6) with its id, on a date.</summary>
     public async Task<(long Id, string Name)> ContractAsync(string root, DateTime utc, CancellationToken ct)
     {
         root = root.Trim().ToUpperInvariant();
         string? name = FuturesRolls.Supports(root) ? FuturesRolls.On(root, utc).Symbol : null;
         if (name == null)
         {
-            // otros productos: el primero que sugiere Tradovate (el más cercano a vencer que siga activo)
+            // other products: the first one Tradovate suggests (the nearest to expiry that is still active)
             if (_contracts.TryGetValue("front|" + root, out var cached)) return cached;
             var list = await GetAsync($"/contract/suggest?t={Uri.EscapeDataString(root)}&l=10", ct).ConfigureAwait(false);
             var first = list.ValueKind == JsonValueKind.Array
                 ? list.EnumerateArray().FirstOrDefault(c => c.TryGetProperty("name", out var n) && (n.GetString() ?? "").StartsWith(root, StringComparison.OrdinalIgnoreCase) && (n.GetString()!.Length <= root.Length + 2))
                 : default;
-            if (first.ValueKind != JsonValueKind.Object) throw new TradovateException($"Tradovate no tiene contratos de {root}.");
+            if (first.ValueKind != JsonValueKind.Object) throw new TradovateException($"Tradovate has no {root} contracts.");
             var r = (first.GetProperty("id").GetInt64(), first.GetProperty("name").GetString()!);
             _contracts["front|" + root] = r;
             _contractNames[r.Item1] = r.Item2;
@@ -228,14 +228,14 @@ public sealed class TradovateConnection : IDisposable
     {
         if (_contracts.TryGetValue(name, out var c)) return c;
         var e = await GetAsync($"/contract/find?name={Uri.EscapeDataString(name)}", ct).ConfigureAwait(false);
-        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("id", out var id)) throw new TradovateException($"Tradovate no encontró el contrato {name}.");
+        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("id", out var id)) throw new TradovateException($"Tradovate did not find the contract {name}.");
         var r = (id.GetInt64(), e.GetProperty("name").GetString() ?? name);
         _contracts[name] = r;
         _contractNames[r.Item1] = r.Item2;
         return r;
     }
 
-    /// <summary>Nombre de un contrato por su id (ESZ6).</summary>
+    /// <summary>Name of a contract by its id (ESZ6).</summary>
     public async Task<string> ContractNameAsync(long id, CancellationToken ct)
     {
         if (_contractNames.TryGetValue(id, out var n)) return n;
@@ -262,9 +262,9 @@ public sealed class TradovateConnection : IDisposable
 }
 
 /// <summary>
-/// WebSocket de Tradovate: marcos «o» (abierto: se autoriza), «h» (latido del servidor), «a[…]» (mensajes) y «c» (cierre).
-/// Los pedidos van como «endpoint\nid\n\ncuerpo» y la respuesta trae {s, i, d}; los eventos traen {e, d}. Hay que
-/// mandar «[]» cada 2,5 s o el servidor corta a los 15 s sin nada.
+/// Tradovate WebSocket: "o" frames (open: it authorizes), "h" (server heartbeat), "a[…]" (messages) and "c" (close).
+/// The requests go as "endpoint\nid\n\nbody" and the response carries {s, i, d}; the events carry {e, d}. You have to
+/// send "[]" every 2.5 s or the server cuts off after 15 s with nothing.
 /// </summary>
 public sealed class TradovateSocket : IDisposable
 {
@@ -289,10 +289,10 @@ public sealed class TradovateSocket : IDisposable
 
     public bool IsConnected => _ws?.State == WebSocketState.Open && _authorized?.Task.IsCompletedSuccessfully == true;
 
-    /// <summary>Evento del servidor (e: md, chart, props, clock, shutdown…).</summary>
+    /// <summary>Server event (e: md, chart, props, clock, shutdown…).</summary>
     public event Action<string, JsonElement>? Event;
 
-    /// <summary>Se conectó (true) o se cortó (false) con el motivo.</summary>
+    /// <summary>It connected (true) or dropped (false) with the reason.</summary>
     public event Action<bool, string?>? StateChanged;
 
     public async Task EnsureAsync(CancellationToken ct)
@@ -302,7 +302,7 @@ public sealed class TradovateSocket : IDisposable
         try
         {
             if (IsConnected) return;
-            Drop("reconectando", notify: false);
+            Drop("reconnecting", notify: false);
             var token = await _token(ct).ConfigureAwait(false);
             var ws = new ClientWebSocket();
             using (var c = CancellationTokenSource.CreateLinkedTokenSource(ct))
@@ -318,7 +318,7 @@ public sealed class TradovateSocket : IDisposable
             _ = Task.Run(() => ReceiveAsync(ws, token, loop));
             using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct);
             wait.CancelAfter(TimeSpan.FromSeconds(15));
-            await using (wait.Token.Register(() => _authorized.TrySetException(new TimeoutException($"La {_name} no respondió a tiempo."))))
+            await using (wait.Token.Register(() => _authorized.TrySetException(new TimeoutException($"The {_name} did not respond in time."))))
                 await _authorized.Task.ConfigureAwait(false);
             _ = Task.Run(() => HeartbeatAsync(ws, loop));
             StateChanged?.Invoke(true, null);
@@ -341,7 +341,7 @@ public sealed class TradovateSocket : IDisposable
         }
         catch
         {
-            // el corte lo detecta la lectura
+            // the drop is detected by the read
         }
     }
 
@@ -362,7 +362,7 @@ public sealed class TradovateSocket : IDisposable
     {
         var buf = new byte[1 << 16];
         var ms = new MemoryStream();
-        string why = "se cortó la conexión";
+        string why = "the connection dropped";
         bool opened = false;
         try
         {
@@ -379,7 +379,7 @@ public sealed class TradovateSocket : IDisposable
 
                 if (r.MessageType == WebSocketMessageType.Close)
                 {
-                    why = "Tradovate cerró la conexión";
+                    why = "Tradovate closed the connection";
                     break;
                 }
 
@@ -398,7 +398,7 @@ public sealed class TradovateSocket : IDisposable
                     case 'h':
                         break;
                     case 'c':
-                        why = "Tradovate cerró la sesión" + (text.Length > 1 ? ": " + text[1..] : "");
+                        why = "Tradovate closed the session" + (text.Length > 1 ? ": " + text[1..] : "");
                         goto done;
                     case 'a':
                         HandleArray(text[1..]);
@@ -444,9 +444,9 @@ public sealed class TradovateSocket : IDisposable
                     string reason = d.ValueKind == JsonValueKind.Object && d.TryGetProperty("reasonCode", out var rc) ? rc.GetString() ?? "" : "";
                     Drop(reason switch
                     {
-                        "ConnectionQuotaReached" => "Tradovate cortó por límite de conexiones (¿tenés Tradovate abierto en otro lado con el mismo usuario?)",
-                        "Maintenance" => "Tradovate está en mantenimiento",
-                        _ => "Tradovate cortó la sesión " + reason,
+                        "ConnectionQuotaReached" => "Tradovate dropped it on a connection limit (do you have Tradovate open elsewhere with the same user?)",
+                        "Maintenance" => "Tradovate is under maintenance",
+                        _ => "Tradovate dropped the session" + reason,
                     }, notify: true);
                     return;
                 }
@@ -461,32 +461,32 @@ public sealed class TradovateSocket : IDisposable
             if (i == 0 && _authorized is { } auth && !auth.Task.IsCompleted)
             {
                 if (status == 200) auth.TrySetResult(true);
-                else auth.TrySetException(new TradovateException($"Tradovate rechazó la autorización de la {_name}: {Text(data)}", status));
+                else auth.TrySetException(new TradovateException($"Tradovate rejected the {_name} authorization: {Text(data)}", status));
                 continue;
             }
 
             if (_pending.TryRemove(i, out var tcs))
             {
                 if (status == 200) tcs.TrySetResult(data);
-                else tcs.TrySetException(new TradovateException($"Tradovate respondió {status}: {Text(data)}", status));
+                else tcs.TrySetException(new TradovateException($"Tradovate replied {status}: {Text(data)}", status));
             }
         }
     }
 
     private static string Text(JsonElement d) => d.ValueKind switch
     {
-        // a veces el texto viene entre comillas («"Access is denied"»)
+        // sometimes the text comes in quotes ("\"Access is denied\"")
         JsonValueKind.String => (d.GetString() ?? "").Trim('"'),
         JsonValueKind.Object when d.TryGetProperty("errorText", out var e) => e.GetString() ?? "",
-        JsonValueKind.Undefined => "sin detalle",
+        JsonValueKind.Undefined => "no detail",
         _ => d.ToString(),
     };
 
-    /// <summary>Pedido por el socket (conecta si hace falta); devuelve «d».</summary>
+    /// <summary>Request over the socket (it connects if needed); returns "d".</summary>
     public async Task<JsonElement> RequestAsync(string endpoint, JsonNode? body, CancellationToken ct, string query = "")
     {
         await EnsureAsync(ct).ConfigureAwait(false);
-        var ws = _ws ?? throw new IOException($"Sin conexión con la {_name}");
+        var ws = _ws ?? throw new IOException($"No connection to the {_name}");
         int id = Interlocked.Increment(ref _id);
         var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = tcs;
@@ -500,7 +500,7 @@ public sealed class TradovateSocket : IDisposable
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new TimeoutException($"La {_name} no respondió a tiempo ({endpoint}).");
+            throw new TimeoutException($"The {_name} did not respond in time ({endpoint}).");
         }
         finally
         {
@@ -526,20 +526,20 @@ public sealed class TradovateSocket : IDisposable
         }
         catch
         {
-            // cerrado
+            // closed
         }
 
         _ws = null;
         _authorized?.TrySetException(new IOException(why));
         foreach (var p in _pending)
             if (_pending.TryRemove(p.Key, out var tcs))
-                tcs.TrySetException(new IOException($"Se cortó la {_name} ({why})"));
+                tcs.TrySetException(new IOException($"The {_name} dropped ({why})"));
         if (was && notify) StateChanged?.Invoke(false, why);
     }
 
     public void Dispose()
     {
         _life.Cancel();
-        Drop("cerrada", notify: false);
+        Drop("closed", notify: false);
     }
 }

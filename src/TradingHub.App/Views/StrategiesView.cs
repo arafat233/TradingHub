@@ -17,9 +17,9 @@ using TradingHub.Strategies;
 namespace TradingHub.App.Views;
 
 /// <summary>
-/// Backtesting: todo lo que es prueba. Código de la estrategia, backtest tick a tick, optimización, walk-forward,
-/// historial de corridas, portafolio de pruebas y reportes. Lo que corre en tiempo real vive en la sección En vivo.
-/// La estrategia se elige arriba (sin barra lateral) para dejar todo el ancho.
+/// Backtesting: everything that is testing. Strategy code, tick-by-tick backtest, optimization, walk-forward,
+/// run history, test portfolio and reports. What runs in real time lives in the Live section.
+/// The strategy is picked at the top (no sidebar) to leave the full width available.
 /// </summary>
 internal sealed partial class StrategiesView : UserControl, IPage
 {
@@ -29,7 +29,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
     private StrategyFile? _current;
     private UiState _state = new();
 
-    // encabezado
+    // header
     private readonly TextBlock _strategyName = new() { FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private Flyout _strategyMenu = new() { Placement = PlacementMode.BottomEdgeAlignedLeft };
     private Button _strategyPicker = null!;
@@ -39,7 +39,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
     private readonly Panel _pages = new();
     private readonly Dictionary<string, Control> _pageControls = new();
 
-    // código
+    // code
     private readonly CodeEditor _editor = new();
     private readonly TextBlock _fileInfo = new() { Classes = { "faint", "small" }, VerticalAlignment = VerticalAlignment.Center };
 
@@ -50,13 +50,13 @@ internal sealed partial class StrategiesView : UserControl, IPage
         _catalog = svc.Strategies;
         _tabs = new Ui.Segmented<string>(new[]
         {
-            ("code", "Código", (string?)"Editar la estrategia en C#"),
-            ("backtest", "Backtest", (string?)"Probar con datos históricos, tick a tick"),
-            ("optimize", "Optimización", (string?)"Probar combinaciones de parámetros"),
-            ("wfo", "Walk-forward", (string?)"Optimizar y validar fuera de muestra, ventana por ventana"),
-            ("history", "Historial", (string?)"Corridas guardadas de esta estrategia"),
-            ("portfolio", "Portafolio", (string?)"Portafolio de pruebas: combinar backtests de varias estrategias y medir su correlación"),
-            ("reports", "Reportes", (string?)"Informes profesionales de las estrategias y portafolios"),
+            ("code", "Code", (string?)"Edit the strategy in C#"),
+            ("backtest", "Backtest", (string?)"Test with historical data, tick by tick"),
+            ("optimize", "Optimization", (string?)"Test combinations of parameters"),
+            ("wfo", "Walk-forward", (string?)"Optimize and validate out of sample, window by window"),
+            ("history", "History", (string?)"This strategy's stored runs"),
+            ("portfolio", "Portfolio", (string?)"Test portfolio: combine backtests from several strategies and measure their correlation"),
+            ("reports", "Reports", (string?)"Professional reports for the strategies and portfolios"),
         });
         _tabs.SelectionChanged += ShowTab;
 
@@ -96,7 +96,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
         var picker = new Button { Flyout = _strategyMenu, Classes = { "ghost" }, Padding = new Thickness(10, 6) };
         _strategyPicker = picker;
         picker.Content = Ui.H(10, Ui.Icon(MaterialIconKind.RobotOutline, 20, Ui.Accent), _strategyName, Ui.Icon(MaterialIconKind.ChevronDown, 16, Ui.Text2));
-        ToolTip.SetTip(picker, "Elegir o crear estrategia");
+        ToolTip.SetTip(picker, "Choose or create a strategy");
         var state = new Border { Child = Ui.H(7, _compileDot, _compileText), Classes = { "pill" } };
         var left = Ui.H(12, picker, state);
         var header = new DockPanel { Margin = new Thickness(20, 12, 20, 12) };
@@ -121,8 +121,8 @@ internal sealed partial class StrategiesView : UserControl, IPage
     }
 
     /// <summary>
-    /// La lista de estrategias: arriba las favoritas y abajo todas, cada una con su estrella para sumarla o sacarla de
-    /// favoritas (sin cerrar la lista), un buscador y las acciones de siempre.
+    /// The strategy list: favorites at the top and all of them below, each with its star to add it to or remove it from
+    /// favorites (without closing the list), a search box and the usual actions.
     /// </summary>
     private void BuildStrategyMenu()
     {
@@ -137,12 +137,12 @@ internal sealed partial class StrategiesView : UserControl, IPage
         var favs = _svc.Settings.FavoriteStrategies;
         if (favs.RemoveAll(x => x.Equals(f.FileName, StringComparison.OrdinalIgnoreCase)) == 0) favs.Add(f.FileName);
         _svc.Settings.Save();
-        _status(IsFavorite(f) ? $"{f.DisplayName} quedó en favoritos" : $"{f.DisplayName} salió de favoritos");
+        _status(IsFavorite(f) ? $"{f.DisplayName} added to favourites" : $"{f.DisplayName} removed from favourites");
     }
 
     private Control StrategyList()
     {
-        var search = new TextBox { Watermark = "Buscar estrategia…", Margin = new Thickness(0, 0, 0, 8) };
+        var search = new TextBox { Watermark = "Search strategy…", Margin = new Thickness(0, 0, 0, 8) };
         var list = new StackPanel { Spacing = 2 };
 
         void Fill()
@@ -160,19 +160,19 @@ internal sealed partial class StrategiesView : UserControl, IPage
                 return h;
             }
 
-            list.Children.Add(Section("Favoritos"));
+            list.Children.Add(Section("Favorites"));
             if (favorites.Count == 0)
                 list.Children.Add(new TextBlock
                 {
-                    Text = q.Length > 0 ? "Ninguna favorita con ese nombre." : "Tocá la estrella de una estrategia para tenerla acá arriba.",
+                    Text = q.Length > 0 ? "No favourite with that name." : "Click a strategy's star to keep it up here.",
                     Classes = { "faint", "small" }, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 2, 4, 8),
                 });
             foreach (var f in favorites) list.Children.Add(StrategyRow(f, Fill));
 
             list.Children.Add(new Border { Height = 1, Background = Ui.Line, Margin = new Thickness(0, 6) });
-            list.Children.Add(Section("Todas las estrategias"));
+            list.Children.Add(Section("Every strategy"));
             if (files.Count == 0)
-                list.Children.Add(new TextBlock { Text = q.Length > 0 ? "Ninguna estrategia con ese nombre." : "Todavía no hay estrategias.", Classes = { "faint", "small" }, Margin = new Thickness(4, 2) });
+                list.Children.Add(new TextBlock { Text = q.Length > 0 ? "No strategy with that name." : "There are no strategies yet.", Classes = { "faint", "small" }, Margin = new Thickness(4, 2) });
             foreach (var f in files) list.Children.Add(StrategyRow(f, Fill));
         }
 
@@ -193,8 +193,8 @@ internal sealed partial class StrategiesView : UserControl, IPage
 
         var actions = Ui.V(2,
             new Border { Height = 1, Background = Ui.Line, Margin = new Thickness(0, 6) },
-            Action("Nueva estrategia…", MaterialIconKind.Plus, () => _ = NewStrategyAsync()),
-            Action("Abrir carpeta de estrategias", MaterialIconKind.FolderOpenOutline, () => Shell.OpenFolder(AppPaths.Strategies)));
+            Action("New strategy…", MaterialIconKind.Plus, () => _ = NewStrategyAsync()),
+            Action("Open strategies folder", MaterialIconKind.FolderOpenOutline, () => Shell.OpenFolder(AppPaths.Strategies)));
         var root = new DockPanel { Width = 440, Margin = new Thickness(12) };
         DockPanel.SetDock(search, Dock.Top);
         DockPanel.SetDock(actions, Dock.Bottom);
@@ -204,7 +204,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
         return root;
     }
 
-    /// <summary>Una estrategia de la lista: la estrella (favorita o no) y el resto de la fila la abre.</summary>
+    /// <summary>A strategy from the list: the star (favorite or not) and the rest of the row opens it.</summary>
     private Control StrategyRow(StrategyFile f, Action refresh)
     {
         bool fav = IsFavorite(f), ok = f.LastCompile?.Success != false, current = ReferenceEquals(f, _current);
@@ -213,7 +213,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
             Content = Ui.Icon(fav ? MaterialIconKind.Star : MaterialIconKind.StarOutline, 18, fav ? Ui.Accent : Ui.Text2),
             Classes = { "ghost" }, Padding = new Thickness(6), VerticalAlignment = VerticalAlignment.Center,
         };
-        ToolTip.SetTip(star, fav ? "Sacar de favoritos" : "Agregar a favoritos");
+        ToolTip.SetTip(star, fav ? "Remove from favorites" : "Add to favorites");
         star.Click += (_, _) =>
         {
             ToggleFavorite(f);
@@ -242,16 +242,16 @@ internal sealed partial class StrategiesView : UserControl, IPage
         return row;
     }
 
-    // ===================================================================== selección y compilación
+    // ===================================================================== selection and compilation
 
-    /// <summary>Abre en el editor la estrategia de ese archivo (por ejemplo, una de otra carpeta).</summary>
+    /// <summary>Opens that file's strategy in the editor (for example, one from another folder).</summary>
     internal async Task OpenFileAsync(string path)
     {
         _catalog.Refresh();
         var full = Path.GetFullPath(path);
         var file = _catalog.Files.FirstOrDefault(f => string.Equals(Path.GetFullPath(f.Path), full, StringComparison.OrdinalIgnoreCase));
         if (file != null) await SelectAsync(file);
-        else _status($"No encontré {Path.GetFileName(path)} entre las estrategias");
+        else _status($"{Path.GetFileName(path)} was not found among the strategies");
     }
 
     private async Task SelectAsync(StrategyFile file)
@@ -272,7 +272,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
         File.WriteAllText(_current.Path, _editor.Text);
         _editor.IsDirty = false;
         UpdateFileInfo();
-        _status($"Guardado {Path.GetFileName(_current.Path)}");
+        _status($"Saved {Path.GetFileName(_current.Path)}");
     }
 
     private void UpdateFileInfo()
@@ -285,7 +285,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
     {
         if (_current == null) return false;
         if (_editor.IsDirty) Save();
-        SetCompileState(null, "Compilando…");
+        SetCompileState(null, "Compiling…");
         var file = _current;
         var res = await Task.Run(() => _catalog.Compile(file, force: !silent));
         if (!ReferenceEquals(file, _current)) return false;
@@ -293,18 +293,18 @@ internal sealed partial class StrategiesView : UserControl, IPage
         if (res.Success && file.Type != null)
         {
             _compiledSource = File.ReadAllText(file.Path);
-            SetCompileState(true, $"Compilada · {res.Elapsed.TotalMilliseconds:0} ms");
+            SetCompileState(true, $"Compiled · {res.Elapsed.TotalMilliseconds:0} ms");
             _strategyName.Text = file.DisplayName;
             LoadState();
             BuildParameterForm();
             RefreshRanges();
-            if (!silent) _status($"{file.DisplayName} compilada sin errores");
+            if (!silent) _status($"{file.DisplayName} compiled with no errors");
             return true;
         }
 
         int errors = res.Diagnostics.Count(d => d.Severity == "error");
-        SetCompileState(false, $"{errors} error{(errors == 1 ? "" : "es")}");
-        if (!silent) _status($"La estrategia tiene {errors} error(es): revisalos en Código");
+        SetCompileState(false, $"{errors} error{(errors == 1 ? "" : "s")}");
+        if (!silent) _status($"The strategy has {errors} error(s): review them in Code");
         return false;
     }
 
@@ -326,26 +326,26 @@ internal sealed partial class StrategiesView : UserControl, IPage
         ShowTab("code");
     }
 
-    // ===================================================================== página: código
+    // ===================================================================== page: code
 
     private Control BuildCodePage()
     {
-        var save = Ui.Button("Guardar", MaterialIconKind.ContentSaveOutline, Save);
+        var save = Ui.Button("Save", MaterialIconKind.ContentSaveOutline, Save);
         ToolTip.SetTip(save, "⌘S");
-        var compile = Ui.Button("Compilar", MaterialIconKind.Hammer, () => _ = CompileAsync(), "primary");
+        var compile = Ui.Button("Compile", MaterialIconKind.Hammer, () => _ = CompileAsync(), "primary");
         ToolTip.SetTip(compile, "⌘B");
-        var test = Ui.Button("Compilar y probar", MaterialIconKind.PlayOutline, async () =>
+        var test = Ui.Button("Compile and test", MaterialIconKind.PlayOutline, async () =>
         {
             if (!await CompileAsync()) return;
             _tabs.Select("backtest");
             ShowTab("backtest");
             await RunBacktestAsync();
         });
-        var help = new Button { Content = Ui.H(6, Ui.Icon(MaterialIconKind.BookOpenPageVariantOutline, 16), new TextBlock { Text = "Referencia" }), Flyout = new Flyout { Content = ApiHelp() } };
-        var delete = Ui.IconButton(MaterialIconKind.DeleteOutline, "Borrar esta estrategia", async () =>
+        var help = new Button { Content = Ui.H(6, Ui.Icon(MaterialIconKind.BookOpenPageVariantOutline, 16), new TextBlock { Text = "Reference" }), Flyout = new Flyout { Content = ApiHelp() } };
+        var delete = Ui.IconButton(MaterialIconKind.DeleteOutline, "Delete this strategy", async () =>
         {
             if (_current == null || TopLevel.GetTopLevel(this) is not Window w) return;
-            if (!await ConfirmDialog.ShowAsync(w, "Borrar estrategia", $"Se borra el archivo {Path.GetFileName(_current.Path)}. El historial de backtests se conserva.", "Borrar", danger: true)) return;
+            if (!await ConfirmDialog.ShowAsync(w, "Delete strategy", $"The file {Path.GetFileName(_current.Path)} is deleted. The backtest history is kept.", "Delete", danger: true)) return;
             _catalog.Delete(_current);
             _current = null;
             var next = _catalog.Files.FirstOrDefault();
@@ -363,7 +363,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
         editorArea.Children.Add(top);
         editorArea.Children.Add(_editor);
 
-        // editor + Claude lado a lado: lo que Claude escribe se ve en el editor
+        // editor + Claude side by side: what Claude writes shows up in the editor
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,1,400") };
         grid.Children.Add(editorArea);
         var split = new GridSplitter { ResizeDirection = GridResizeDirection.Columns, Width = 1 };
@@ -386,20 +386,20 @@ internal sealed partial class StrategiesView : UserControl, IPage
             MaxHeight = 520,
             Width = 520,
             Content = Ui.V(12,
-                Ui.H2("Referencia rápida"),
-                Section("Ciclo", "OnInit()  → crear indicadores\nOnBar(Bar bar)  → al cerrar cada vela\nOnTick(Trade t)  → cada operación (más lento)\nOnOrderFilled(orden) · OnSessionStart(día) · OnStop()"),
-                Section("Datos", "Bars[0] (última cerrada), Bars[1]… · Bar.Open/High/Low/Close/Volume\nBar.BuyVolume / SellVolume / Delta / MaxDelta / MinDelta / Trades / PocPrice\nBar.Levels (con UseFootprint = true) · Price · Time · LocalTime · TickSize"),
-                Section("Órdenes", "EnterLong() · EnterShort() · Buy(cant) · Sell(cant)\nBuyLimit(precio) · SellLimit(precio) · BuyStop(precio) · SellStop(precio)\nClosePosition() · CancelAll() · Modify(orden, precio)\nStopLossTicks · TakeProfitTicks · TrailingStopTicks (automáticos, OCO)"),
-                Section("Posición", "Position (>0 largo, <0 corto) · IsFlat · IsLong · IsShort\nAveragePrice · OpenPnL · NetProfit · ActiveOrders"),
-                Section("Indicadores", "Sma(n) · Ema(n) · Rsi(n) · Atr(n) · Vwap() · Bollinger(n, k)\nMacd(12,26,9) · Highest(n) · Lowest(n) · StdDev(n) · CumulativeDelta()\nCustom(\"nombre\", bars => …)   ·   serie[0] actual, serie[1] anterior, .IsReady"),
-                Section("Ayudas", "CrossAbove(a, b) · CrossBelow(a, b) · Ticks(n) · Round(precio)\nTimeBetween(desde, hasta) · Log(\"texto\")"),
-                Section("Dibujos en el gráfico", "DrawBox(id, desde, precio1, hasta, precio2, color, fillOpacity, texto)\nDrawLine(id, t1, p1, t2, p2, color) · DrawHorizontalLine(id, precio, desde, color, texto)\nDrawArrowUp / DrawArrowDown(id, tiempo, precio, color, texto) · DrawMarker · DrawText\nPlot(\"nombre\", valor, color) → línea vela a vela · RemoveDrawing(id) · ClearDrawings()\nMismo id = reemplaza (estirar el rango del día). Color: \"#RRGGBB\" o \"verde\", \"rojo\"…"),
-                Section("Contexto del mercado", "MarketTrend (0 rango … 1 tendencia, 24 h) · Regime (Range / Mixed / Trend)\nMarketVolatility (% por hora, 24 h) · VolatilityRank (percentil del último mes)\nFiltro sin código: RegimeFilter · MinVolatilityRank · MaxVolatilityRank (parámetros)"),
-                Section("Parámetros", "[Parameter(\"Nombre\")] en una propiedad pública para editarla\n[Optimize(mín, máx, paso)] para incluirla en la optimización")),
+                Ui.H2("Quick reference"),
+                Section("Lifecycle", "OnInit()  → create indicators\nOnBar(Bar bar)  → when each candle closes\nOnTick(Trade t)  → every trade (slower)\nOnOrderFilled(order) · OnSessionStart(day) · OnStop()"),
+                Section("Data", "Bars[0] (last closed), Bars[1]… · Bar.Open/High/Low/Close/Volume\nBar.BuyVolume / SellVolume / Delta / MaxDelta / MinDelta / Trades / PocPrice\nBar.Levels (with UseFootprint = true) · Price · Time · LocalTime · TickSize"),
+                Section("Orders", "EnterLong() · EnterShort() · Buy(qty) · Sell(qty)\nBuyLimit(price) · SellLimit(price) · BuyStop(price) · SellStop(price)\nClosePosition() · CancelAll() · Modify(order, price)\nStopLossTicks · TakeProfitTicks · TrailingStopTicks (automatic, OCO)"),
+                Section("Position", "Position (>0 long, <0 short) · IsFlat · IsLong · IsShort\nAveragePrice · OpenPnL · NetProfit · ActiveOrders"),
+                Section("Indicators", "Sma(n) · Ema(n) · Rsi(n) · Atr(n) · Vwap() · Bollinger(n, k)\nMacd(12,26,9) · Highest(n) · Lowest(n) · StdDev(n) · CumulativeDelta()\nCustom(\"name\", bars => …)   ·   series[0] current, series[1] previous, .IsReady"),
+                Section("Helpers", "CrossAbove(a, b) · CrossBelow(a, b) · Ticks(n) · Round(price)\nTimeBetween(from, to) · Log(\"text\")"),
+                Section("Drawings on the chart", "DrawBox(id, from, price1, to, price2, color, fillOpacity, text)\nDrawLine(id, t1, p1, t2, p2, color) · DrawHorizontalLine(id, price, from, color, text)\nDrawArrowUp / DrawArrowDown(id, time, price, color, text) · DrawMarker · DrawText\nPlot(\"name\", value, color) → a line candle by candle · RemoveDrawing(id) · ClearDrawings()\nThe same id = it replaces (stretching the day's range). Color: \"#RRGGBB\" or \"green\", \"red\"…"),
+                Section("Market context", "MarketTrend (0 range … 1 trend, 24 h) · Regime (Range / Mixed / Trend)\nMarketVolatility (% per hour, 24 h) · VolatilityRank (percentile of the last month)\nFilter with no code: RegimeFilter · MinVolatilityRank · MaxVolatilityRank (parameters)"),
+                Section("Parameters", "[Parameter(\"Name\")] on a public property to make it editable\n[Optimize(min, max, step)] to include it in the optimization")),
         };
     }
 
-    // ===================================================================== estado por estrategia
+    // ===================================================================== per-strategy state
 
     private sealed class UiState
     {
@@ -412,7 +412,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
         public int OutSampleDays { get; set; } = 7;
         public bool Anchored { get; set; }
 
-        /// <summary>Cómo busca parámetros el walk-forward en cada ventana.</summary>
+        /// <summary>How the walk-forward searches for parameters in each window.</summary>
         public SearchMode Search { get; set; } = SearchMode.Auto;
     }
 
@@ -432,7 +432,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
             _state = new UiState();
         }
 
-        // valores tipados: instancia nueva + lo guardado
+        // typed values: a fresh instance + what was stored
         if (_current?.Type != null)
         {
             var s = _current.Create();
@@ -451,7 +451,7 @@ internal sealed partial class StrategiesView : UserControl, IPage
                 }
             }
 
-            // el período de las velas va al final, tildado o no, con los períodos que se habían elegido
+            // the candle period goes at the end, ticked or not, with the periods that had been chosen
             defaults.Add(_state.Ranges.FirstOrDefault(r => r.IsPeriod) ?? ParameterRange.Periods(Array.Empty<string>(), enabled: false));
             _state.Ranges = defaults;
         }
@@ -470,23 +470,23 @@ internal sealed partial class StrategiesView : UserControl, IPage
         }
         catch
         {
-            // no es crítico
+            // not critical
         }
     }
 }
 
-/// <summary>Diálogo para crear una estrategia desde una plantilla.</summary>
+/// <summary>Dialog for creating a strategy from a template.</summary>
 internal sealed class NewStrategyDialog : Window
 {
     public NewStrategyDialog()
     {
-        Title = "Nueva estrategia";
+        Title = "New strategy";
         Width = 560;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Ui.Bg2;
-        var name = new TextBox { Text = "Mi estrategia" };
+        var name = new TextBox { Text = "My strategy" };
         var list = new ListBox { MaxHeight = 320, Background = Brushes.Transparent };
         foreach (var t in StrategyTemplates.All)
         {
@@ -495,9 +495,9 @@ internal sealed class NewStrategyDialog : Window
         }
 
         list.SelectedIndex = 0;
-        var cancel = new Button { Content = "Cancelar", IsCancel = true };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
-        var ok = new Button { Content = "Crear", IsDefault = true }.Classes("primary");
+        var ok = new Button { Content = "Create", IsDefault = true }.Classes("primary");
         ok.Click += (_, _) =>
         {
             if (list.SelectedItem is not ListBoxItem { Tag: StrategyTemplate t } || string.IsNullOrWhiteSpace(name.Text)) return;
@@ -509,9 +509,9 @@ internal sealed class NewStrategyDialog : Window
             Spacing = 14,
             Children =
             {
-                new TextBlock { Text = "Nueva estrategia", Classes = { "h2" } },
-                Ui.Field("Nombre", name),
-                Ui.Field("Partir de", list),
+                new TextBlock { Text = "New strategy", Classes = { "h2" } },
+                Ui.Field("Name", name),
+                Ui.Field("Start from", list),
                 Ui.H(8, cancel, ok).Also(p => p.HorizontalAlignment = HorizontalAlignment.Right),
             },
         };

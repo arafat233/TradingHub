@@ -10,9 +10,9 @@ using TradingHub.App.Windows;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Trading Hub en la barra de menú de la Mac (arriba a la derecha): al tocar su ícono se abre un panel con las estrategias en
-/// vivo, las posiciones y lo que están haciendo los agentes. Cerrar la ventana deja a Trading Hub corriendo ahí (si está
-/// activado en Ajustes); se sale del todo con ⌘Q o con «Salir de Trading Hub» del panel.
+/// Trading Hub in the Mac's menu bar (top right): clicking its icon opens a panel with the live strategies,
+/// the positions and what the agents are doing. Closing the window leaves Trading Hub running there (if it is
+/// enabled in Settings); you quit for good with Cmd+Q or with "Quit Trading Hub" from the panel.
 /// </summary>
 internal sealed class MenuBar
 {
@@ -30,14 +30,14 @@ internal sealed class MenuBar
         _svc = svc;
         _main = main;
         _tray = new TrayIcon { Icon = new WindowIcon(Glyph()), ToolTipText = TradingHub.Common.Product.Name, IsVisible = svc.Settings.KeepInMenuBar };
-        MacOSProperties.SetIsTemplateIcon(_tray, true); // se pinta blanco o negro según la barra, como los íconos del sistema
-        // en macOS el clic en el ícono abre su menú (sin menú no llega ningún aviso): el menú trae lo que corre, en vivo
+        MacOSProperties.SetIsTemplateIcon(_tray, true); // it is painted white or black depending on the bar, like the system icons
+        // on macOS clicking the icon opens its menu (with no menu no notice arrives): the menu carries what is running, live
         _tray.Menu = _menu;
         _menu.NeedsUpdate += (_, _) => RefreshMenu();
         _menu.Opening += (_, _) =>
         {
             RefreshMenu();
-            _menuTimer.Start(); // abierto: los números se actualizan solos
+            _menuTimer.Start(); // open: the numbers update on their own
         };
         _menu.Closed += (_, _) => _menuTimer.Stop();
         _tray.Clicked += (_, _) => TogglePanel();
@@ -45,7 +45,7 @@ internal sealed class MenuBar
         _menuTimer.Tick += (_, _) => RefreshMenu();
         TrayIcon.SetIcons(app, new TrayIcons { _tray });
 
-        // tocar el ícono del Dock con la ventana cerrada la vuelve a abrir
+        // clicking the Dock icon with the window closed opens it again
         if (app.TryGetFeature(typeof(IActivatableLifetime)) is IActivatableLifetime activatable)
             activatable.Activated += (_, e) =>
             {
@@ -55,7 +55,7 @@ internal sealed class MenuBar
 
     public static MenuBar? Current { get; private set; }
 
-    /// <summary>En herramientas y pruebas (datos en otra carpeta) no se pone nada en la barra de menú.</summary>
+    /// <summary>In tools and tests (data in another folder) nothing is put in the menu bar.</summary>
     public static MenuBar? Install(Application app, AppServices svc, MainWindow main)
     {
         if (!OperatingSystem.IsMacOS() || Environment.GetEnvironmentVariable("TRADINGHUB_DATA_DIR") is { Length: > 0 }) return null;
@@ -71,7 +71,7 @@ internal sealed class MenuBar
         return Current;
     }
 
-    /// <summary>Se activó o desactivó «seguir en la barra de menú» en Ajustes.</summary>
+    /// <summary>"Keep running in the menu bar" was enabled or disabled in Settings.</summary>
     public void Refresh() => _tray.IsVisible = _svc.Settings.KeepInMenuBar;
 
     public void ShowMain()
@@ -82,18 +82,18 @@ internal sealed class MenuBar
         _main.Activate();
     }
 
-    /// <summary>Sale de Trading Hub del todo (detiene las estrategias; las que corrían se reanudan al abrir si así está en Ajustes).</summary>
+    /// <summary>Quits Trading Hub for good (it stops the strategies; the ones that were running resume on opening if Settings says so).</summary>
     public static void Quit()
     {
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.Shutdown();
     }
 
-    /// <summary>Un renglón del menú: clave estable, texto, si se puede tocar y qué hace (null = separador).</summary>
+    /// <summary>A row of the menu: stable key, text, whether it can be clicked and what it does (null = separator).</summary>
     private sealed record MenuLine(string Key, string? Text, bool Enabled = false, Action? Click = null);
 
-    private static readonly System.Globalization.CultureInfo Es = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+    private static readonly System.Globalization.CultureInfo Fmt = System.Globalization.CultureInfo.GetCultureInfo("en-US");
 
-    private static string Money(decimal v) => v.ToString("+#,##0.00;-#,##0.00;0.00", Es);
+    private static string Money(decimal v) => v.ToString("+#,##0.00;-#,##0.00;0.00", Fmt);
 
     private List<MenuLine> MenuLines()
     {
@@ -103,19 +103,19 @@ internal sealed class MenuBar
 
         Sep();
         var running = _svc.Live.Entries(includeStopped: false).Where(e => e.Running).OrderBy(e => e.Locked).ThenBy(e => e.Info.Strategy).ToList();
-        lines.Add(new MenuLine("live", $"Estrategias en vivo ({running.Count})"));
+        lines.Add(new MenuLine("live", $"Live strategies ({running.Count})"));
         foreach (var e in running)
         {
             var r = e.Runner!;
             decimal pos = e.Ledger.Position;
             var plan = _svc.Live.PlanOf(e);
-            string side = pos == 0 ? "plana" : $"{(pos > 0 ? "largo" : "corto")} {Math.Abs(pos).ToString("0.####", Es)} {e.Ledger.OpenSymbol ?? plan.Symbol}";
-            string state = e.Paused ? " · pausada" : r.DailyLimitActive ? " · frenada por hoy" : "";
-            string each = plan.Units <= 0 ? "no abre" : $"{plan.Text} por orden{(plan.Micro ? " (micro)" : "")}";
-            lines.Add(new MenuLine($"s:{e.Key}", $"   {e.Info.Strategy} · {r.Data.Instrument.Symbol} · {each} · {side} · abierta {Money(e.OpenPnL)} · hoy {Money(r.TodayPnL)}{state}", true, ShowPanel));
+            string side = pos == 0 ? "flat" : $"{(pos > 0 ? "long" : "short")} {Math.Abs(pos).ToString("0.####", Fmt)} {e.Ledger.OpenSymbol ?? plan.Symbol}";
+            string state = e.Paused ? " · paused" : r.DailyLimitActive ? " · halted for today" : "";
+            string each = plan.Units <= 0 ? "does not open" : $"{plan.Text} per order{(plan.Micro ? " (micro)" : "")}";
+            lines.Add(new MenuLine($"s:{e.Key}", $"   {e.Info.Strategy} · {r.Data.Instrument.Symbol} · {each} · {side} · open {Money(e.OpenPnL)} · today {Money(r.TodayPnL)}{state}", true, ShowPanel));
         }
 
-        if (running.Count == 0) lines.Add(new MenuLine("live-none", "   Ninguna corriendo"));
+        if (running.Count == 0) lines.Add(new MenuLine("live-none", "   None running"));
 
         Sep();
         var positions = new List<MenuLine>();
@@ -124,27 +124,27 @@ internal sealed class MenuBar
             try
             {
                 foreach (var p in _svc.AccountCenter.Snapshot(a).Positions.Where(p => p.Net != 0))
-                    positions.Add(new MenuLine($"p:{a.Id}:{p.Symbol}", $"   {p.Symbol} · {a.Name} · {(p.Net > 0 ? "largo" : "corto")} {Math.Abs(p.Net).ToString("0.####", Es)} · {Money(p.OpenPnl)}", true, ShowPanel));
+                    positions.Add(new MenuLine($"p:{a.Id}:{p.Symbol}", $"   {p.Symbol} · {a.Name} · {(p.Net > 0 ? "long" : "short")} {Math.Abs(p.Net).ToString("0.####", Fmt)} · {Money(p.OpenPnl)}", true, ShowPanel));
             }
             catch
             {
-                // una cuenta que no contesta no frena el menú
+                // an account that does not answer does not hold up the menu
             }
         }
 
-        lines.Add(new MenuLine("pos", $"Posiciones abiertas ({positions.Count})"));
+        lines.Add(new MenuLine("pos", $"Open positions ({positions.Count})"));
         lines.AddRange(positions);
-        if (positions.Count == 0) lines.Add(new MenuLine("pos-none", "   Sin posiciones"));
+        if (positions.Count == 0) lines.Add(new MenuLine("pos-none", "   No positions"));
 
 
         Sep();
-        lines.Add(new MenuLine("panel", "Ver el panel en vivo…", true, ShowPanel));
-        lines.Add(new MenuLine("open", "Abrir Trading Hub", true, ShowMain));
-        lines.Add(new MenuLine("quit", "Salir de Trading Hub", true, Quit));
+        lines.Add(new MenuLine("panel", "Show the live panel…", true, ShowPanel));
+        lines.Add(new MenuLine("open", "Open Trading Hub", true, ShowMain));
+        lines.Add(new MenuLine("quit", "Quit Trading Hub", true, Quit));
         return lines;
     }
 
-    /// <summary>Pone el menú al día: si cambiaron los renglones lo rehace; si no, solo cambia los textos.</summary>
+    /// <summary>Brings the menu up to date: if the rows changed it rebuilds it; if not, it only changes the texts.</summary>
     private void RefreshMenu()
     {
         List<MenuLine> lines;
@@ -183,7 +183,7 @@ internal sealed class MenuBar
         }
     }
 
-    /// <summary>El panel completo (más detalle que el menú), debajo de la barra.</summary>
+    /// <summary>The full panel (more detail than the menu), below the bar.</summary>
     public void ShowPanel()
     {
         _panel ??= CreatePanel();
@@ -195,7 +195,7 @@ internal sealed class MenuBar
 
     private void TogglePanel()
     {
-        // el clic en el ícono también le saca el foco al panel (y lo cierra): no lo vuelve a abrir enseguida
+        // clicking the icon also takes the focus away from the panel (and closes it): it does not reopen it right away
         if (_panel is { IsVisible: true })
         {
             _panel.Hide();
@@ -222,7 +222,7 @@ internal sealed class MenuBar
         return p;
     }
 
-    /// <summary>Debajo del ícono (donde está el mouse al tocarlo), sin salirse de la pantalla.</summary>
+    /// <summary>Below the icon (where the mouse is when clicking it), without going off screen.</summary>
     private void Place(Window panel)
     {
         var screens = _main.Screens;
@@ -232,7 +232,7 @@ internal sealed class MenuBar
         PixelPoint? mouse = null;
         if (MouseLocation() is { } m)
         {
-            // macOS mide desde abajo a la izquierda de la pantalla principal, en puntos
+            // macOS measures from the bottom left of the main screen, in points
             double heightPoints = primary.Bounds.Height / scale;
             mouse = new PixelPoint((int)(m.X * scale), (int)((heightPoints - m.Y) * scale));
         }
@@ -263,7 +263,7 @@ internal sealed class MenuBar
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static extern CGPoint SendPoint(IntPtr receiver, IntPtr selector);
 
-    /// <summary>Dónde está el mouse ([NSEvent mouseLocation]: en puntos, desde abajo a la izquierda).</summary>
+    /// <summary>Where the mouse is ([NSEvent mouseLocation]: in points, from the bottom left).</summary>
     private static CGPoint? MouseLocation()
     {
         try
@@ -277,14 +277,14 @@ internal sealed class MenuBar
         }
     }
 
-    /// <summary>El ícono de la barra: la serpiente de Trading Hub en negro sobre transparente (macOS lo adapta al tema).</summary>
+    /// <summary>The bar icon: the Trading Hub snake in black on transparent (macOS adapts it to the theme).</summary>
     internal static Bitmap Glyph()
     {
-        const int size = 44; // 22 puntos en pantallas Retina
+        const int size = 44; // 22 points on Retina screens
         using var surface = SKSurface.Create(new SKImageInfo(size, size, SKColorType.Rgba8888, SKAlphaType.Premul));
         var c = surface.Canvas;
         c.Clear(SKColors.Transparent);
-        // el cuerpo: una S que sube desde la cola (abajo a la izquierda) hasta la cabeza (arriba a la derecha)
+        // the body: an S rising from the tail (bottom left) up to the head (top right)
         using var body = new SKPath();
         body.MoveTo(7, 38);
         body.CubicTo(17, 43, 31, 39, 29, 30);
@@ -293,10 +293,10 @@ internal sealed class MenuBar
         using var stroke = new SKPaint { Color = SKColors.Black, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 5.4f, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
         c.DrawPath(body, stroke);
         using var fill = new SKPaint { Color = SKColors.Black, IsAntialias = true, Style = SKPaintStyle.Fill };
-        c.DrawOval(new SKRect(27, 4.5f, 38.5f, 13.5f), fill); // la cabeza
+        c.DrawOval(new SKRect(27, 4.5f, 38.5f, 13.5f), fill); // the head
         using var clear = new SKPaint { BlendMode = SKBlendMode.Clear, IsAntialias = true };
-        c.DrawCircle(34.2f, 7.8f, 1.5f, clear); // el ojo
-        // la lengua bífida
+        c.DrawCircle(34.2f, 7.8f, 1.5f, clear); // the eye
+        // the forked tongue
         using var tongue = new SKPaint { Color = SKColors.Black, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.6f, StrokeCap = SKStrokeCap.Round };
         c.DrawLine(38, 9.5f, 41.5f, 10.5f, tongue);
         c.DrawLine(41.5f, 10.5f, 43.2f, 9, tongue);

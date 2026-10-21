@@ -2,7 +2,7 @@ using System.Collections;
 
 namespace TradingHub.Trading.Statistics
 {
-    /// <summary>Operación completa (entrada + salida) para estadísticas y marcas en el gráfico.</summary>
+    /// <summary>Complete trade (entry + exit) for statistics and chart markers.</summary>
     public class HistoryMyTrade
     {
         public Security Security { get; set; } = new();
@@ -13,7 +13,7 @@ namespace TradingHub.Trading.Statistics
         public decimal OpenPrice { get; set; }
         public decimal ClosePrice { get; set; }
 
-        /// <summary>Volumen con signo: + largo, − corto.</summary>
+        /// <summary>Signed volume: + long, - short.</summary>
         public decimal OpenVolume { get; set; }
 
         public decimal PnL { get; set; }
@@ -22,10 +22,10 @@ namespace TradingHub.Trading.Statistics
         public decimal MaxRunUp { get; set; }
         public decimal MaxDrawDown { get; set; }
 
-        public override string ToString() => $"{(OpenVolume > 0 ? "Largo" : "Corto")} {Math.Abs(OpenVolume)} {OpenPrice}->{ClosePrice} PnL {PnL}";
+        public override string ToString() => $"{(OpenVolume > 0 ? "Long" : "Short")} {Math.Abs(OpenVolume)} {OpenPrice}->{ClosePrice} PnL {PnL}";
     }
 
-    /// <summary>Lista que avisa cuando se agrega un elemento.</summary>
+    /// <summary>List that reports when an element is added.</summary>
     public class NotifyingList<T> : IReadOnlyList<T>
     {
         private readonly List<T> _items = new();
@@ -62,7 +62,7 @@ namespace TradingHub.Trading.Statistics
         public NotifyingList<HistoryMyTrade> HistoryMyTrades { get; } = new();
     }
 
-    /// <summary>Proveedor de estadísticas de trading (lo alimenta el broker simulado).</summary>
+    /// <summary>Trading statistics provider (the simulated broker feeds it).</summary>
     public class TradingStatisticsProvider
     {
         public static TradingStatisticsProvider Empty { get; } = new();
@@ -88,7 +88,7 @@ namespace TradingHub.Trading.Statistics
 
 namespace TradingHub.Trading.Dom
 {
-    /// <summary>Tipo de nivel del libro.</summary>
+    /// <summary>Book level type.</summary>
     public enum DomLevelType
     {
         Bid,

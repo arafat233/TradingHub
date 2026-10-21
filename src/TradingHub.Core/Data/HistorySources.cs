@@ -3,36 +3,36 @@ using TradingHub.Market;
 namespace TradingHub.Data;
 
 /// <summary>
-/// De dónde sale la historia de cada instrumento. Cada fuente guarda lo suyo en {raíz}/{fuente}/{símbolo}: Rithmic (o
-/// Tradovate) lo que graba y baja de su servidor, Databento lo que se le compra. Al leer se elige:
+/// Where each instrument's history comes from. Each source stores its own in {root}/{source}/{symbol}: Rithmic (or
+/// Tradovate) whatever it records and downloads from its own server, Databento whatever is bought from it. On reading you pick:
 /// <list type="bullet">
-/// <item>«rithmic»: la historia combinada (lo de Rithmic y, en los minutos que a Rithmic le faltan, lo de Databento);</item>
-/// <item>«rithmic-solo»: solo lo de Rithmic;</item>
-/// <item>«databento»: solo lo de Databento.</item>
+/// <item>"rithmic": the combined history (Rithmic's and, for the minutes Rithmic is missing, Databento's);</item>
+/// <item>"rithmic-solo": Rithmic's only;</item>
+/// <item>"databento": Databento's only.</item>
 /// </list>
-/// Así lo que ya estaba guardado como «rithmic» (backtests, el laboratorio de Claude, los gráficos) sigue viendo toda la historia.
+/// That way whatever was already stored as "rithmic" (backtests, Claude's lab, the charts) still sees the whole history.
 /// </summary>
 public static class HistorySources
 {
     public const string Databento = "databento";
 
-    /// <summary>Sufijo de «solo esa conexión», sin completar con Databento (rithmic-solo).</summary>
+    /// <summary>Suffix for "that connection only", without filling in from Databento (rithmic-solo).</summary>
     public const string OnlySuffix = "-solo";
 
-    /// <summary>Las conexiones de futuros de CME cuya historia completa Databento (los mismos contratos continuos).</summary>
+    /// <summary>The CME futures connections whose history Databento fills in (the same continuous contracts).</summary>
     public static bool FilledByDatabento(string feedId) => feedId is "rithmic" or "tradovate";
 
-    /// <summary>La carpeta propia de una fuente (rithmic-solo → rithmic).</summary>
+    /// <summary>A source's own folder (rithmic-solo -> rithmic).</summary>
     public static string Folder(string feedId) => feedId.EndsWith(OnlySuffix, StringComparison.Ordinal) ? feedId[..^OnlySuffix.Length] : feedId;
 
-    /// <summary>Las carpetas que se leen para una fuente, en orden: la primera manda y las demás completan lo que le falta.</summary>
+    /// <summary>The folders read for a source, in order: the first one wins and the rest fill in what it is missing.</summary>
     public static IReadOnlyList<string> Folders(string feedId)
     {
         if (feedId.EndsWith(OnlySuffix, StringComparison.Ordinal)) return new[] { Folder(feedId) };
         return FilledByDatabento(feedId) ? new[] { feedId, Databento } : new[] { feedId };
     }
 
-    /// <summary>Los archivos de un día que existen, en el orden de <see cref="Folders"/>.</summary>
+    /// <summary>The files of a day that exist, in the order of <see cref="Folders"/>.</summary>
     public static List<string> DayFiles(string root, string feedId, string symbol, DateOnly day)
     {
         var files = new List<string>(2);
@@ -47,7 +47,7 @@ public static class HistorySources
 
     public static bool HasDay(string root, string feedId, string symbol, DateOnly day) => DayFiles(root, feedId, symbol, day).Count > 0;
 
-    /// <summary>Los días con datos en cualquiera de las carpetas de la fuente, ordenados.</summary>
+    /// <summary>The days with data in any of the source's folders, sorted.</summary>
     public static List<DateOnly> AvailableDays(string root, string feedId, string symbol)
     {
         var days = new SortedSet<DateOnly>();
@@ -57,7 +57,7 @@ public static class HistorySources
         return days.ToList();
     }
 
-    /// <summary>El tick con que se guardó el instrumento (del último día guardado), o null si no hay archivos.</summary>
+    /// <summary>The tick the instrument was stored with (from the last stored day), or null if there are no files.</summary>
     public static decimal? StoredTickSize(string root, string feedId, string symbol)
     {
         var days = AvailableDays(root, feedId, symbol);
@@ -69,8 +69,8 @@ public static class HistorySources
     }
 
     /// <summary>
-    /// Las operaciones de un día, ordenadas. Con más de una carpeta, la primera manda: de las demás solo entran los
-    /// minutos en que la primera no tiene ninguna operación (por ejemplo, las horas en que la app estuvo cerrada y no grabó).
+    /// A day's trades, sorted. With more than one folder, the first one wins: from the rest only the
+    /// minutes where the first one has no trades at all are taken (for example, the hours the app was closed and did not record).
     /// </summary>
     public static List<Trade> ReadDay(string root, string feedId, string symbol, DateOnly day)
     {
@@ -101,8 +101,8 @@ public static class HistorySources
 
         if (!added) return main;
 
-        // cada fuente numera a su manera: se ordena por hora (estable: a la misma hora, primero la que manda) y se
-        // vuelven a numerar, para que los ids sigan creciendo y no se repitan entre fuentes
+        // each source numbers things its own way: they are sorted by time (stable: at the same time, the winning one first) and
+        // renumbered, so the ids keep increasing and do not repeat between sources
         var ordered = merged.Select((t, i) => (t, i)).OrderBy(x => x.t.Time.Ticks).ThenBy(x => x.i).Select(x => x.t).ToList();
         long baseId = Math.Max(0, ordered.Min(t => t.Id));
         for (int i = 0; i < ordered.Count; i++)
@@ -115,9 +115,9 @@ public static class HistorySources
     }
 
     /// <summary>
-    /// La historia guardada como se elige para probar: lo de cada carpeta y, para los futuros que tienen historia de su
-    /// conexión y de Databento, además la combinada («rithmic», marcada <see cref="SymbolData.Combined"/>) y la de solo
-    /// esa conexión («rithmic-solo»). Las de un mismo instrumento quedan juntas, primero la combinada.
+    /// The stored history as it is picked for testing: each folder's own and, for the futures that have history from their
+    /// connection and from Databento, also the combined one ("rithmic", marked <see cref="SymbolData.Combined"/>) and the one from that
+    /// connection only ("rithmic-solo"). The ones of the same instrument stay together, the combined one first.
     /// </summary>
     public static List<SymbolData> Datasets(string root)
     {
@@ -149,11 +149,11 @@ public static class HistorySources
         return groups.OrderByDescending(g => g.Max(x => x.Bytes)).SelectMany(g => g).ToList();
     }
 
-    /// <summary>Cómo se llama la fuente de un conjunto de <see cref="Datasets"/> (sin el nombre propio de la conexión).</summary>
+    /// <summary>What the source of a set of <see cref="Datasets"/> is called (without the connection's own name).</summary>
     public static string Describe(SymbolData s)
     {
         if (s.FeedId == Databento) return "Databento";
-        if (s.FeedId.EndsWith(OnlySuffix, StringComparison.Ordinal)) return "solo " + Pretty(Folder(s.FeedId));
+        if (s.FeedId.EndsWith(OnlySuffix, StringComparison.Ordinal)) return "only " + Pretty(Folder(s.FeedId));
         return s.Combined ? $"{Pretty(s.FeedId)} + Databento" : Pretty(s.FeedId);
     }
 

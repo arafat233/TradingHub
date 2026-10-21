@@ -9,7 +9,7 @@ using TradingHub.Trading;
 
 namespace TradingHub.Feeds.Binance;
 
-/// <summary>Configuración de una cuenta de Binance (las claves se guardan en el llavero de macOS).</summary>
+/// <summary>Configuration of a Binance account (the keys are stored in the macOS keychain).</summary>
 public sealed class BinanceAccountSettings
 {
     public bool Futures { get; set; } = true;
@@ -17,7 +17,7 @@ public sealed class BinanceAccountSettings
     public string ApiKey { get; set; } = "";
     public string ApiSecret { get; set; } = "";
 
-    /// <summary>URL REST propia (vacío = la estándar según mercado y testnet).</summary>
+    /// <summary>Custom REST URL (empty = the standard one based on market and testnet).</summary>
     public string? BaseUrl { get; set; }
 
     public string RestBase => !string.IsNullOrWhiteSpace(BaseUrl)
@@ -40,8 +40,8 @@ public sealed record BinancePosition(string Symbol, decimal Quantity, decimal En
 public sealed record BinanceOpenOrder(long OrderId, string Symbol, string Side, string Type, decimal Price, decimal StopPrice, decimal Quantity, decimal Executed, string Status, bool ReduceOnly = false);
 
 /// <summary>
-/// API privada de Binance (firmada con HMAC-SHA256): saldos, posiciones y órdenes.
-/// Funciona contra el testnet o contra la cuenta real según la configuración.
+/// Binance private API (signed with HMAC-SHA256): balances, positions and orders.
+/// It works against the testnet or against the real account depending on the configuration.
 /// </summary>
 public sealed class BinanceAccountClient : IDisposable
 {
@@ -58,7 +58,7 @@ public sealed class BinanceAccountClient : IDisposable
 
     private string P(string futuresPath, string spotPath) => _s.Futures ? futuresPath : spotPath;
 
-    /// <summary>Firma una query con la clave secreta (HMAC-SHA256 en hexadecimal).</summary>
+    /// <summary>Signs a query with the secret key (HMAC-SHA256 in hexadecimal).</summary>
     public static string Sign(string query, string secret)
     {
         using var h = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
@@ -75,7 +75,7 @@ public sealed class BinanceAccountClient : IDisposable
 
     private async Task<JsonDocument> SignedAsync(HttpMethod method, string path, string query, CancellationToken ct)
     {
-        if (!_s.HasKeys) throw new InvalidOperationException("Faltan la API key y el secret de Binance (Conexiones).");
+        if (!_s.HasKeys) throw new InvalidOperationException("The Binance API key and secret are missing (Connections).");
         long ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + _timeOffsetMs;
         string q = (string.IsNullOrEmpty(query) ? "" : query + "&") + $"recvWindow=5000&timestamp={ts}";
         string url = $"{_s.RestBase}{path}?{q}&signature={Sign(q, _s.ApiSecret)}";
@@ -92,10 +92,10 @@ public sealed class BinanceAccountClient : IDisposable
             }
             catch
             {
-                // cuerpo no JSON
+                // non-JSON body
             }
 
-            throw new InvalidOperationException($"Binance rechazó la operación ({(int)resp.StatusCode}): {msg}");
+            throw new InvalidOperationException($"Binance rejected the operation ({(int)resp.StatusCode}): {msg}");
         }
 
         return JsonDocument.Parse(body);
@@ -154,7 +154,7 @@ public sealed class BinanceAccountClient : IDisposable
             o.TryGetProperty("reduceOnly", out var ro) && ro.ValueKind == System.Text.Json.JsonValueKind.True)).ToList();
     }
 
-    /// <summary>Envía una orden. type: MARKET, LIMIT o STOP_MARKET (futuros) / STOP_LOSS (spot).</summary>
+    /// <summary>Sends an order. type: MARKET, LIMIT or STOP_MARKET (futures) / STOP_LOSS (spot).</summary>
     public async Task<long> PlaceOrderAsync(string symbol, OrderDirections dir, OrderTypes type, decimal qty, decimal price, bool reduceOnly, CancellationToken ct)
     {
         var sb = new StringBuilder($"symbol={symbol}&side={(dir == OrderDirections.Buy ? "BUY" : "SELL")}&quantity={Fmt(qty)}");
@@ -170,7 +170,7 @@ public sealed class BinanceAccountClient : IDisposable
                 sb.Append(_s.Futures ? $"&type=STOP_MARKET&stopPrice={Fmt(price)}" : $"&type=STOP_LOSS&stopPrice={Fmt(price)}");
                 break;
             default:
-                throw new NotSupportedException("Tipo de orden no soportado");
+                throw new NotSupportedException("Unsupported order type");
         }
 
         if (reduceOnly && _s.Futures) sb.Append("&reduceOnly=true");
@@ -188,18 +188,18 @@ public sealed class BinanceAccountClient : IDisposable
         using var _ = await SignedAsync(HttpMethod.Delete, P("/fapi/v1/allOpenOrders", "/api/v3/openOrders"), $"symbol={symbol}", ct).ConfigureAwait(false);
     }
 
-    /// <summary>Prueba la conexión: hora del servidor y, si hay claves, el saldo.</summary>
+    /// <summary>Tests the connection: server time and, if there are keys, the balance.</summary>
     public async Task<(bool Ok, string Message)> TestAsync(CancellationToken ct)
     {
         try
         {
             await SyncTimeAsync(ct).ConfigureAwait(false);
-            if (!_s.HasKeys) return (true, $"Datos públicos OK ({_s.RestBase}). Sin claves: solo cotizaciones.");
+            if (!_s.HasKeys) return (true, $"Public data OK ({_s.RestBase}). Without keys: quotes only.");
             var balances = await GetBalancesAsync(ct).ConfigureAwait(false);
             var main = balances.OrderByDescending(b => b.Asset is "USDT" or "USDC" ? 1 : 0).ThenByDescending(b => b.Wallet).FirstOrDefault();
             return (true, main == null
-                ? $"Cuenta conectada ({(_s.Testnet ? "testnet" : "REAL")}) sin saldo"
-                : $"Cuenta conectada ({(_s.Testnet ? "testnet" : "REAL")}): {main.Wallet:0.##} {main.Asset} (disponible {main.Available:0.##})");
+                ? $"Account connected ({(_s.Testnet ? "testnet" : "REAL")}) with no balance"
+                : $"Account connected ({(_s.Testnet ? "testnet" : "REAL")}): {main.Wallet:0.##} {main.Asset} (available {main.Available:0.##})");
         }
         catch (Exception ex)
         {
@@ -211,8 +211,8 @@ public sealed class BinanceAccountClient : IDisposable
 }
 
 /// <summary>
-/// Cuenta de Binance como <see cref="ITradingAccount"/>: envía órdenes por REST y refresca
-/// posición y órdenes abiertas cada 2 segundos.
+/// Binance account as an <see cref="ITradingAccount"/>: it sends orders over REST and refreshes
+/// position and open orders every 2 seconds.
 /// </summary>
 public sealed class BinanceBroker : ITradingAccount, IDisposable
 {
@@ -245,7 +245,7 @@ public sealed class BinanceBroker : ITradingAccount, IDisposable
     private async Task PollLoop()
     {
         try { await _client.SyncTimeAsync(_cts.Token).ConfigureAwait(false); }
-        catch { /* se reintenta en el bucle */ }
+        catch { /* it is retried in the loop */ }
 
         while (!_cts.IsCancellationRequested)
         {
@@ -326,11 +326,11 @@ public sealed class BinanceBroker : ITradingAccount, IDisposable
     public Order Limit(OrderDirections dir, decimal qty, decimal price, string comment = "") => Send(dir, OrderTypes.Limit, qty, price, comment);
     public Order Stop(OrderDirections dir, decimal qty, decimal trigger, string comment = "") => Send(dir, OrderTypes.Stop, qty, trigger, comment);
 
-    /// <summary>Stop loss / objetivo como orden solo-reducir (en futuros).</summary>
+    /// <summary>Stop loss / target as a reduce-only order (on futures).</summary>
     public Order Exit(OrderTypes type, OrderDirections dir, decimal qty, decimal price, string comment = "") =>
         Send(dir, type == OrderTypes.Stop ? OrderTypes.Stop : OrderTypes.Limit, qty, price, comment, reduceOnly: _settings.Futures);
 
-    /// <summary>Binance no modifica precio ni cantidad: cancela y envía una orden nueva.</summary>
+    /// <summary>Binance does not modify price or quantity: it cancels and sends a new order.</summary>
     public Order Replace(Order order, decimal newPrice, decimal newQuantity)
     {
         Cancel(order);
@@ -366,15 +366,15 @@ public sealed class BinanceBroker : ITradingAccount, IDisposable
     {
         CancelAll();
         var q = Position.Volume;
-        if (q > 0) Send(OrderDirections.Sell, OrderTypes.Market, q, 0, "Cerrar", reduceOnly: true);
-        else if (q < 0) Send(OrderDirections.Buy, OrderTypes.Market, -q, 0, "Cerrar", reduceOnly: true);
+        if (q > 0) Send(OrderDirections.Sell, OrderTypes.Market, q, 0, "Close", reduceOnly: true);
+        else if (q < 0) Send(OrderDirections.Buy, OrderTypes.Market, -q, 0, "Close", reduceOnly: true);
     }
 
     public void Reverse()
     {
         var q = Position.Volume;
-        if (q > 0) Market(OrderDirections.Sell, q * 2, "Revertir");
-        else if (q < 0) Market(OrderDirections.Buy, -q * 2, "Revertir");
+        if (q > 0) Market(OrderDirections.Sell, q * 2, "Reverse");
+        else if (q < 0) Market(OrderDirections.Buy, -q * 2, "Reverse");
     }
 
     public void Dispose()

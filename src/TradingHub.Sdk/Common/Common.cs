@@ -4,7 +4,7 @@ using System.Drawing.Drawing2D;
 
 namespace TradingHub.Common
 {
-    /// <summary>Lápiz multiplataforma (equivalente a System.Drawing.Pen sin GDI+).</summary>
+    /// <summary>Cross-platform pen (equivalent to System.Drawing.Pen without GDI+).</summary>
     public class UniversalPen
     {
         public UniversalPen(Color color, float width = 1f)
@@ -30,7 +30,7 @@ namespace TradingHub.Common
         public static implicit operator TradingHub.Rendering.Tools.RenderPen(UniversalPen p) => p?.ToRenderPen();
     }
 
-    /// <summary>Pinceles sólidos multiplataforma.</summary>
+    /// <summary>Cross-platform solid brushes.</summary>
     public class UniversalSolidBrush
     {
         public UniversalSolidBrush(Color color)
@@ -56,7 +56,7 @@ namespace TradingHub.Common
 
     public static class ColorUtils
     {
-        /// <summary>Parsea "#RRGGBB" o "#AARRGGBB".</summary>
+        /// <summary>Parses "#RRGGBB" or "#AARRGGBB".</summary>
         public static Color ParseHex(string hex)
         {
             if (string.IsNullOrWhiteSpace(hex)) return Color.Empty;
@@ -79,7 +79,7 @@ namespace TradingHub.Common.Logging
 
     public sealed record LogEntry(DateTime Time, LogLevel Level, string Source, string Message, Exception Exception);
 
-    /// <summary>Registro central de la plataforma (la UI se suscribe para mostrarlo).</summary>
+    /// <summary>Central platform log (the UI subscribes to show it).</summary>
     public static class Log
     {
         private static readonly ConcurrentQueue<LogEntry> Recent = new();
@@ -112,7 +112,7 @@ namespace TradingHub.Common.Logging
 
 namespace TradingHub.Common.Collections
 {
-    /// <summary>Lista con capacidad máxima (descarta los más viejos).</summary>
+    /// <summary>List with a maximum capacity (it discards the oldest ones).</summary>
     public class LimitedList<T> : List<T>
     {
         public LimitedList(int capacity)

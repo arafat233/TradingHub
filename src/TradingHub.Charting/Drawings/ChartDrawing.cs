@@ -28,7 +28,7 @@ public enum LineStyleKind
     Dotted,
 }
 
-/// <summary>Punto anclado en el tiempo y el precio (sobrevive a cambios de período).</summary>
+/// <summary>Point anchored in time and price (it survives period changes).</summary>
 public struct ChartPoint
 {
     public DateTime Time { get; set; }
@@ -41,7 +41,7 @@ public struct ChartPoint
     }
 }
 
-/// <summary>Nivel de un retroceso de Fibonacci (valor, si se ve y su color; 0 = el del dibujo).</summary>
+/// <summary>Level of a Fibonacci retracement (value, whether it is visible and its color; 0 = the drawing's).</summary>
 public sealed class FibLevel
 {
     public double Value { get; set; }
@@ -51,7 +51,7 @@ public sealed class FibLevel
     public FibLevel Clone() => new() { Value = Value, Visible = Visible, ColorArgb = ColorArgb };
 }
 
-/// <summary>Objeto dibujado por el usuario sobre el gráfico.</summary>
+/// <summary>Object drawn by the user on the chart.</summary>
 public sealed class ChartDrawing
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -60,45 +60,45 @@ public sealed class ChartDrawing
     public uint ColorArgb { get; set; } = 0xFF1E90FF;
     public float Width { get; set; } = 1.5f;
 
-    /// <summary>Formato viejo (antes de <see cref="LineStyle"/>): se sigue leyendo.</summary>
+    /// <summary>Old format (before <see cref="LineStyle"/>): it is still read.</summary>
     public bool Dashed { get; set; }
 
     public LineStyleKind LineStyle { get; set; }
 
-    /// <summary>Texto del dibujo (en líneas y zonas se muestra como etiqueta).</summary>
+    /// <summary>Text of the drawing (on lines and zones it is shown as a label).</summary>
     public string Text { get; set; } = "";
 
     public bool Locked { get; set; }
 
-    /// <summary>Relleno de zonas (0 = el color de la línea, transparente).</summary>
+    /// <summary>Fill of zones (0 = the line color, transparent).</summary>
     public uint FillArgb { get; set; }
 
-    /// <summary>Extender hacia la izquierda / derecha (líneas de tendencia y zonas).</summary>
+    /// <summary>Extend to the left / right (trend lines and zones).</summary>
     public bool ExtendLeft { get; set; }
     public bool ExtendRight { get; set; }
 
-    /// <summary>Mostrar el precio en las líneas y en los niveles.</summary>
+    /// <summary>Show the price on lines and levels.</summary>
     public bool ShowPriceLabel { get; set; } = true;
 
     public float FontSize { get; set; } = 13;
     public bool Bold { get; set; }
 
-    /// <summary>Color del texto (0 = el de la línea).</summary>
+    /// <summary>Text color (0 = the line's).</summary>
     public uint TextArgb { get; set; }
 
-    /// <summary>Oculto (sigue guardado; se vuelve a mostrar desde su panel o la lista de dibujos).</summary>
+    /// <summary>Hidden (still stored; it is shown again from its panel or the drawing list).</summary>
     public bool Hidden { get; set; }
 
-    /// <summary>Si se ve solo en un período (código, p. ej. "M5"); null = en todos.</summary>
+    /// <summary>Whether it is visible only on one period (code, e.g. "M5"); null = on all of them.</summary>
     public string? OnlyPeriod { get; set; }
 
-    /// <summary>Alerta de precio en líneas horizontales (avisa cuando el precio la cruza).</summary>
+    /// <summary>Price alert on horizontal lines (it warns when the price crosses it).</summary>
     public bool Alert { get; set; }
 
-    /// <summary>Niveles de Fibonacci propios (null = los de siempre).</summary>
+    /// <summary>Custom Fibonacci levels (null = the usual ones).</summary>
     public List<FibLevel>? Levels { get; set; }
 
-    /// <summary>Posición larga/corta: cantidad para calcular ganancia y riesgo (0 = sin montos).</summary>
+    /// <summary>Long/short position: quantity to compute profit and risk (0 = no amounts).</summary>
     public decimal Quantity { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
@@ -134,25 +134,25 @@ public sealed class ChartDrawing
 
     public static string KindName(DrawingKind k) => k switch
     {
-        DrawingKind.HorizontalLine => "Línea horizontal",
-        DrawingKind.HorizontalRay => "Rayo horizontal",
-        DrawingKind.VerticalLine => "Línea vertical",
-        DrawingKind.TrendLine => "Línea de tendencia",
-        DrawingKind.Ray => "Rayo",
-        DrawingKind.ExtendedLine => "Línea extendida",
-        DrawingKind.Rectangle => "Rectángulo / zona",
-        DrawingKind.FibRetracement => "Retroceso de Fibonacci",
-        DrawingKind.Text => "Texto",
-        DrawingKind.Ruler => "Regla",
-        DrawingKind.LongPosition => "Posición larga",
-        DrawingKind.ShortPosition => "Posición corta",
+        DrawingKind.HorizontalLine => "Horizontal line",
+        DrawingKind.HorizontalRay => "Horizontal ray",
+        DrawingKind.VerticalLine => "Vertical line",
+        DrawingKind.TrendLine => "Trend line",
+        DrawingKind.Ray => "Ray",
+        DrawingKind.ExtendedLine => "Extended line",
+        DrawingKind.Rectangle => "Rectangle / zone",
+        DrawingKind.FibRetracement => "Fibonacci retracement",
+        DrawingKind.Text => "Text",
+        DrawingKind.Ruler => "Ruler",
+        DrawingKind.LongPosition => "Long position",
+        DrawingKind.ShortPosition => "Short position",
         _ => k.ToString(),
     };
 
-    /// <summary>Si se dibuja en un gráfico de ese período.</summary>
+    /// <summary>Whether it is drawn on a chart of that period.</summary>
     public bool IsVisibleOn(ChartPeriod period) => !Hidden && (OnlyPeriod == null || OnlyPeriod == period.Code);
 
-    /// <summary>Copia independiente (otro Id).</summary>
+    /// <summary>Independent copy (another Id).</summary>
     public ChartDrawing Clone()
     {
         var c = (ChartDrawing)MemberwiseClone();
@@ -163,7 +163,7 @@ public sealed class ChartDrawing
         return c;
     }
 
-    /// <summary>Toma el estilo (no la posición) de otro dibujo: lo usa "predeterminado" y "copiar estilo".</summary>
+    /// <summary>Takes the style (not the position) of another drawing: used by "use as default" and "copy style".</summary>
     public void CopyStyleFrom(ChartDrawing src)
     {
         ColorArgb = src.ColorArgb;
@@ -181,9 +181,9 @@ public sealed class ChartDrawing
         Quantity = src.Quantity;
     }
 
-    // ------------------------------------------------------------------ posición larga/corta
+    // ------------------------------------------------------------------ long/short position
 
-    /// <summary>Arma una posición con stop y objetivo por defecto (1:2) desde la entrada (Points[0]).</summary>
+    /// <summary>Builds a position with a default stop and target (1:2) from the entry (Points[0]).</summary>
     public void InitPosition(double risk, DateTime end)
     {
         var e = Points[0];
@@ -194,8 +194,8 @@ public sealed class ChartDrawing
     }
 
     /// <summary>
-    /// Arrastre de un manejador. En la posición: 0 = entrada, 1 = objetivo, 2 = stop (solo precio) y 3 = largo
-    /// (hasta cuándo). En el resto, el punto correspondiente.
+    /// Dragging a handler. On the position: 0 = entry, 1 = target, 2 = stop (price only) and 3 = length
+    /// (until when). On the rest, the corresponding point.
     /// </summary>
     public void MoveHandle(int handle, ChartPoint p)
     {
@@ -218,14 +218,14 @@ public sealed class ChartDrawing
         if (handle >= 0 && handle < Points.Count) Points[handle] = p;
     }
 
-    /// <summary>Resultado de la posición sobre las velas: si tocó el objetivo o el stop primero.</summary>
+    /// <summary>Result of the position over the candles: whether it hit the target or the stop first.</summary>
     public (string Status, int Outcome) PositionOutcome(CandleSeries series)
     {
         if (!IsPosition || Points.Count < 3 || series.Count == 0) return ("", 0);
         bool isLong = Kind == DrawingKind.LongPosition;
         double target = Points[1].Price, stop = Points[2].Price;
         var end = Points[1].Time > Points[0].Time ? Points[1].Time : DateTime.MaxValue;
-        // desde la vela siguiente a la entrada (la vela de la entrada ya tenía su rango antes de entrar)
+        // from the candle after the entry (the entry candle already had its range before entering)
         int first = series.FindBar(Points[0].Time) + 1;
         if (first < 1) first = 1;
         for (int i = first; i < series.Count && series[i].Time <= end; i++)
@@ -234,16 +234,16 @@ public sealed class ChartDrawing
             double hi = (double)series.TicksToPrice(c.HighTicks), lo = (double)series.TicksToPrice(c.LowTicks);
             bool hitStop = isLong ? lo <= stop : hi >= stop;
             bool hitTarget = isLong ? hi >= target : lo <= target;
-            if (hitStop) return ("Stop tocado", -1); // si toca los dos en la misma vela, se toma el peor caso
-            if (hitTarget) return ("Objetivo tocado", 1);
+            if (hitStop) return ("Stop hit", -1); // if it touches both in the same candle, the worst case is taken
+            if (hitTarget) return ("Target hit", 1);
         }
 
         return ("", 0);
     }
 
-    // ------------------------------------------------------------------ coordenadas
+    // ------------------------------------------------------------------ coordinates
 
-    /// <summary>X de un instante (interpola entre velas y extrapola al futuro).</summary>
+    /// <summary>X of an instant (it interpolates between candles and extrapolates into the future).</summary>
     public static float XOf(ChartLayout layout, CandleSeries series, DateTime time)
     {
         if (series.Count == 0) return layout.Plot.Right;
@@ -268,7 +268,7 @@ public sealed class ChartDrawing
         return layout.CenterX(bar + frac);
     }
 
-    /// <summary>Instante en una coordenada X.</summary>
+    /// <summary>Instant at an X coordinate.</summary>
     public static DateTime TimeAt(ChartLayout layout, CandleSeries series, float x)
     {
         if (series.Count == 0) return DateTime.UtcNow;
@@ -289,7 +289,7 @@ public sealed class ChartDrawing
         return t0 + TimeSpan.FromTicks((long)((t1 - t0).Ticks * frac));
     }
 
-    // ------------------------------------------------------------------ dibujo
+    // ------------------------------------------------------------------ drawing
 
     private SKPathEffect? Effect(float scale = 1) => EffectiveLineStyle switch
     {
@@ -401,7 +401,7 @@ public sealed class ChartDrawing
                 break;
             }
             case DrawingKind.Text:
-                canvas.DrawText(string.IsNullOrEmpty(Text) ? "Texto" : Text, x0, y0, labelFont, text);
+                canvas.DrawText(string.IsNullOrEmpty(Text) ? "Text" : Text, x0, y0, labelFont, text);
                 break;
             case DrawingKind.Ruler:
             {
@@ -420,7 +420,7 @@ public sealed class ChartDrawing
                     int bars = Math.Abs(layout.BarAt(x1) - layout.BarAt(x0));
                     var span = Points[1].Time - Points[0].Time;
                     string l1 = $"{(diff >= 0 ? "+" : "")}{Format(diff, decimals)} ({pct:+0.00;-0.00}%)  {ticks} ticks";
-                    string l2 = $"{bars} barras · {FormatSpan(span)}";
+                    string l2 = $"{bars} bars · {FormatSpan(span)}";
                     DrawBox(canvas, font, (x0 + x1) / 2, Math.Max(y0, y1) + 6, SKColors.White, l1, l2);
                 }
 
@@ -483,14 +483,14 @@ public sealed class ChartDrawing
         string Ticks(double d) => tick > 0 ? $" · {Math.Round(d / tick).ToString("0", ic)} ticks" : "";
         string Pct(double d) => entry != 0 ? $" · {(d / entry * 100).ToString("0.00", ic)}%" : "";
         string Money(double d) => Quantity > 0 ? $" · {((double)Quantity * d).ToString("0.00", ic)}" : "";
-        // las etiquetas se centran en la parte visible de la caja
+        // the labels are centered on the visible part of the box
         var plotRect = main.Rect;
         float vx0 = Math.Max(x0, plotRect.Left), vx1 = Math.Min(x1, plotRect.Right);
         float cx = vx1 > vx0 ? (vx0 + vx1) / 2 : (x0 + x1) / 2;
-        string tl = $"Objetivo {Format(target, decimals)}  +{Format(reward, decimals)}{Pct(reward)}{Ticks(reward)}{Money(reward)}";
+        string tl = $"Target {Format(target, decimals)}  +{Format(reward, decimals)}{Pct(reward)}{Ticks(reward)}{Money(reward)}";
         string sl = $"Stop {Format(stop, decimals)}  −{Format(riskAmt, decimals)}{Pct(riskAmt)}{Ticks(riskAmt)}{Money(riskAmt)}";
         float boxH = font.Spacing + 8;
-        // la etiqueta del objetivo va del lado de afuera (arriba en la larga, abajo en la corta)
+        // the target label goes on the outer side (above on a long, below on a short)
         DrawBox(canvas, font, cx, isLong ? yT - boxH - 4 : yT + 4, theme.UpCandle, tl);
         DrawBox(canvas, font, cx, isLong ? yS + 4 : yS - boxH - 4, theme.DownCandle, sl);
         string mid = $"{(isLong ? "Larga" : "Corta")} {Format(entry, decimals)} · R:R {rr.ToString("0.00", ic)}" + (Quantity > 0 ? $" · Cant {Quantity.ToString(ic)}" : "") + (status.Length > 0 ? $" · {status}" : "");
@@ -498,7 +498,7 @@ public sealed class ChartDrawing
         DrawBox(canvas, font, cx, yE - boxH / 2, midCol, mid);
     }
 
-    /// <summary>Cajita oscura con una o más líneas de texto, centrada en <paramref name="cx"/>.</summary>
+    /// <summary>Dark little box with one or more lines of text, centered on <paramref name="cx"/>.</summary>
     private static void DrawBox(SKCanvas canvas, SKFont font, float cx, float top, SKColor color, params string[] lines)
     {
         float w = lines.Max(l => RenderContext.MeasureWidth(font, l)) + 12;
@@ -533,7 +533,7 @@ public sealed class ChartDrawing
         canvas.DrawArc(new SKRect(x - 2.6f, y - 5, x + 2.6f, y + 1), 180, 180, false, p);
     }
 
-    /// <summary>Extiende un segmento hasta los bordes pedidos del rectángulo.</summary>
+    /// <summary>Extends a segment to the requested edges of the rectangle.</summary>
     private static (float, float, float, float) Extend(float x0, float y0, float x1, float y1, SKRect r, bool left, bool right)
     {
         if (Math.Abs(x1 - x0) < 0.01f)
@@ -581,7 +581,7 @@ public sealed class ChartDrawing
         }
     }
 
-    /// <summary>Prueba si un punto toca el objeto. Devuelve el índice del manejador (-1 = el cuerpo).</summary>
+    /// <summary>Tests whether a point touches the object. Returns the handler index (-1 = the body).</summary>
     public bool HitTest(ChartLayout layout, CandleSeries series, float x, float y, out int handle)
     {
         handle = -1;

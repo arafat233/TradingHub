@@ -1,6 +1,6 @@
 namespace TradingHub.Attributes
 {
-    /// <summary>Muestra la propiedad solo cuando otra propiedad tiene alguno de los valores dados.</summary>
+    /// <summary>Shows the property only when another property has one of the given values.</summary>
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
     public sealed class VisibleWhenAttribute : Attribute
     {
@@ -14,7 +14,7 @@ namespace TradingHub.Attributes
         public object[] Values { get; }
     }
 
-    /// <summary>Link a la ayuda del indicador.</summary>
+    /// <summary>Link to the indicator's help.</summary>
     [AttributeUsage(AttributeTargets.Class)]
     public sealed class HelpLinkAttribute : Attribute
     {
@@ -41,7 +41,7 @@ namespace TradingHub.Attributes
         public string Id { get; }
     }
 
-    /// <summary>Pestaña del editor de propiedades en la que aparece la propiedad.</summary>
+    /// <summary>Tab of the property editor the property appears in.</summary>
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Class, AllowMultiple = false)]
     public sealed class TabAttribute : Attribute
     {
@@ -69,7 +69,7 @@ namespace TradingHub.Attributes
 
 namespace TradingHub.Attributes.Editors
 {
-    /// <summary>Indica que un objeto anidado se muestra expandido en el editor.</summary>
+    /// <summary>Indicates that a nested object is shown expanded in the editor.</summary>
     [AttributeUsage(AttributeTargets.Property)]
     public sealed class IsExpandedAttribute : Attribute
     {

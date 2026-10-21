@@ -4,17 +4,17 @@ using TradingHub.Rendering.Tools;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Extensiones de compatibilidad usadas por los indicadores.</summary>
+    /// <summary>Compatibility extensions used by the indicators.</summary>
     public static class IndicatorExtensions
     {
-        /// <summary>Conversión de colores (en esta plataforma CrossColor y System.Drawing.Color son lo mismo).</summary>
+        /// <summary>Color conversion (on this platform CrossColor and System.Drawing.Color are the same thing).</summary>
         public static Color Convert(this Color color) => color;
 
         public static Color? Convert(this Color? color) => color;
 
         public static Color SetTransparency(this Color color, int alpha) => Color.FromArgb(Math.Clamp(alpha, 0, 255), color);
 
-        /// <summary>Suma de los últimos <paramref name="period"/> valores hasta <paramref name="bar"/>.</summary>
+        /// <summary>Sum of the last <paramref name="period"/> values up to <paramref name="bar"/>.</summary>
         public static decimal CalcSum(this IDataSeries series, int period, int bar)
         {
             decimal sum = 0;
@@ -53,7 +53,7 @@ namespace TradingHub.Indicators
             _ => System.Convert.ToDecimal(o),
         };
 
-        /// <summary>Dibuja una etiqueta con el valor sobre el eje de precios (a la derecha del panel).</summary>
+        /// <summary>Draws a label with the value over the price axis (to the right of the panel).</summary>
         public static void DrawLabelOnPriceAxis(this Indicator indicator, RenderContext context, string text, int y, RenderFont font, Color background, Color textColor)
         {
             if (indicator?.ChartInfo == null || string.IsNullOrEmpty(text)) return;

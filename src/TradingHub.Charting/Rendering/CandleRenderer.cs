@@ -3,7 +3,7 @@ using TradingHub.Indicators;
 
 namespace TradingHub.Charting.Rendering;
 
-/// <summary>Velas, barras OHLC y línea.</summary>
+/// <summary>Candles, OHLC bars and line.</summary>
 internal sealed class CandleRenderer
 {
     private readonly SKPaint _fill = new() { IsAntialias = false, Style = SKPaintStyle.Fill };
@@ -39,12 +39,12 @@ internal sealed class CandleRenderer
         decimal haOpen = 0, haClose = 0;
         if (ha)
         {
-            // Heikin Ashi: la apertura es recursiva; arrancar 300 velas antes alcanza para converger
+            // Heikin Ashi: the open is recursive; starting 300 candles earlier is enough to converge
             int start = Math.Max(0, layout.FirstVisible - 300);
             for (int i = start; i < Math.Min(layout.FirstVisible, series.Count); i++) NextHa(series, i, start, ref haOpen, ref haClose, out _, out _);
         }
 
-        // la serie se puede achicar entre que se calculó el layout y este dibujo (se rearmó con otro período): nunca fuera de rango
+        // the series can shrink between the layout being computed and this draw (it was rebuilt with another period): never out of range
         int last = Math.Min(layout.LastVisible, series.Count - 1);
         for (int i = Math.Max(0, layout.FirstVisible); i <= last; i++)
         {
@@ -93,7 +93,7 @@ internal sealed class CandleRenderer
         }
     }
 
-    /// <summary>Avanza el cálculo de Heikin Ashi una vela.</summary>
+    /// <summary>Advances the Heikin Ashi calculation by one candle.</summary>
     private static void NextHa(TradingHub.Data.CandleSeries series, int i, int start, ref decimal haOpen, ref decimal haClose, out decimal haHigh, out decimal haLow)
     {
         var c = series[i];

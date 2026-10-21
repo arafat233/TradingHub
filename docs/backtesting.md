@@ -1,242 +1,247 @@
-[← Volver al índice](README.md)
+[← Back to the index](README.md)
 
 # Backtesting
 
-La sección **Backtesting** (⌘2) junta todo lo que es prueba. Arriba elegís la estrategia y abajo tenés las pestañas
-**Código**, **Backtest**, **Optimización**, **Walk-forward**, **Historial**, **Portafolio** y **Reportes**. Cómo se
-escribe una estrategia está en [Estrategias](estrategias.md); lo que corre en tiempo real, en [En vivo](en-vivo.md).
+The **Backtesting** section (⌘2) gathers everything to do with testing. At the top you pick the strategy and below you
+have the **Code**, **Backtest**, **Optimization**, **Walk-forward**, **History**, **Portfolio** and **Reports** tabs.
+How a strategy is written is covered in [Strategies](strategies.md); what runs in real time, in [Live](live.md).
 
-## Elegir los datos
+## Choosing the data
 
-El backtest recorre, una por una, las operaciones reales guardadas: lo que se grabó mientras tenías gráficos abiertos y
-lo que bajaste o importaste en [Datos](datos.md). Sin nada guardado, la lista está vacía.
+The backtest walks, one by one, through the real trades that are stored: whatever was recorded while you had charts open
+and whatever you downloaded or imported in [Data](data.md). With nothing stored, the list is empty.
 
-- **Instrumento (datos guardados)** muestra `SÍMBOLO · fuente · N días`, y debajo el rango y lo que ocupa.
-- Los futuros que además tienen historia de [Databento](datos.md#databento) aparecen tres veces:
+- **Instrument (stored data)** shows `SYMBOL · source · N days`, and below it the range and how much space it takes.
+- Futures that also have [Databento](data.md#databento) history appear three times:
 
-  | Entrada | Qué usa |
+  | Entry | What it uses |
   |---|---|
-  | **Rithmic + Databento** | La combinada: manda Rithmic y Databento completa solo los minutos en que Rithmic no tiene operaciones |
-  | **solo Rithmic** | Solo lo grabado o bajado de Rithmic |
-  | **Databento** | Solo lo bajado de Databento |
+  | **Rithmic + Databento** | The combined one: Rithmic leads and Databento only fills the minutes where Rithmic has no trades |
+  | **Rithmic only** | Only what was recorded or downloaded from Rithmic |
+  | **Databento** | Only what was downloaded from Databento |
 
-  Con Tradovate pasa lo mismo («Tradovate + Databento», «solo Tradovate»).
-- **Desde** y **Hasta** (el último día entra completo), con los rangos rápidos **1 semana**, **1 mes**, **3 meses**,
-  **6 meses**, **1 año** y **Todo**, contados hacia atrás desde el último día guardado (Todo arranca en el primero).
-- Al cambiar de instrumento el rango pasa a los últimos 7 días guardados, y la comisión % a 0,04 si es cripto (Binance
-  o Bybit) o a 0 en el resto.
+  The same goes for Tradovate («Tradovate + Databento», «Tradovate only»).
+- **From** and **To** (the last day is included in full), with the quick ranges **1 week**, **1 month**, **3 months**,
+  **6 months**, **1 year** and **All**, counted backwards from the last stored day (All starts at the first).
+- When you change instrument the range jumps to the last 7 stored days, and the commission % to 0.04 if it is crypto
+  (Binance or Bybit) or to 0 otherwise.
 
-**Período de las velas**: un código como `M5`. Hay botones para `M1`, `M5`, `M15`, `H1`, `H4`, `D1`, `Tick500` y
-`Range20`. No importan las mayúsculas y acepta la forma de la barra del gráfico y nombres en castellano: `d1`, `D`,
-`1D`, `Daily` o `diario` son lo mismo, igual que `5m` y `M5`, `1h` y `H1`, o `semanal` y `W1`.
+**Candle period**: a code like `M5`. There are buttons for `M1`, `M5`, `M15`, `H1`, `H4`, `D1`, `Tick500` and
+`Range20`. Case doesn't matter and it accepts the chart bar's form too: `d1`, `D`, `1D` and `Daily` are the same thing,
+just like `5m` and `M5`, `1h` and `H1`, or `Weekly` and `W1`.
 
-| Código | Tipo de vela |
+| Code | Candle type |
 |---|---|
-| `S30`, `M5`, `H1`, `D1` o `Daily`, `W1` o `Weekly`, `Mo1` o `Monthly` | De tiempo (segundos, minutos, horas, días, semanas, meses) |
-| `Tick500` | Cada 500 operaciones |
-| `Volume1000` | Cada 1.000 de volumen |
-| `Range20` | Cada vez que el rango supera 20 ticks |
-| `Delta300` | Cuando el delta de la vela llega a ±300 |
+| `S30`, `M5`, `H1`, `D1` or `Daily`, `W1` or `Weekly`, `Mo1` or `Monthly` | Time-based (seconds, minutes, hours, days, weeks, months) |
+| `Tick500` | Every 500 trades |
+| `Volume1000` | Every 1,000 of volume |
+| `Range20` | Every time the range exceeds 20 ticks |
+| `Delta300` | When the candle's delta reaches ±300 |
 
-Renko no está disponible en backtests.
+Renko is not available in backtests.
 
-## Ejecución: costos y reglas
+## Execution: costs and rules
 
-| Campo | Por defecto | Qué hace |
+| Field | Default | What it does |
 |---|---|---|
-| Capital inicial | 10.000 | Base del retorno %, el drawdown % y el Sharpe |
-| Comisión % por lado | 0,04 en cripto, 0 en el resto | Porcentaje del nominal (cantidad × precio × valor del punto) en cada entrada y cada salida |
-| Comisión fija por unidad | 0 | Por contrato o unidad y por lado; se suma a la porcentual (en futuros, usá esta) |
-| Deslizamiento (ticks) | 1 | Ticks en contra en las órdenes a mercado y en los stops |
-| Órdenes límite | Solo si el precio lo atraviesa | La alternativa es «Apenas lo toca (optimista)» |
-| Zona de la sesión e inicio (h) | UTC, 0 | Definen `LocalTime`, `TimeBetween`, el día de cada sesión (VWAP, delta acumulado, `OnSessionStart`) y las estadísticas por hora |
+| Starting capital | 10,000 | The base for the % return, the % drawdown and the Sharpe |
+| Commission % per side | 0.04 in crypto, 0 otherwise | A percentage of the notional (quantity × price × point value) on each entry and each exit |
+| Fixed commission per unit | 0 | Per contract or unit and per side; it is added to the percentage one (in futures, use this one) |
+| Slippage (ticks) | 1 | Ticks against you on market orders and on stops |
+| Limit orders | Only if price trades through | The alternative is «As soon as it touches (optimistic)» |
+| Session zone and start (h) | UTC, 0 | They define `LocalTime`, `TimeBetween`, each session's day (VWAP, cumulative delta, `OnSessionStart`) and the hourly statistics |
 
-Las zonas disponibles son UTC, Buenos Aires, Nueva York, Chicago (CME) y Londres. La tarjeta **Parámetros** tiene los de
-la estrategia y, aparte, los de gestión de la posición. Lo que configurás queda guardado por estrategia: esos parámetros
-son los que toma después la estrategia puesta en un gráfico, y [En vivo](en-vivo.md) usa además las velas y la sesión.
+The available zones are UTC, Buenos Aires, New York, Chicago (CME) and London. The **Parameters** card holds the
+strategy's own and, separately, the position-management ones. What you configure is saved per strategy: those parameters
+are the ones the strategy later picks up when placed on a chart, and [Live](live.md) also uses the candles and the
+session.
 
-### Cómo se llenan las órdenes
+### How orders are filled
 
-| Orden | Se llena |
+| Order | It fills |
 |---|---|
-| A mercado | Con la operación siguiente a la orden, más o menos el deslizamiento. Si la mandó `OnBar`, con la primera operación de la vela siguiente. |
-| Límite | Al precio límite cuando una operación lo atraviesa (o lo toca, en modo optimista). Si al mandarla el precio ya estaba del otro lado, se llena como a mercado, nunca peor que el límite. |
-| Stop | Cuando una operación llega al precio, al precio de esa operación más o menos el deslizamiento (con un hueco, peor). |
-| Stop y objetivo automáticos | Como stop y como límite, unidos como OCO. |
+| Market | With the trade following the order, plus or minus the slippage. If `OnBar` sent it, with the first trade of the next candle. |
+| Limit | At the limit price when a trade goes through it (or touches it, in optimistic mode). If price was already on the other side when it was sent, it fills like a market order, never worse than the limit. |
+| Stop | When a trade reaches the price, at that trade's price plus or minus the slippage (with a gap, worse). |
+| Automatic stop and target | As a stop and as a limit, tied together as OCO. |
 
-Ninguna orden se llena con la operación que la originó. Al final del rango, la posición abierta se cierra al último
-precio («Fin del backtest»). El resultado está en la moneda del instrumento: diferencia de precio × cantidad × valor del
-punto (en el NQ, 20 por punto). El contexto de mercado arranca con el mes anterior guardado, como en vivo.
+No order fills with the trade that triggered it. At the end of the range, the open position is closed at the last price
+(«End of the backtest»). The result is in the instrument's currency: price difference × quantity × point value (on NQ,
+20 per point). The market context starts with the previous stored month, as it does live.
 
-## Resultados
+## Results
 
-Cada backtest queda en el **Historial** con el código exacto que se usó. Arriba se ven **Resultado neto** (y su % del
-capital), **Profit factor**, **Ganadoras**, **Drawdown máx.** (en % y con el factor de recuperación), **Sharpe** (y
-Sortino) y **Expectativa**, y la curva de capital. Debajo, cinco pestañas:
+Each backtest is kept in the **History** with the exact code that was used. At the top you see **Net result** (and its %
+of capital), **Profit factor**, **Winners**, **Max drawdown** (as a % and with the recovery factor), **Sharpe** (and
+Sortino) and **Expectancy**, plus the equity curve. Below, five tabs:
 
-- **Operaciones**: número, lado, entrada y salida con su precio (en la hora de tu Mac), cantidad, resultado neto, MAE y
-  MFE (lo máximo que fue en contra y a favor), velas y «Salida por» (el nombre de la orden que cerró).
-- **Métricas**: 28 números, entre ellos comisiones, retorno, promedio por operación, rachas, velas promedio, tiempo en
-  el mercado, resultado de largos y cortos, ticks simulados y velas.
-- **Según el mercado**, **Monte Carlo** y **Registro** (lo que la estrategia escribió con `Log`, con hora UTC, hasta
-  5.000 líneas), que se explican abajo.
+- **Trades**: number, side, entry and exit with their price (in your Mac's time), quantity, net result, MAE and MFE
+  (the most it went against and in favour), candles and «Exit by» (the name of the order that closed it).
+- **Metrics**: 28 numbers, among them commissions, return, average per trade, streaks, average candles, time in the
+  market, the result of longs and shorts, simulated ticks and candles.
+- **By market regime**, **Monte Carlo** and **Log** (whatever the strategy wrote with `Log`, in UTC time, up to 5,000
+  lines), explained below.
 
-| Métrica | Cómo se calcula |
+| Metric | How it is computed |
 |---|---|
-| Profit factor | Ganancia bruta / pérdida bruta (∞ si no hubo pérdidas) |
-| Ganadoras | Operaciones con resultado neto mayor a 0, sobre el total |
-| Expectativa | % ganadoras × ganancia promedio + % perdedoras × pérdida promedio |
-| Drawdown máximo | Mayor caída desde un pico de la curva de capital (con lo abierto, al cierre de cada vela); el % es sobre ese pico |
-| Factor de recuperación | Resultado neto / drawdown máximo |
-| Sharpe y Sortino | Media de los retornos diarios / su desvío (Sortino solo cuenta los días negativos), × √252, o × √365 en cripto |
+| Profit factor | Gross profit / gross loss (∞ if there were no losses) |
+| Winners | Trades with a net result greater than 0, over the total |
+| Expectancy | % winners × average win + % losers × average loss |
+| Maximum drawdown | The largest fall from a peak of the equity curve (including what is open, at each candle's close); the % is against that peak |
+| Recovery factor | Net result / maximum drawdown |
+| Sharpe and Sortino | Mean of the daily returns / their standard deviation (Sortino only counts the negative days), × √252, or × √365 in crypto |
 
-### Según el mercado
+### By market regime
 
-Cada operación guarda cómo estaba el mercado al entrar, con las mismas medidas del contexto de las estrategias: rango,
-mixto, tendencia alcista o bajista (eficiencia de las últimas 24 horas) y volatilidad baja, normal o alta (hasta el
-percentil 33 del último mes, entre 33 y 67, o desde 67). La tabla da operaciones, neto, profit factor, % de ganadoras y
-promedio de cada condición, y marca «poca muestra» cuando hay muy pocas.
+Each trade records what the market looked like on entry, with the same measures as the strategies' context: range,
+mixed, uptrend or downtrend (the efficiency of the last 24 hours) and low, normal or high volatility (up to the 33rd
+percentile of the last month, between 33 and 67, or from 67 up). The table gives trades, net, profit factor, % winners
+and average for each condition, and flags «small sample» when there are very few.
 
-Debajo elegís condiciones y tocás **Volver a correr solo en estas condiciones**. No es un recorte del backtest anterior:
-es uno nuevo con el filtro de contexto, donde la estrategia decide en cada vela con lo que se sabía hasta ese momento
-(las salidas siempre pasan), igual que en vivo. Arriba se comparan las dos corridas. Ojo: si elegís las condiciones
-mirando estos mismos resultados, el filtro está ajustado a esos datos; validalo con walk-forward o en otro período.
+Below it you pick conditions and click **Re-run only in these conditions**. It is not a slice of the previous backtest:
+it is a new one with the context filter, where the strategy decides on each candle with what was known at that point
+(exits always go through), just like live. At the top the two runs are compared. Careful: if you pick the conditions by
+looking at these very results, the filter is fitted to that data; validate it with walk-forward or on another period.
 
 ### Monte Carlo
 
-**Simular 1.000 órdenes al azar** reordena las operaciones 1.000 veces y mide el drawdown de cada camino: el típico
-(mediana), el de 1 de cada 20 caminos (percentil 95), el extremo (percentil 99) y el peor visto, más el **riesgo de
-ruina** (caminos con un drawdown de al menos el 50 % del capital). El gráfico muestra 40 de esos caminos.
+**Simulate 1,000 random orderings** reshuffles the trades 1,000 times and measures each path's drawdown: the typical one
+(median), the one of 1 in every 20 paths (95th percentile), the extreme one (99th percentile) and the worst seen, plus
+the **risk of ruin** (paths with a drawdown of at least 50 % of the capital). The chart shows 40 of those paths.
 
-## Historial
+## History
 
-Filtrás por **Todas**, **Backtests**, **Optimizaciones**, **Walk-forward** o la estrella (favoritas). Cada corrida trae
-sus métricas, la curva, los parámetros y la configuración, con una nota editable. Botones: estrella, borrar, **Ver
-código** (la versión exacta), **Informe** (arma el informe profesional en Reportes) y **Usar parámetros** (los copia al
-backtest y lo corre). Se guarda en `~/Library/Application Support/Trading Hub/Backtests`, una carpeta por estrategia.
+You filter by **All**, **Backtests**, **Optimizations**, **Walk-forward** or the star (favourites). Each run carries its
+metrics, the curve, the parameters and the configuration, with an editable note. Buttons: star, delete, **View code**
+(the exact version), **Report** (builds the professional report in Reports) and **Use parameters** (copies them into the
+backtest and runs it). It is stored in `~/Library/Application Support/Trading Hub/Backtests`, one folder per strategy.
 
-## Optimización
+## Optimization
 
-1. En **Qué probar** marcás los parámetros a recorrer con su mínimo, máximo y paso (los que tienen `[Optimize]` ya
-   vienen marcados). Se ve cuántas combinaciones son: con más de 3.000 te avisa y con más de 20.000 no corre.
-2. **Ordenar por**: Resultado / drawdown (por defecto), Resultado neto, Profit factor (con tope de 100), Sharpe,
-   Sortino, Factor de recuperación, Expectativa o % ganadoras.
-3. **Mínimo de operaciones** (10): las combinaciones con menos quedan sin métrica, para no premiar la suerte.
-4. **Optimizar**. Usa los datos y la ejecución de la pestaña Backtest y prueba todas las combinaciones (grilla), en
-   paralelo con todos los núcleos menos uno.
+1. In **What to test** you tick the parameters to sweep with their minimum, maximum and step (the ones with
+   `[Optimize]` come ticked already). You can see how many combinations there are: over 3,000 it warns you and over
+   20,000 it won't run.
+2. **Sort by**: Result / drawdown (the default), Net result, Profit factor (capped at 100), Sharpe, Sortino, Recovery
+   factor, Expectancy or % winners.
+3. **Minimum trades** (10): combinations with fewer are left without a metric, so luck doesn't get rewarded.
+4. **Optimize**. It uses the data and the execution settings from the Backtest tab and tries every combination (a grid),
+   in parallel across all cores but one.
 
-**Optimizar el timeframe.** Al final de **Qué probar** está **Período de las velas**: lo tildás y marcás los períodos
-a probar (`M1`, `M5`, `M15`, `M30`, `H1`, `H4` y `D1`). Cada combinación de parámetros se prueba en cada período
-marcado: la historia tick a tick se carga una sola vez y las velas se arman en cada período. En la tabla cada fila
-dice su período, y **Usar en Backtest** también lo copia. En el walk-forward el período se elige en cada ventana como
-un parámetro más, y la medición de sobreajuste cuenta cada período como una prueba más.
+**Optimizing the timeframe.** At the end of **What to test** sits **Candle period**: you tick it and pick the periods to
+try (`M1`, `M5`, `M15`, `M30`, `H1`, `H4` and `D1`). Each parameter combination is tested on every ticked period: the
+tick-by-tick history is loaded once and the candles are built for each period. In the table each row states its period,
+and **Use in Backtest** copies that too. In the walk-forward the period is chosen in each window like any other
+parameter, and the overfitting measurement counts each period as one more trial.
 
-La tabla muestra hasta 500 filas ordenadas por la métrica. **Usar en Backtest** (o doble clic) copia los parámetros y
-corre el backtest. La mejor fila suele ser un pico de suerte: validá con walk-forward. Las optimizaciones y los
-walk-forward también quedan en el Historial.
+The table shows up to 500 rows sorted by the metric. **Use in Backtest** (or a double click) copies the parameters and
+runs the backtest. The best row is usually a lucky peak: validate with walk-forward. Optimizations and walk-forwards are
+also kept in the History.
 
 ## Walk-forward
 
-Optimiza en una ventana (dentro de muestra), prueba lo elegido en los días siguientes, que la optimización no vio (fuera
-de muestra), avanza y repite. Lo que cuenta es el resultado fuera de muestra encadenado.
+It optimizes on a window (in sample), tests whatever was chosen on the following days, which the optimization never saw
+(out of sample), moves on and repeats. What counts is the chained out-of-sample result.
 
-- **Dentro de muestra** (14 días) y **Fuera de muestra** (7 días). **Móvil**: la ventana de optimización tiene largo
-  fijo y avanza. **Anclada**: arranca siempre en el primer día y crece. Antes de correr se ve cuántas ventanas salen.
-- Usa los parámetros, la métrica y el mínimo de operaciones de Optimización, y los datos y costos de Backtest.
-- **Búsqueda de parámetros**: **Automática** (grilla hasta 300 combinaciones, bayesiana si hay más), **Grilla
-  completa** o **Bayesiana**. La bayesiana mide 80 combinaciones por ventana.
+- **In sample** (14 days) and **Out of sample** (7 days). **Rolling**: the optimization window has a fixed length and
+  advances. **Anchored**: it always starts on the first day and grows. Before running you see how many windows come out.
+- It uses the parameters, the metric and the minimum trades from Optimization, and the data and costs from Backtest.
+- **Parameter search**: **Automatic** (a grid up to 300 combinations, Bayesian beyond that), **Full grid** or
+  **Bayesian**. The Bayesian one measures 80 combinations per window.
 
-Resultados: **Fuera de muestra** (neto, operaciones y profit factor), **Eficiencia WF**, **Ventanas ganadoras**,
-**Drawdown fuera**, **Sobreajuste** y **Caminos (CPCV)**, la curva fuera de muestra con cada ventana marcada (V1, V2…) y
-una tabla por ventana con sus fechas, los parámetros elegidos, el neto dentro y fuera, y su eficiencia.
+Results: **Out of sample** (net, trades and profit factor), **WF efficiency**, **Winning windows**, **Out-of-sample
+drawdown**, **Overfitting** and **Paths (CPCV)**, the out-of-sample curve with each window marked (W1, W2…) and a table
+per window with its dates, the chosen parameters, the in- and out-of-sample net, and its efficiency.
 
-### Cómo trabaja por dentro
+### How it works inside
 
-1. **Una corrida por combinación.** Cada combinación se corre una sola vez sobre toda la historia, con los indicadores
-   calientes y el contexto de mercado como en vivo, y cada ventana se mide recortando ese resultado (las operaciones que
-   entraron en la ventana y el capital hora por hora). Ninguna ventana usa datos de después de ella.
-2. **Compresión de ticks.** Las operaciones seguidas al mismo precio, del mismo lado y en el mismo segundo se juntan en
-   una con el volumen sumado. Las velas de tiempo o de rango quedan idénticas (apertura, máximo, mínimo, cierre, volumen,
-   delta y footprint) y las órdenes se llenan a los mismos precios, con muchos menos eventos. Se usa en la optimización y
-   el walk-forward solo con velas de tiempo o de rango y si la estrategia no usa `OnTick`; lo único que cambia es
-   `Bar.Trades`, la cantidad de operaciones de cada vela.
-3. **Grilla o bayesiana.** La grilla prueba todo y deja ver el mapa entero. La bayesiana (TPE, *Tree-structured Parzen
-   Estimator*) arranca con puntos bien repartidos (un hipercubo latino de entre 8 y 30, un cuarto del presupuesto) y
-   después propone de a tandas: separa el 20 % mejor de lo medido, estima para cada parámetro qué valores son
-   frecuentes entre las buenas (`l(x)`) y entre las malas (`g(x)`), y prueba donde `l(x)/g(x)` es más alto.
-4. **Meseta, no pico.** En cada ventana se elige por el promedio con las vecinas: para cada combinación,
-   `puntaje = (suma de su métrica y la de las vecinas a un paso de grilla + mediana) / (vecinas + 2)`. La mediana tira
-   hacia el medio a las que tienen pocas vecinas medidas, y una vecina sin métrica cuenta peor que la peor. Una combinación
-   que gana sola entre vecinas que pierden casi siempre es suerte; una zona entera que gana, no.
-5. **Eficiencia.** `ganancia diaria fuera de muestra / ganancia diaria dentro de muestra`, sumando todas las ventanas
-   (y lo mismo por ventana). Más de 0,5 es buena señal; 0 si dentro de muestra no ganó.
-6. **PBO con CSCV** (probabilidad de sobreoptimización con validación cruzada combinatoriamente simétrica). Con el
-   resultado diario de todas las combinaciones corridas, la historia se parte en 10 bloques (menos si hay pocos días) y
-   se prueban todas las formas de elegir la mitad como «dentro» (252): en cada una se toma la de mejor Sharpe ahí y se mira su
-   lugar `r` en la otra mitad (1 = la peor de `N`). Con `ω = r / (N + 1)`, queda en la mitad de abajo si
-   `ln(ω / (1 − ω)) ≤ 0`; **PBO** es la proporción de veces que pasa. Trading Hub muestra además cuántas veces la
-   elegida **ganó plata** en la otra mitad (tarjeta **Sobreajuste**: verde con menos del 20 % de pérdidas, rojo desde el
-   50 %), porque una PBO alta con todas ganando es una meseta, no un problema. Hacen falta 4 combinaciones y 20 días.
-7. **CPCV con embargo** (validación cruzada combinatoria purgada). La historia se parte en 8 grupos seguidos (menos si
-   hay pocos días); para cada par de grupos de prueba (28 pares) se elige la combinación por meseta con los días
-   restantes, sacando los que quedan a menos del **embargo** de los grupos de prueba (la duración típica de una
-   operación, entre 1 y 5 días), y se mide en esos dos grupos. Como cada grupo es de prueba en 7 pares, salen 7 caminos
-   fuera de muestra completos, cada uno con su neto, Sharpe y drawdown. La tarjeta
-   **Caminos (CPCV)** es verde si gana al menos el 70 % y la mediana es positiva, y roja si la mediana no gana.
+1. **One run per combination.** Each combination is run once over the whole history, with warm indicators and the market
+   context as it is live, and each window is measured by slicing that result (the trades that entered in the window and
+   the equity hour by hour). No window uses data from after it.
+2. **Tick compression.** Consecutive trades at the same price, on the same side and in the same second are merged into
+   one with the volume added up. Time and range candles come out identical (open, high, low, close, volume, delta and
+   footprint) and orders fill at the same prices, with far fewer events. It is used in the optimization and the
+   walk-forward only with time or range candles and if the strategy does not use `OnTick`; the only thing that changes
+   is `Bar.Trades`, each candle's trade count.
+3. **Grid or Bayesian.** The grid tries everything and lets you see the whole map. The Bayesian one (TPE,
+   *Tree-structured Parzen Estimator*) starts with well-spread points (a Latin hypercube of between 8 and 30, a quarter
+   of the budget) and then proposes in batches: it separates the best 20 % of what was measured, estimates for each
+   parameter which values are frequent among the good ones (`l(x)`) and among the bad ones (`g(x)`), and tries where
+   `l(x)/g(x)` is highest.
+4. **A plateau, not a peak.** In each window the choice is made by the average with the neighbours: for each
+   combination, `score = (sum of its metric and that of the neighbours one grid step away + median) / (neighbours + 2)`.
+   The median pulls combinations with few measured neighbours towards the middle, and a neighbour with no metric counts
+   worse than the worst one. A combination that wins alone among losing neighbours is almost always luck; a whole zone
+   that wins is not.
+5. **Efficiency.** `out-of-sample daily profit / in-sample daily profit`, summing every window (and the same per
+   window). Above 0.5 is a good sign; 0 if the in-sample didn't make money.
+6. **PBO with CSCV** (probability of backtest overfitting with combinatorially symmetric cross-validation). With the
+   daily result of every combination that was run, the history is split into 10 blocks (fewer if there are few days) and
+   every way of choosing half as «in» is tried (252): in each one the best Sharpe there is taken and its rank `r` in the
+   other half is looked at (1 = the worst of `N`). With `ω = r / (N + 1)`, it lands in the bottom half if
+   `ln(ω / (1 − ω)) ≤ 0`; **PBO** is the proportion of times that happens. Trading Hub also shows how often the chosen
+   one **made money** in the other half (the **Overfitting** card: green with under 20 % losses, red from 50 %),
+   because a high PBO with everything winning is a plateau, not a problem. It needs 4 combinations and 20 days.
+7. **CPCV with embargo** (combinatorial purged cross-validation). The history is split into 8 consecutive groups (fewer
+   if there are few days); for each pair of test groups (28 pairs) the combination is chosen by plateau using the
+   remaining days, dropping those within the **embargo** of the test groups (a trade's typical duration, between 1 and
+   5 days), and it is measured on those two groups. Since each group is a test group in 7 pairs, 7 complete
+   out-of-sample paths come out, each with its net, Sharpe and drawdown. The **Paths (CPCV)** card is green if at least
+   70 % win and the median is positive, and red if the median doesn't win.
 
-## Sharpe deflactado y la validación
+## The deflated Sharpe and the validation
 
-Probar muchas variantes hace que la mejor parezca buena por azar. El **Sharpe deflactado** mide la probabilidad de que
-la ventaja sea real después de descontar cuántas cosas se probaron. Con el Sharpe por operación fuera de muestra
-(`SR` = media / desvío del resultado neto), su asimetría `γ3`, su curtosis `γ4` (3 en una normal) y `n` operaciones:
+Trying many variants makes the best one look good by chance. The **deflated Sharpe** measures the probability that the
+edge is real once you discount how many things were tried. With the out-of-sample per-trade Sharpe (`SR` = mean /
+standard deviation of the net result), its skew `γ3`, its kurtosis `γ4` (3 in a normal) and `n` trades:
 
 ```
 PSR(SR*) = Φ( (SR − SR*) · √(n − 1) / √(1 − γ3·SR + (γ4 − 1)/4 · SR²) )
-SR*      = √(max(V, 1/n)) · E[máx Z_N],   E[máx Z_N] ≈ (1 − γ)·Φ⁻¹(1 − 1/N) + γ·Φ⁻¹(1 − 1/(N·e)),   γ ≈ 0,5772
+SR*      = √(max(V, 1/n)) · E[max Z_N],   E[max Z_N] ≈ (1 − γ)·Φ⁻¹(1 − 1/N) + γ·Φ⁻¹(1 − 1/(N·e)),   γ ≈ 0.5772
 ```
 
-`N` es la cantidad de configuraciones probadas, `V` la varianza de sus Sharpe y `Φ` la normal acumulada: `SR*` es el
-Sharpe que mostraría por suerte la mejor de `N` estrategias sin ventaja.
+`N` is the number of configurations tried, `V` the variance of their Sharpes and `Φ` the cumulative normal: `SR*` is the
+Sharpe that the best of `N` edgeless strategies would show out of luck.
 
-La validación son reglas fijas (`ValidationGate` en `TradingHub.Strategies`) que juzgan solo lo de fuera de muestra:
+The validation is a set of fixed rules (`ValidationGate` in `TradingHub.Strategies`) that judge the out-of-sample data
+only:
 
-| Prueba | Pasa | Dudosa | No pasa |
+| Test | Passes | Doubtful | Fails |
 |---|---|---|---|
-| Muestra | ≥ 30 operaciones | | menos |
-| Resultado | neto > 0 | | neto ≤ 0 |
-| Profit factor | ≥ 1,2 | ≥ 1,0 | < 1,0 |
-| Eficiencia walk-forward | ≥ 0,5 | ≥ 0,3 | < 0,3 |
-| Consistencia (ventanas que ganan) | ≥ 60 % | ≥ 40 % | < 40 % |
-| Ventanas | ≥ 4 | menos | |
-| Estabilidad (dispersión de los parámetros elegidos / ancho del rango) | ≤ 0,35 | más | |
-| Meseta (vecinas de la mejor que ganan) | ≥ 50 % | menos | |
-| Robustez (combinaciones que ganan) | ≥ 25 % | menos | |
-| Sobreajuste (la elegida pierde en la otra mitad) | < 20 % | < 50 % | ≥ 50 % |
-| Caminos CPCV | ≥ 70 % ganan | menos | mediana ≤ 0 |
-| Sharpe deflactado | ≥ 90 % | ≥ 50 % | < 50 % |
-| Desgaste (con 30 operaciones o más) | se sostiene | el último tercio rinde menos de la mitad que el primero, o t ≤ −1,5 | el primero ganaba, el último pierde y t ≤ −2 |
-| Regímenes (grupos con al menos 8 operaciones y el 15 %) | gana en todos | pierde en alguno | |
+| Sample | ≥ 30 trades | | fewer |
+| Result | net > 0 | | net ≤ 0 |
+| Profit factor | ≥ 1.2 | ≥ 1.0 | < 1.0 |
+| Walk-forward efficiency | ≥ 0.5 | ≥ 0.3 | < 0.3 |
+| Consistency (winning windows) | ≥ 60 % | ≥ 40 % | < 40 % |
+| Windows | ≥ 4 | fewer | |
+| Stability (spread of the chosen parameters / range width) | ≤ 0.35 | more | |
+| Plateau (neighbours of the best one that win) | ≥ 50 % | fewer | |
+| Robustness (combinations that win) | ≥ 25 % | fewer | |
+| Overfitting (the chosen one loses in the other half) | < 20 % | < 50 % | ≥ 50 % |
+| CPCV paths | ≥ 70 % win | fewer | median ≤ 0 |
+| Deflated Sharpe | ≥ 90 % | ≥ 50 % | < 50 % |
+| Decay (with 30 trades or more) | it holds up | the last third yields less than half of the first, or t ≤ −1.5 | the first made money, the last loses and t ≤ −2 |
+| Regimes (groups with at least 8 trades and 15 %) | wins in all of them | loses in one | |
 
-Con alguna «no pasa» el veredicto es **no pasa**; con alguna dudosa, **dudosa**; si no, **pasa**. Si gana fuera de
-muestra y solo falla lo que depende de la cantidad de operaciones, el veredicto es **falta muestra**, con cuántas veces
-más operaciones harían falta (proyectando el Sharpe deflactado con la misma ventaja, hasta 8 veces).
+With any «fails» the verdict is **fails**; with any doubtful, **doubtful**; otherwise, **passes**. If it wins out of
+sample and only the trade-count-dependent tests fail, the verdict is **needs more sample**, with how many times more
+trades would be needed (projecting the deflated Sharpe with the same edge, up to 8 times).
 
-En esta versión, la pestaña Walk-forward muestra la eficiencia, las ventanas ganadoras, el sobreajuste y los caminos (los
-dos últimos, con los umbrales de esta tabla). La validación completa, con el Sharpe deflactado, el desgaste y los
-regímenes, está en la biblioteca, cubierta por las pruebas, para usarla desde código (ver [Desarrollo](desarrollo.md)).
+In this version, the Walk-forward tab shows the efficiency, the winning windows, the overfitting and the paths (the last
+two with this table's thresholds). The full validation, with the deflated Sharpe, the decay and the regimes, lives in the
+library, covered by the tests, ready to use from code (see [Development](development.md)).
 
-## Portafolio
+## Portfolio
 
-Combina backtests guardados de varias estrategias o instrumentos: **Agregar** (elegís la corrida), pesos **Igual**,
-**Riesgo parejo** (cada una pesa la inversa de la volatilidad de su resultado diario) o **Manual**, y el capital. Muestra
-las métricas del conjunto, la curva, la matriz de correlación de los resultados diarios (conviene que esté por debajo de
-0,5) y cuánto baja el drawdown frente a la suma de los individuales. **Sugerir combinación** busca entre los últimos
-backtests de todas tus estrategias la combinación con correlación menor a 0,5 que más mejora el Sharpe (hasta 5).
-**Informe** arma el informe del portafolio.
+It combines stored backtests from several strategies or instruments: **Add** (you pick the run), **Equal**, **Risk
+parity** (each one weighs the inverse of its daily result's volatility) or **Manual** weights, and the capital. It shows
+the group's metrics, the curve, the correlation matrix of the daily results (below 0.5 is preferable) and how much the
+drawdown drops compared with the sum of the individual ones. **Suggest a combination** searches your strategies' latest
+backtests for the combination with a correlation under 0.5 that improves the Sharpe the most (up to 5). **Report**
+builds the portfolio's report.
 
-## Reportes
+## Reports
 
-Informes en Markdown con todas las métricas, tablas y gráficos: los arma **Informe** desde el Historial o el Portafolio,
-o Claude con el laboratorio (con su veredicto y su análisis). Se guardan en `~/Documents/Trading Hub/Estrategias/Reportes`,
-se ven como una hoja y **Exportar PDF / HTML** los abre en el navegador para imprimirlos o guardarlos como PDF. Ver
-[Claude](asistente-claude.md).
+Markdown reports with every metric, table and chart: they are built by **Report** from the History or the Portfolio, or
+by Claude with the lab (with its verdict and its analysis). They are stored in
+`~/Documents/Trading Hub/Strategies/Reports`, shown as a sheet, and **Export PDF / HTML** opens them in the browser to
+print them or save them as PDF. See [Claude](claude-assistant.md).

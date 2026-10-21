@@ -1,25 +1,25 @@
 namespace TradingHub.Market;
 
 /// <summary>
-/// Un instrumento operable (BTCUSDT en Binance Futures, ES en el simulador, etc.).
-/// Los precios se manejan internamente como múltiplos enteros del tick ("ticks").
+/// A tradable instrument (BTCUSDT on Binance Futures, ES in the simulator, etc.).
+/// The prices are handled internally as integer multiples of the tick ("ticks").
 /// </summary>
 public sealed class Instrument
 {
     public required string Symbol { get; init; }
 
-    /// <summary>Identificador del feed que lo provee (ej. "binance-futures").</summary>
+    /// <summary>Identifier of the feed that provides it (e.g. "binance-futures").</summary>
     public required string FeedId { get; init; }
 
-    /// <summary>Nombre legible del mercado (ej. "Binance Futures").</summary>
+    /// <summary>Readable market name (e.g. "Binance Futures").</summary>
     public string Exchange { get; init; } = "";
 
     public required decimal TickSize { get; init; }
 
-    /// <summary>Paso mínimo de volumen (0.001 BTC, 1 contrato, ...).</summary>
+    /// <summary>Minimum volume step (0.001 BTC, 1 contract, ...).</summary>
     public decimal VolumeStep { get; init; } = 1m;
 
-    /// <summary>Valor monetario de 1 punto por 1 unidad de volumen (para PnL).</summary>
+    /// <summary>Monetary value of 1 point per 1 unit of volume (for PnL).</summary>
     public decimal PointValue { get; init; } = 1m;
 
     public string BaseAsset { get; init; } = "";
@@ -44,7 +44,7 @@ public sealed class Instrument
     {
         value = Math.Abs(value);
         if (value == 0) return 0;
-        var normalized = value / 1.0000000000000000000000000000m; // quita ceros a la derecha
+        var normalized = value / 1.0000000000000000000000000000m; // strips trailing zeros
         var bits = decimal.GetBits(normalized);
         return (bits[3] >> 16) & 0xFF;
     }

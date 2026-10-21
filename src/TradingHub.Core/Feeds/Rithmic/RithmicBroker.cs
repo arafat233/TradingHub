@@ -5,8 +5,8 @@ using TradingHub.Trading;
 namespace TradingHub.Feeds.Rithmic;
 
 /// <summary>
-/// Una cuenta de Rithmic operando un instrumento (el contrato del mes: ES → ESZ6). El Chart Trader, el DOM,
-/// el gráfico y el stop/objetivo operan contra esta cuenta igual que con la simulada o la de Binance.
+/// A Rithmic account trading one instrument (the front-month contract: ES -> ESZ6). The Chart Trader, the DOM,
+/// the chart and the stop/target all trade against this account just as with the simulated one or Binance's.
 /// </summary>
 public sealed class RithmicBroker : ITradingAccount, IDisposable
 {
@@ -35,7 +35,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
 
     public string Name { get; }
 
-    /// <summary>Las cuentas de práctica (Paper Trading, Test) no son reales; el resto sí.</summary>
+    /// <summary>The practice accounts (Paper Trading, Test) are not real; the rest are.</summary>
     public bool IsReal => !_session.IsPractice;
 
     public Instrument Instrument => _data.Instrument;
@@ -45,7 +45,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
     public string? LastError { get; private set; }
     public event Action? Changed;
 
-    /// <summary>Contrato donde opera (ESZ6, CME); null hasta que Rithmic lo confirma.</summary>
+    /// <summary>Contract it trades (ESZ6, CME); null until Rithmic confirms it.</summary>
     public (string Symbol, string Exchange)? Contract => _resolved;
 
     private async Task<(string Symbol, string Exchange)> ContractAsync()
@@ -60,7 +60,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
         }
         catch (Exception ex)
         {
-            LastError = "No se pudo saber el contrato del mes: " + ex.Message;
+            LastError = "Could not determine the front-month contract: " + ex.Message;
             Changed?.Invoke();
             throw;
         }
@@ -86,7 +86,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
         }
     }
 
-    /// <summary>Junta lo que cuenta Rithmic (órdenes y posición) con las órdenes de Trading Hub (mismos objetos).</summary>
+    /// <summary>Merges what Rithmic reports (orders and position) with Trading Hub's orders (the same objects).</summary>
     private void Sync()
     {
         if (_resolved is not { } c) return;
@@ -102,7 +102,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
                 else if (s.UserTag.Length > 0 && _byTag.TryGetValue(s.UserTag, out var t)) o = t;
                 if (o == null)
                 {
-                    if (s.Done) continue; // ya terminada antes de abrir Trading Hub
+                    if (s.Done) continue; // already finished before Trading Hub opened
                     o = new Order { ExchangeOrderId = s.BasketId, Comment = "Rithmic" };
                 }
 
@@ -113,11 +113,11 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
                 }
 
                 Apply(s, o);
-                if (s.Rejected && s.Reason.Length > 0) LastError = "Rithmic rechazó la orden: " + s.Reason;
+                if (s.Rejected && s.Reason.Length > 0) LastError = "Rithmic rejected the order: " + s.Reason;
                 if (o.State == OrderStates.Active && seen.Add(o)) active.Add(o);
             }
 
-            // las nuestras que todavía no aparecieron en Rithmic (recién mandadas)
+            // ours that have not shown up in Rithmic yet (just sent)
             foreach (var o in _byTag.Values)
                 if (o.State == OrderStates.Active && o.ExchangeOrderId.Length == 0 && seen.Add(o)) active.Add(o);
         }
@@ -142,7 +142,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
         {
             order.State = OrderStates.Failed;
             order.Status = OrderStatus.Rejected;
-            LastError = "En futuros la cantidad tiene que ser un número entero de contratos (1, 2, 3…)";
+            LastError = "In futures the quantity has to be a whole number of contracts (1, 2, 3…)";
             Changed?.Invoke();
             return order;
         }
@@ -185,7 +185,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
     public Order Limit(OrderDirections dir, decimal qty, decimal price, string comment = "") => Send(dir, OrderTypes.Limit, qty, price, comment);
     public Order Stop(OrderDirections dir, decimal qty, decimal trigger, string comment = "") => Send(dir, OrderTypes.Stop, qty, trigger, comment);
 
-    /// <summary>Stop loss / objetivo: Trading Hub los maneja en OCO (Rithmic no tiene "solo reducir" en una orden simple).</summary>
+    /// <summary>Stop loss / target: Trading Hub manages them as OCO (Rithmic has no "reduce only" on a plain order).</summary>
     public Order Exit(OrderTypes type, OrderDirections dir, decimal qty, decimal price, string comment = "") =>
         Send(dir, type == OrderTypes.Stop ? OrderTypes.Stop : OrderTypes.Limit, qty, price, comment, reduceOnly: true);
 
@@ -200,7 +200,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
         {
             try
             {
-                // si todavía no tiene número en Rithmic, se espera un momento a que llegue
+                // if it does not have a Rithmic number yet, it waits a moment for it to arrive
                 for (int i = 0; i < 20 && order.ExchangeOrderId.Length == 0 && order.State == OrderStates.Active; i++) await Task.Delay(100).ConfigureAwait(false);
                 if (order.ExchangeOrderId.Length == 0) return;
                 await _session.CancelAsync(_account, order.ExchangeOrderId, CancellationToken.None).ConfigureAwait(false);
@@ -219,7 +219,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
         foreach (var o in _active.Where(o => (o.Type == OrderTypes.Stop ? o.TriggerPrice : o.Price) == price).ToList()) Cancel(o);
     }
 
-    /// <summary>Cancela las órdenes de este instrumento (no las de otros contratos de la cuenta).</summary>
+    /// <summary>Cancels this instrument's orders (not those of the account's other contracts).</summary>
     public void CancelAll()
     {
         foreach (var o in _active.ToList()) Cancel(o);
@@ -227,7 +227,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
 
     public void Modify(Order order, decimal newPrice) => Replace(order, newPrice, order.Unfilled);
 
-    /// <summary>Rithmic modifica precio y cantidad sobre la misma orden.</summary>
+    /// <summary>Rithmic modifies price and quantity on the same order.</summary>
     public Order Replace(Order order, decimal newPrice, decimal newQuantity)
     {
         decimal px = Instrument.RoundPrice(newPrice);
@@ -239,7 +239,7 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
             try
             {
                 for (int i = 0; i < 20 && order.ExchangeOrderId.Length == 0 && order.State == OrderStates.Active; i++) await Task.Delay(100).ConfigureAwait(false);
-                var s = StateOf(order) ?? throw new InvalidOperationException("La orden todavía no figura en Rithmic");
+                var s = StateOf(order) ?? throw new InvalidOperationException("The order does not appear at Rithmic yet");
                 await _session.ModifyAsync(_account, s, total, px, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -256,15 +256,15 @@ public sealed class RithmicBroker : ITradingAccount, IDisposable
     {
         CancelAll();
         var q = Position.Volume;
-        if (q > 0) Send(OrderDirections.Sell, OrderTypes.Market, q, 0, "Cerrar");
-        else if (q < 0) Send(OrderDirections.Buy, OrderTypes.Market, -q, 0, "Cerrar");
+        if (q > 0) Send(OrderDirections.Sell, OrderTypes.Market, q, 0, "Close");
+        else if (q < 0) Send(OrderDirections.Buy, OrderTypes.Market, -q, 0, "Close");
     }
 
     public void Reverse()
     {
         var q = Position.Volume;
-        if (q > 0) Market(OrderDirections.Sell, q * 2, "Revertir");
-        else if (q < 0) Market(OrderDirections.Buy, -q * 2, "Revertir");
+        if (q > 0) Market(OrderDirections.Sell, q * 2, "Reverse");
+        else if (q < 0) Market(OrderDirections.Buy, -q * 2, "Reverse");
     }
 
     public void Dispose() => _session.Changed -= Sync;

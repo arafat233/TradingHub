@@ -7,9 +7,9 @@
     <ProjectReference Include="..\..\src\TradingHub.App\TradingHub.App.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Rithmic de mentira: las capturas nunca entran con el usuario real -->
+    <!-- Fake Rithmic: the snapshots never log in with the real user -->
     <Compile Include="..\..\tests\TradingHub.Tests\FakeRithmicServer.cs" Link="FakeRithmicServer.cs" />
-    <!-- y los de OANDA, Alpaca, Databento, cTrader y Tradovate -->
+    <!-- and the OANDA, Alpaca, Databento, cTrader and Tradovate ones -->
     <Compile Include="..\..\tests\TradingHub.Tests\FakeHttpServer.cs" Link="FakeHttpServer.cs" />
     <Compile Include="..\..\tests\TradingHub.Tests\FakeBrokers.cs" Link="FakeBrokers.cs" />
   </ItemGroup>

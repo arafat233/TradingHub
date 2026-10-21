@@ -9,14 +9,14 @@ using TradingHub.App.Services;
 
 namespace TradingHub.App.Views;
 
-/// <summary>Reportes del laboratorio de Claude: lista con el veredicto y visor del Markdown.</summary>
+/// <summary>Reports from Claude's lab: a list with the verdict and a Markdown viewer.</summary>
 internal sealed partial class StrategiesView
 {
     private readonly ListBox _reportList = new() { Background = Brushes.Transparent };
     private readonly MarkdownView _reportView = new();
     private readonly TextBlock _reportEmpty = new()
     {
-        Text = "Todavía no hay reportes. En Código, activá «Laboratorio» en el panel de Claude y pedile que investigue y optimice una estrategia: al terminar guarda el reporte acá.",
+        Text = "There are no reports yet. In Code, enable “Lab” in the Claude panel and ask it to research and optimize a strategy: when it finishes it stores the report here.",
         Classes = { "muted" },
         TextWrapping = TextWrapping.Wrap,
         MaxWidth = 460,
@@ -35,20 +35,20 @@ internal sealed partial class StrategiesView
         {
             var html = ReportExport.Export(_report);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"\"{html}\"") { UseShellExecute = false });
-            _status($"Informe exportado: {System.IO.Path.GetFileName(html)} (en el navegador: Archivo → Exportar como PDF)");
+            _status($"Report exported: {System.IO.Path.GetFileName(html)} (in the browser: File → Export as PDF)");
         }
         catch (Exception ex)
         {
-            _status("No se pudo exportar: " + ex.Message);
+            _status("Could not export: " + ex.Message);
         }
     }
 
     internal static IBrush VerdictBrush(string verdict) => verdict switch
     {
-        "ganadora" => Ui.Up,
-        "prometedora" => Ui.Accent,
-        "perdedora" => Ui.Down,
-        "descartada" => Ui.Text2,
+        "winner" => Ui.Up,
+        "promising" => Ui.Accent,
+        "loser" => Ui.Down,
+        "discarded" => Ui.Text2,
         _ => Ui.Text2,
     };
 
@@ -75,8 +75,8 @@ internal sealed partial class StrategiesView
         };
 
         _reportView.Paper = true;
-        var refresh = Ui.IconButton(MaterialIconKind.Refresh, "Actualizar", RefreshReports, 16);
-        var folder = Ui.IconButton(MaterialIconKind.FolderOpenOutline, "Abrir la carpeta de reportes", () =>
+        var refresh = Ui.IconButton(MaterialIconKind.Refresh, "Refresh", RefreshReports, 16);
+        var folder = Ui.IconButton(MaterialIconKind.FolderOpenOutline, "Open the reports folder", () =>
         {
             System.IO.Directory.CreateDirectory(AppPaths.Reports);
             Windows.Shell.OpenFolder(AppPaths.Reports);
@@ -85,13 +85,13 @@ internal sealed partial class StrategiesView
         var tools = Ui.H(4, refresh, folder);
         DockPanel.SetDock(tools, Dock.Right);
         head.Children.Add(tools);
-        head.Children.Add(Ui.H3("Reportes del laboratorio"));
+        head.Children.Add(Ui.H3("Lab reports"));
         var left = new DockPanel();
         DockPanel.SetDock(head, Dock.Top);
         left.Children.Add(head);
         left.Children.Add(new ScrollViewer { Content = _reportList, Margin = new Thickness(8, 0, 8, 8) });
 
-        // el reporte se muestra como una hoja (fondo blanco), igual que al imprimirlo
+        // the report is shown as a sheet (white background), just as when printed
         var page = new Border
         {
             Child = _reportView,
@@ -103,9 +103,9 @@ internal sealed partial class StrategiesView
             HorizontalAlignment = HorizontalAlignment.Center,
             BoxShadow = BoxShadows.Parse("0 6 28 0 #66000000"),
         };
-        var export = Ui.Button("Exportar PDF / HTML", MaterialIconKind.FileExportOutline, ExportReport, "primary");
-        ToolTip.SetTip(export, "Guarda el informe como HTML con los gráficos incluidos y lo abre en el navegador (desde ahí: Archivo → Exportar como PDF o Imprimir)");
-        var finder = Ui.Button("Mostrar en Finder", MaterialIconKind.FolderOutline, () =>
+        var export = Ui.Button("Export PDF / HTML", MaterialIconKind.FileExportOutline, ExportReport, "primary");
+        ToolTip.SetTip(export, "It saves the report as HTML with the charts embedded and opens it in the browser (from there: File → Export as PDF or Print)");
+        var finder = Ui.Button("Show in Finder", MaterialIconKind.FolderOutline, () =>
         {
             if (_report != null) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"-R \"{_report.Path}\"") { UseShellExecute = false });
         });
@@ -156,7 +156,7 @@ internal sealed partial class StrategiesView
 
         _reportEmpty.IsVisible = select == null;
         if (_reportBar != null) _reportBar.IsVisible = select != null;
-        // sin reportes la hoja blanca quedaba como un rectángulo deforme en el medio
+        // with no reports the white sheet looked like a misshapen rectangle in the middle
         if (_reportColumn != null) _reportColumn.IsVisible = select != null;
     }
 
@@ -170,14 +170,14 @@ internal sealed partial class StrategiesView
         }
         catch (Exception ex)
         {
-            _reportView.Markdown = "No se pudo leer el reporte: " + ex.Message;
+            _reportView.Markdown = "Could not read the report: " + ex.Message;
         }
 
         _reportEmpty.IsVisible = false;
         if (_reportColumn != null) _reportColumn.IsVisible = true;
     }
 
-    /// <summary>Abre la pestaña Reportes en un reporte.</summary>
+    /// <summary>Opens the Reports tab on a report.</summary>
     internal void OpenReport(string path)
     {
         _tabs.Select("reports");

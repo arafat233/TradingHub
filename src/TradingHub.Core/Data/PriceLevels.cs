@@ -1,21 +1,21 @@
 namespace TradingHub.Data;
 
-/// <summary>Datos de un nivel de precio dentro de una vela (una fila del footprint).</summary>
+/// <summary>Data of one price level inside a candle (one footprint row).</summary>
 public struct LevelData
 {
-    /// <summary>Volumen vendido agresivamente (pegó contra el bid).</summary>
+    /// <summary>Volume sold aggressively (it hit the bid).</summary>
     public decimal Bid;
 
-    /// <summary>Volumen comprado agresivamente (pegó contra el ask).</summary>
+    /// <summary>Volume bought aggressively (it hit the ask).</summary>
     public decimal Ask;
 
-    /// <summary>Volumen sin lado conocido.</summary>
+    /// <summary>Volume with no known side.</summary>
     public decimal Between;
 
-    /// <summary>Cantidad de operaciones.</summary>
+    /// <summary>Number of trades.</summary>
     public int Trades;
 
-    /// <summary>Hora (UTC, ticks) de la última operación en el nivel.</summary>
+    /// <summary>Time (UTC, ticks) of the last trade at the level.</summary>
     public long LastTimeTicks;
 
     public readonly decimal Volume => Bid + Ask + Between;
@@ -24,13 +24,13 @@ public struct LevelData
 }
 
 /// <summary>
-/// Niveles de precio de una vela, indexados por fila (precio en ticks / paso de fila).
-/// Es un arreglo que crece hacia ambos lados: acceso O(1) e iteración contigua (rápida para dibujar).
+/// Price levels of a candle, indexed by row (price in ticks / row step).
+/// It is an array that grows in both directions: O(1) access and contiguous iteration (fast for drawing).
 /// </summary>
 public sealed class PriceLevels
 {
     private LevelData[] _items = Array.Empty<LevelData>();
-    private long _base;          // fila de _items[0]
+    private long _base;          // row of _items[0]
     private long _minRow = long.MaxValue;
     private long _maxRow = long.MinValue;
 
@@ -38,7 +38,7 @@ public sealed class PriceLevels
     public long MinRow => _minRow;
     public long MaxRow => _maxRow;
 
-    /// <summary>Cantidad de filas entre la mínima y la máxima (incluye filas sin operaciones).</summary>
+    /// <summary>Number of rows between the lowest and the highest (including rows with no trades).</summary>
     public int Span => IsEmpty ? 0 : (int)(_maxRow - _minRow + 1);
 
     public ref LevelData GetOrAdd(long row)
@@ -64,9 +64,9 @@ public sealed class PriceLevels
         long newMax = Math.Max(_base + _items.Length - 1, row);
         long needed = newMax - newMin + 1;
         long size = Math.Max(needed + needed / 2, _items.Length * 2L);
-        if (size > int.MaxValue / 64) size = needed; // límite defensivo
+        if (size > int.MaxValue / 64) size = needed; // defensive limit
         var arr = new LevelData[size];
-        // margen hacia el lado que creció
+        // margin towards the side that grew
         long pad = size - needed;
         long newBase = row < _base ? newMin - pad : newMin;
         Array.Copy(_items, 0, arr, _base - newBase, _items.Length);
@@ -93,7 +93,7 @@ public sealed class PriceLevels
         return d;
     }
 
-    /// <summary>Recorre las filas con operaciones, de menor a mayor precio.</summary>
+    /// <summary>Walks the rows with trades, from the lowest price to the highest.</summary>
     public IEnumerable<(long Row, LevelData Data)> Enumerate()
     {
         if (IsEmpty) yield break;
@@ -104,7 +104,7 @@ public sealed class PriceLevels
         }
     }
 
-    /// <summary>Acceso directo sin chequeo para el render (r entre MinRow y MaxRow).</summary>
+    /// <summary>Direct unchecked access for the renderer (r between MinRow and MaxRow).</summary>
     public ref readonly LevelData UnsafeAt(long row) => ref _items[row - _base];
 
     public void Clear()

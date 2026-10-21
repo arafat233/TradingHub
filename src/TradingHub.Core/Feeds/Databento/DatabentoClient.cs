@@ -7,9 +7,9 @@ using TradingHub.Market;
 namespace TradingHub.Feeds.Databento;
 
 /// <summary>
-/// Historia de futuros de CME (Globex MDP 3.0, desde 2010) por Databento: cada operación con su lado agresor real.
-/// Es pago por uso (las cuentas nuevas traen créditos gratis): por eso Trading Hub siempre calcula el costo antes y solo baja
-/// cuando el usuario confirma. Usa el contrato continuo por volumen (NQ.v.0), que rola como los gráficos de Trading Hub.
+/// CME futures history (Globex MDP 3.0, since 2010) through Databento: every trade with its real aggressor side.
+/// It is pay as you go (new accounts come with free credits): that is why Trading Hub always computes the cost first and only downloads
+/// when the user confirms. It uses the volume continuous contract (NQ.v.0), which rolls like Trading Hub's charts.
 /// </summary>
 public sealed class DatabentoClient : IDisposable
 {
@@ -24,7 +24,7 @@ public sealed class DatabentoClient : IDisposable
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes(apiKey.Trim() + ":")));
     }
 
-    /// <summary>Símbolo continuo por volumen (NQ → NQ.v.0).</summary>
+    /// <summary>Volume continuous symbol (NQ -> NQ.v.0).</summary>
     public static string Continuous(string root) => root.Trim().ToUpperInvariant() + ".v.0";
 
     private static string Day(DateOnly d) => d.ToString("yyyy-MM-dd", Inv);
@@ -46,7 +46,7 @@ public sealed class DatabentoClient : IDisposable
         try
         {
             using var doc = JsonDocument.Parse(body);
-            // «detail» viene como texto o como objeto {case, message, …}
+            // "detail" comes as text or as an object {case, message, …}
             if (doc.RootElement.TryGetProperty("detail", out var d))
                 detail = d.ValueKind == JsonValueKind.String ? d.GetString() ?? body
                     : d.ValueKind == JsonValueKind.Object && d.TryGetProperty("message", out var m) ? m.GetString() ?? d.ToString()
@@ -58,20 +58,20 @@ public sealed class DatabentoClient : IDisposable
 
         return status switch
         {
-            System.Net.HttpStatusCode.Unauthorized => "Databento rechazó la API key.",
-            System.Net.HttpStatusCode.PaymentRequired => "Databento: no te alcanzan los créditos para este pedido.",
-            _ => $"Databento respondió {(int)status}: {detail}",
+            System.Net.HttpStatusCode.Unauthorized => "Databento rejected the API key.",
+            System.Net.HttpStatusCode.PaymentRequired => "Databento: your credits are not enough for this request.",
+            _ => $"Databento replied {(int)status}: {detail}",
         };
     }
 
-    /// <summary>Costo en dólares de bajar las operaciones de ese rango (no baja nada).</summary>
+    /// <summary>Cost in dollars of downloading that range's trades (it downloads nothing).</summary>
     public async Task<decimal> CostAsync(string root, DateOnly from, DateOnly toInclusive, CancellationToken ct)
     {
         var body = await GetStringAsync($"{_base}/metadata.get_cost?{Query(root, from, toInclusive.AddDays(1), "trades")}", ct).ConfigureAwait(false);
         return decimal.Parse(body.Trim().Trim('"'), NumberStyles.Float, Inv);
     }
 
-    /// <summary>Desde y hasta cuándo hay datos en Globex.</summary>
+    /// <summary>From and until when there is data in Globex.</summary>
     public async Task<(DateTime Start, DateTime End)> RangeAsync(CancellationToken ct)
     {
         using var doc = JsonDocument.Parse(await GetStringAsync($"{_base}/metadata.get_dataset_range?dataset={Dataset}", ct).ConfigureAwait(false));
@@ -80,8 +80,8 @@ public sealed class DatabentoClient : IDisposable
     }
 
     /// <summary>
-    /// Las operaciones de un día UTC (CSV): hora del evento, precio, tamaño y lado agresor (B = compró a mercado,
-    /// A = vendió a mercado). null si ese día no hubo operaciones. Esto SÍ consume créditos.
+    /// The trades of one UTC day (CSV): event time, price, size and aggressor side (B = bought at market,
+    /// A = sold at market). null if there were no trades that day. This one DOES consume credits.
     /// </summary>
     public async Task<List<Trade>?> DownloadDayAsync(Instrument instrument, DateOnly day, IProgress<double>? progress, CancellationToken ct)
     {
@@ -91,7 +91,7 @@ public sealed class DatabentoClient : IDisposable
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            // un día sin sesión (feriado) puede venir como error de rango vacío
+            // a day with no session (a holiday) can come back as an empty-range error
             if (resp.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity && body.Contains("no data", StringComparison.OrdinalIgnoreCase)) return null;
             throw new HttpRequestException(Explain(resp.StatusCode, body));
         }
@@ -103,7 +103,7 @@ public sealed class DatabentoClient : IDisposable
         if (header == null) return null;
         var cols = header.Split(',');
         int iTs = Array.IndexOf(cols, "ts_event"), iPx = Array.IndexOf(cols, "price"), iSz = Array.IndexOf(cols, "size"), iSide = Array.IndexOf(cols, "side");
-        if (iTs < 0 || iPx < 0 || iSz < 0) throw new InvalidDataException("Databento devolvió un formato inesperado: " + header);
+        if (iTs < 0 || iPx < 0 || iSz < 0) throw new InvalidDataException("Databento returned an unexpected format: " + header);
         var list = new List<Trade>();
         long lastId = 0, read = 0;
         decimal last = 0;
@@ -135,14 +135,14 @@ public sealed class DatabentoClient : IDisposable
         return list.Count > 0 ? list : null;
     }
 
-    /// <summary>Hora en nanosegundos Unix (o ISO 8601 si viene «linda»).</summary>
+    /// <summary>Time in Unix nanoseconds (or ISO 8601 if it comes "pretty").</summary>
     internal static DateTime ParseTime(string s)
     {
         if (long.TryParse(s, NumberStyles.Integer, Inv, out var ns)) return DateTime.UnixEpoch.AddTicks(ns / 100);
         return DateTime.Parse(s, Inv, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
     }
 
-    /// <summary>Precio en punto fijo (1e-9) o decimal.</summary>
+    /// <summary>Price in fixed point (1e-9) or decimal.</summary>
     internal static decimal ParsePrice(string s)
     {
         if (s.Contains('.') || s.Contains('e') || s.Contains('E')) return decimal.TryParse(s, NumberStyles.Float, Inv, out var d) ? d : 0;

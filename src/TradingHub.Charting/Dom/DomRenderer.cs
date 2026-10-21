@@ -8,8 +8,8 @@ using TradingHub.Trading;
 namespace TradingHub.Charting.Dom;
 
 /// <summary>
-/// Libro de órdenes vertical (DOM / escalera de precios) al estilo SmartDOM: órdenes propias,
-/// bid, precio, ask y volumen operado en la sesión por precio. Se opera haciendo clic.
+/// Vertical order book (DOM / price ladder) in the SmartDOM style: your own orders,
+/// bid, price, ask and volume traded in the session per price. You trade by clicking.
 /// </summary>
 public sealed class DomModel
 {
@@ -36,31 +36,31 @@ public sealed class DomModel
     public Instrument Instrument => Data.Instrument;
     public ITradingAccount? Broker { get; set; }
 
-    /// <summary>Stop/objetivos de la cuenta (se pintan distinto).</summary>
+    /// <summary>Account stop/targets (painted differently).</summary>
     public BracketManager? Brackets { get; set; }
 
-    /// <summary>Configuración visual y de comportamiento (compartida entre DOMs).</summary>
+    /// <summary>Visual and behavior settings (shared between DOMs).</summary>
     public DomSettings Settings { get; set; }
 
-    /// <summary>Ticks del instrumento por fila del DOM.</summary>
+    /// <summary>Instrument ticks per DOM row.</summary>
     public int Step { get; set; } = 1;
 
-    /// <summary>Precio (en ticks) de la fila central cuando no está centrado automáticamente.</summary>
+    /// <summary>Price (in ticks) of the center row when it is not centered automatically.</summary>
     public long CenterTicks { get; set; }
 
-    /// <summary>Si sigue al precio (se apaga al desplazar con la rueda).</summary>
+    /// <summary>Whether it follows the price (it switches off when scrolling with the wheel).</summary>
     public bool AutoCenter { get; set; }
 
     public float RowHeight => Math.Clamp(Settings.RowHeight, 10, 60);
     public decimal OrderQuantity { get; set; } = 1;
 
-    /// <summary>Orden que se está arrastrando en el DOM y precio de destino.</summary>
+    /// <summary>Order being dragged in the DOM and its destination price.</summary>
     public Order? DragOrder { get; set; }
     public decimal DragPrice { get; set; }
 
     public SessionSettings Session { get; set; } = SessionSettings.CryptoUtc;
 
-    /// <summary>Volumen operado en la sesión por fila (bid = vendedores agresivos, ask = compradores agresivos).</summary>
+    /// <summary>Volume traded in the session per row (bid = aggressive sellers, ask = aggressive buyers).</summary>
     public IReadOnlyDictionary<long, (decimal Bid, decimal Ask)> SessionVolume => _sessionVolume;
 
     public long RowOf(long ticks) => CandleSeries.FloorDiv(ticks, Step);
@@ -79,7 +79,7 @@ public sealed class DomModel
 
         for (int i = _processed; i < store.Count; i++)
         {
-            if (store.GetId(i) < 0) continue; // historia en velas: no son operaciones reales
+            if (store.GetId(i) < 0) continue; // candle history: these are not real trades
             long row = RowOf(store.GetPriceTicks(i));
             _sessionVolume.TryGetValue(row, out var v);
             var vol = store.GetVolume(i);
@@ -98,7 +98,7 @@ public sealed class DomModel
     }
 }
 
-/// <summary>Dibuja el DOM y resuelve los clics.</summary>
+/// <summary>Draws the DOM and resolves the clicks.</summary>
 public sealed class DomRenderer
 {
     private readonly SKPaint _fill = new() { IsAntialias = false };
@@ -112,34 +112,34 @@ public sealed class DomRenderer
 
     private ChartTheme? _theme;
 
-    /// <summary>Colores (por defecto, la base del modo oscuro/claro de la app).</summary>
+    /// <summary>Colors (by default, the base of the app's dark/light mode).</summary>
     public ChartTheme Theme
     {
         get => _theme ?? ChartTheme.Base;
         set => _theme = value;
     }
 
-    /// <summary>Alto del encabezado en el último dibujo.</summary>
+    /// <summary>Header height in the last draw.</summary>
     public float HeaderHeight => _headerH;
 
-    /// <summary>Fila de arriba en el último dibujo (si cambia, el DOM se movió).</summary>
+    /// <summary>Top row in the last draw (if it changes, the DOM moved).</summary>
     public long TopRow => _topRow;
 
-    /// <summary>Rótulos de cada columna, del más largo al más corto.</summary>
+    /// <summary>Labels of each column, from the longest to the shortest.</summary>
     public static string[] HeaderLabels(DomColumn c) => c switch
     {
-        DomColumn.BuyOrders or DomColumn.SellOrders => new[] { "Órdenes", "Órd.", "Ó" },
+        DomColumn.BuyOrders or DomColumn.SellOrders => new[] { "Orders", "Ord.", "O" },
         DomColumn.Bid => new[] { "Bid", "B" },
-        DomColumn.Price => new[] { "Precio", "Prec.", "$" },
+        DomColumn.Price => new[] { "Price", "Prec.", "$" },
         DomColumn.Ask => new[] { "Ask", "A" },
-        DomColumn.Volume => new[] { "Volumen", "Vol.", "V" },
+        DomColumn.Volume => new[] { "Volume", "Vol.", "V" },
         DomColumn.Delta => new[] { "Delta", "Δ" },
         DomColumn.TradedBid => new[] { "Vol. bid", "V.bid", "Vb" },
         DomColumn.TradedAsk => new[] { "Vol. ask", "V.ask", "Va" },
         _ => new[] { c.ToString() },
     };
 
-    /// <summary>El rótulo más largo que entra en el ancho, o null si no entra ninguno.</summary>
+    /// <summary>The longest label that fits in the width, or null if none fits.</summary>
     public static string? FitLabel(DomColumn c, float width, Func<string, float> measure)
     {
         foreach (var s in HeaderLabels(c))
@@ -147,7 +147,7 @@ public sealed class DomRenderer
         return null;
     }
 
-    /// <summary>Reparte el ancho; la columna de precio nunca queda más angosta que el precio (si no, se corta).</summary>
+    /// <summary>Splits the width; the price column is never narrower than the price (otherwise it gets cut off).</summary>
     private void ComputeColumns(DomSettings s, float width, float priceMin = 0)
     {
         _cols.Clear();
@@ -185,7 +185,7 @@ public sealed class DomRenderer
 
     private bool Has(DomColumn c) => _cols.Any(x => x.Col == c);
 
-    /// <summary>Columna donde se dibujan las órdenes propias de un lado (si su columna está oculta, usa otra).</summary>
+    /// <summary>Column where one side's own orders are drawn (if its column is hidden, it uses another).</summary>
     public DomColumn OrdersColumn(OrderDirections dir)
     {
         var order = dir == OrderDirections.Buy
@@ -208,7 +208,7 @@ public sealed class DomRenderer
         var inst = dom.Instrument;
         var book = dom.Data.Depth;
 
-        // la letra nunca más alta que la fila
+        // the letter never taller than the row
         float size = Math.Min(Math.Clamp(s.FontSize, 7, 24), _rowH - 3);
         var font = RenderContext.GetFont(t.FontFamily, size, false, false);
         var bold = RenderContext.GetFont(t.FontFamily, size, true, false);
@@ -222,17 +222,17 @@ public sealed class DomRenderer
         canvas.DrawRect(0, 0, width, height, _fill);
 
         _rows = Math.Max(1, (int)((height - _headerH) / _rowH));
-        int drawRows = _rows + 1; // fila parcial abajo
+        int drawRows = _rows + 1; // partial row at the bottom
         long lastTicks = dom.Data.Trades.Count > 0 ? dom.Data.Trades.GetPriceTicks(dom.Data.Trades.Count - 1) : (book.HasBid ? book.BestBidTicks : 0);
         long lastRow = dom.RowOf(lastTicks);
         long centerRow = dom.RowOf(dom.CenterTicks);
-        // recentra si el precio se va del tercio central
+        // it recenters if the price leaves the middle third
         if (dom.CenterTicks == 0 || (dom.AutoCenter && Math.Abs(lastRow - centerRow) > _rows / 3)) dom.CenterTicks = lastRow * dom.Step;
 
         long center = dom.RowOf(dom.CenterTicks);
         _topRow = center + _rows / 2;
 
-        // libro por fila
+        // book per row
         var bids = new Dictionary<long, decimal>();
         var asks = new Dictionary<long, decimal>();
         foreach (var l in book.Bids) bids[dom.RowOf(l.PriceTicks)] = bids.GetValueOrDefault(dom.RowOf(l.PriceTicks)) + l.Size;
@@ -255,7 +255,7 @@ public sealed class DomRenderer
         int volDec = FootprintRendererShim.Decimals(maxVol, inst.VolumeDecimals);
         int hoverRow = mouseY is float my && my > _headerH ? (int)((my - _headerH) / _rowH) : -1;
 
-        // fondos de fila
+        // row backgrounds
         var bidBg = C(s.BidBackground);
         var askBg = C(s.AskBackground);
         var spreadBg = C(s.SpreadBackground);
@@ -354,7 +354,7 @@ public sealed class DomRenderer
             canvas.Restore();
         }
 
-        // posición: recuadro en el precio promedio
+        // position: a box at the average price
         if (posRow != long.MinValue)
         {
             int i = (int)(_topRow - posRow);
@@ -375,7 +375,7 @@ public sealed class DomRenderer
             }
         }
 
-        // órdenes propias
+        // your own orders
         var orders = dom.Broker?.ActiveOrders.ToList() ?? new List<Order>();
         foreach (var o in orders)
         {
@@ -402,7 +402,7 @@ public sealed class DomRenderer
             canvas.Restore();
         }
 
-        // líneas de columnas
+        // column lines
         _stroke.Color = new SKColor(40, 46, 60);
         foreach (var (_, x, _) in _cols.Skip(1))
         {
@@ -457,7 +457,7 @@ public sealed class DomRenderer
         float baseline = _headerH / 2 - (font.Metrics.Ascent + font.Metrics.Descent) / 2;
         foreach (var (col, x, w) in _cols)
         {
-            // el rótulo se abrevia según el ancho y nunca se sale de su columna
+            // the label is abbreviated to fit the width and never spills out of its column
             var label = FitLabel(col, w, s => RenderContext.MeasureWidth(font, s));
             if (label == null) continue;
             canvas.Save();
@@ -471,7 +471,7 @@ public sealed class DomRenderer
         canvas.DrawLine(0, _headerH - 0.5f, _width, _headerH - 0.5f, _stroke);
     }
 
-    /// <summary>Qué hay bajo el mouse: columna y precio.</summary>
+    /// <summary>What is under the mouse: column and price.</summary>
     public (DomColumn Column, decimal Price)? HitTest(DomModel dom, float x, float y)
     {
         if (y < _headerH || _width <= 0) return null;
@@ -483,7 +483,7 @@ public sealed class DomRenderer
         return null;
     }
 
-    /// <summary>Orden propia dibujada en la celda (columna de órdenes de su lado, mismo precio).</summary>
+    /// <summary>Your own order drawn in the cell (orders column of its side, same price).</summary>
     public Order? OrderAt(DomModel dom, float x, float y)
     {
         var hit = HitTest(dom, x, y);
@@ -499,7 +499,7 @@ public sealed class DomRenderer
         return null;
     }
 
-    /// <summary>Clic en el DOM: opera directo en el broker (sin confirmación).</summary>
+    /// <summary>Click on the DOM: it trades straight at the broker (no confirmation).</summary>
     public string? Click(DomModel dom, float x, float y, bool right, bool cancelModifier)
     {
         var hit = HitTest(dom, x, y);
@@ -514,7 +514,7 @@ public sealed class DomRenderer
         if (right || cancelModifier)
         {
             broker.CancelAt(price);
-            return $"Órdenes canceladas en {dom.Instrument.FormatPrice(price)}";
+            return $"Orders cancelled at {dom.Instrument.FormatPrice(price)}";
         }
 
         switch (col)
@@ -523,12 +523,12 @@ public sealed class DomRenderer
             case DomColumn.BuyOrders:
                 if (price < bestAsk) broker.Limit(OrderDirections.Buy, qty, price);
                 else broker.Stop(OrderDirections.Buy, qty, price);
-                return $"Compra {(price < bestAsk ? "límite" : "stop")} {qty} @ {dom.Instrument.FormatPrice(price)}";
+                return $"Buy {(price < bestAsk ? "limit" : "stop")} {qty} @ {dom.Instrument.FormatPrice(price)}";
             case DomColumn.Ask:
             case DomColumn.SellOrders:
                 if (price > bestBid) broker.Limit(OrderDirections.Sell, qty, price);
                 else broker.Stop(OrderDirections.Sell, qty, price);
-                return $"Venta {(price > bestBid ? "límite" : "stop")} {qty} @ {dom.Instrument.FormatPrice(price)}";
+                return $"Sell {(price > bestBid ? "limit" : "stop")} {qty} @ {dom.Instrument.FormatPrice(price)}";
         }
 
         return null;

@@ -8,10 +8,10 @@ using TradingHub.Market;
 namespace TradingHub.Feeds.Tradovate;
 
 /// <summary>
-/// Datos de Tradovate (futuros de CME): cinta (gráfico de ticks en vivo, con bid/ask para saber quién agredió), libro
-/// (DOM), historia tick a tick y velas. Ojo: los datos por API solo andan si la cuenta tiene habilitados los datos de
-/// CME para API (licencia aparte); sin eso Tradovate responde «symbol is inaccessible» y se puede operar igual con los
-/// gráficos de otra conexión (por ejemplo Rithmic).
+/// Tradovate data (CME futures): tape (live tick chart, with bid/ask to know who was the aggressor), book
+/// (DOM), tick-by-tick history and candles. Note: the API data only works if the account has CME API data
+/// enabled (a separate licence); without that Tradovate answers "symbol is inaccessible" and you can still trade with
+/// charts from another connection (for example Rithmic).
 /// </summary>
 public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 {
@@ -20,9 +20,9 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
     private readonly ConcurrentDictionary<long, ChartRoute> _charts = new();
 
     /// <summary>
-    /// Paquetes de gráfico que llegaron antes de saber de quién son: la respuesta de md/getChart (con los ids) y los
-    /// primeros paquetes vienen pegados, y el que pidió registra la ruta un instante después. Se guardan y se entregan
-    /// al registrar la ruta.
+    /// Chart packets that arrived before we knew whose they are: the md/getChart response (with the ids) and the
+    /// first packets come glued together, and the requester registers the route an instant later. They are stored and delivered
+    /// when the route is registered.
     /// </summary>
     private readonly ConcurrentDictionary<long, (DateTime At, List<JsonElement> Packets)> _orphans = new();
     private readonly ConcurrentDictionary<long, List<LiveTarget>> _doms = new();
@@ -52,9 +52,9 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
     public string DisplayName => "Tradovate";
     public bool SupportsHistory => true;
     public bool IsLive => true;
-    public string HistoryNote => "ticks de Tradovate (hace falta tener habilitados los datos de CME por API)";
+    public string HistoryNote => "Tradovate ticks (CME data over the API must be enabled)";
 
-    /// <summary>Primero los contratos que elegiste en la conexión y después todos los de CME Group (al mes activo).</summary>
+    /// <summary>First the contracts you picked in the connection and then all of CME Group's (at the active month).</summary>
     public Task<IReadOnlyList<Instrument>> GetInstrumentsAsync(CancellationToken ct)
     {
         var list = new List<Instrument>();
@@ -71,18 +71,18 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
                 TickSize = product?.Tick ?? 0.25m,
                 VolumeStep = 1,
                 PointValue = product?.PointValue ?? 1,
-                Description = $"{product?.Name ?? root} · Tradovate (mes activo)",
+                Description = $"{product?.Name ?? root} · Tradovate (front month)",
             });
         }
 
         return Task.FromResult<IReadOnlyList<Instrument>>(list);
     }
 
-    // ===================================================================== historia
+    // ===================================================================== history
 
     private static string Iso(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-ddTHH:mm:ss.fffZ", Inv);
 
-    /// <summary>Una ruta de gráfico: a dónde van los paquetes de una suscripción de md/getChart.</summary>
+    /// <summary>A chart route: where the packets of an md/getChart subscription go.</summary>
     private sealed class ChartRoute
     {
         public Instrument Instrument = null!;
@@ -92,7 +92,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
         public LiveTarget? Live;
     }
 
-    /// <summary>Pide un gráfico (ticks o velas) y junta la historia hasta el fin de historia («eoh»); después lo cancela.</summary>
+    /// <summary>Requests a chart (ticks or candles) and gathers the history up to the end of history ("eoh"); then cancels it.</summary>
     private async Task ChartHistoryAsync(string contract, JsonObject chartDescription, DateTime fromUtc, DateTime toUtc, int elements, Instrument instrument,
         bool bars, Action<JsonElement> packet, CancellationToken ct)
     {
@@ -116,7 +116,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new TimeoutException("Tradovate no terminó de mandar la historia a tiempo.");
+            throw new TimeoutException("Tradovate did not finish sending the history in time.");
         }
         finally
         {
@@ -131,7 +131,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
                 }
                 catch
                 {
-                    // ya terminado
+                    // already finished
                 }
             }
         }
@@ -139,7 +139,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
 
     private static JsonObject TickChart() => new() { ["underlyingType"] = "Tick", ["elementSize"] = 1, ["elementSizeUnit"] = "UnderlyingUnits", ["withHistogram"] = false };
 
-    /// <summary>Ticks de un paquete: precio, bid y ask relativos al base (en ticks) y hora relativa a la base.</summary>
+    /// <summary>Ticks of a packet: price, bid and ask relative to the base (in ticks) and time relative to the base.</summary>
     private static IEnumerable<(long Id, DateTime Time, decimal Price, decimal Size, decimal? Bid, decimal? Ask)> Ticks(JsonElement packet)
     {
         if (!packet.TryGetProperty("tks", out var tks) || tks.ValueKind != JsonValueKind.Array) yield break;
@@ -159,7 +159,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
     private static decimal Num(JsonElement e, string key) =>
         e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : 0;
 
-    /// <summary>Lado agresor: al ask o más arriba compró, al bid o más abajo vendió; si no, la regla del tick.</summary>
+    /// <summary>Aggressor side: at the ask or above it bought, at the bid or below it sold; otherwise, the tick rule.</summary>
     private static TradeSide Aggressor(decimal price, decimal? bid, decimal? ask, ref decimal last, ref TradeSide lastSide)
     {
         if (ask is { } a && price >= a)
@@ -187,7 +187,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
         long lastId = 0;
         foreach (var seg in segments)
         {
-            // de atrás para adelante: cada pedido trae hasta 50 mil ticks hacia el pasado desde el cursor
+            // back to front: each request brings up to 50 thousand ticks into the past from the cursor
             var ticks = new Dictionary<long, (DateTime Time, decimal Price, decimal Size, decimal? Bid, decimal? Ask)>();
             var cursor = seg.To;
             for (int page = 0; page < 400 && cursor > seg.From && !ct.IsCancellationRequested; page++)
@@ -234,7 +234,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
         return list.Count > 0 ? list : null;
     }
 
-    // ===================================================================== velas
+    // ===================================================================== candles
 
     public Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct) => Task.FromResult<DateTime?>(null);
 
@@ -267,7 +267,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
 
     public string CacheTag => "tradovate";
 
-    // ===================================================================== en vivo
+    // ===================================================================== live
 
     private sealed class LiveTarget
     {
@@ -297,12 +297,12 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
         {
             try
             {
-                t.Sink.OnStatus(t.Instrument, FeedStatus.Connecting, "Conectando a Tradovate…");
+                t.Sink.OnStatus(t.Instrument, FeedStatus.Connecting, "Connecting to Tradovate…");
                 var (id, name) = await _conn.ContractAsync(t.Instrument.Symbol, DateTime.UtcNow, CancellationToken.None).ConfigureAwait(false);
                 t.Contract = name;
                 t.ContractId = id;
                 t.HistoryDone = false;
-                // cinta: gráfico de ticks en vivo (cada tick trae el bid y el ask del momento)
+                // tape: live tick chart (each tick carries the bid and the ask of that moment)
                 var res = await _conn.Md.RequestAsync("md/getChart", new JsonObject
                 {
                     ["symbol"] = name,
@@ -314,7 +314,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
                 long hist = res.TryGetProperty("historicalId", out var h) ? h.GetInt64() : 0;
                 t.ChartId = real != 0 ? real : hist;
                 Register(new ChartRoute { Instrument = t.Instrument, Live = t }, hist, real);
-                // libro
+                // book
                 _doms.AddOrUpdate(id, _ => new List<LiveTarget> { t }, (_, l) =>
                 {
                     lock (l)
@@ -324,14 +324,14 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
                 var dom = await _conn.Md.RequestAsync("md/subscribeDOM", new JsonObject { ["symbol"] = name }, CancellationToken.None).ConfigureAwait(false);
                 if (dom.ValueKind == JsonValueKind.String) throw new TradovateException(dom.GetString() ?? "");
                 t.Attempts = 0;
-                t.Sink.OnStatus(t.Instrument, FeedStatus.Connected, $"Tradovate conectado ({name})");
+                t.Sink.OnStatus(t.Instrument, FeedStatus.Connected, $"Tradovate connected ({name})");
                 return;
             }
             catch (Exception ex)
             {
                 t.Attempts++;
                 string msg = ex.Message.Contains("inaccessible", StringComparison.OrdinalIgnoreCase)
-                    ? "Tradovate no da datos de este contrato por API (hacen falta los datos de CME para API). Podés operar tus cuentas de Tradovate desde un gráfico de Rithmic."
+                    ? "Tradovate provides no data for this contract over the API (CME data for API is required). You can trade your Tradovate accounts from a Rithmic chart."
                     : ex.Message;
                 t.Sink.OnStatus(t.Instrument, t.Attempts > 3 && msg.Contains("API") ? FeedStatus.Error : FeedStatus.Reconnecting, msg);
                 await Task.Delay(LiveSubscription.Backoff(t.Attempts)).ConfigureAwait(false);
@@ -339,7 +339,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
         }
     }
 
-    /// <summary>Registra la ruta de un gráfico y le entrega lo que ya había llegado para sus ids.</summary>
+    /// <summary>Registers a chart's route and delivers whatever had already arrived for its ids.</summary>
     private void Register(ChartRoute route, long hist, long real)
     {
         foreach (var id in new[] { hist, real }.Where(x => x != 0).Distinct())
@@ -362,12 +362,12 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
                 long id = packet.TryGetProperty("id", out var idEl) && idEl.TryGetInt64(out var v) ? v : 0;
                 if (!_charts.TryGetValue(id, out var route))
                 {
-                    // todavía sin ruta: se guarda un rato (los viejos se descartan)
+                    // still with no route: it is stored for a while (the old ones are discarded)
                     var entry = _orphans.GetOrAdd(id, _ => (DateTime.UtcNow, new List<JsonElement>()));
                     lock (entry.Packets)
                         if (entry.Packets.Count < 5000) entry.Packets.Add(packet.Clone());
                     foreach (var old in _orphans.Where(kv => (DateTime.UtcNow - kv.Value.At).TotalSeconds > 60).Select(kv => kv.Key).ToList()) _orphans.TryRemove(old, out _);
-                    // pudo registrarse justo ahora
+                    // it may have registered just now
                     if (_charts.TryGetValue(id, out var late) && _orphans.TryRemove(id, out var again))
                         lock (late)
                             foreach (var pk in again.Packets) Deliver(late, pk);
@@ -394,7 +394,7 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
                         return;
                     }
 
-                    if (!live.HistoryDone) return; // el tick de historia que trae al suscribirse
+                    if (!live.HistoryDone) return; // the history tick it brings on subscribing
                     var trades = new List<Trade>();
                     foreach (var t in Ticks(packet).OrderBy(x => x.Time))
                     {
@@ -460,12 +460,12 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
             }
             catch
             {
-                // ya no importa
+                // it no longer matters
             }
         }
     }
 
-    /// <summary>Prueba el login y si hay datos por API.</summary>
+    /// <summary>Tests the login and whether there is API data.</summary>
     public async Task<(bool Ok, string Message)> TestAsync(CancellationToken ct)
     {
         await _conn.AccessTokenAsync(ct).ConfigureAwait(false);
@@ -477,16 +477,16 @@ public sealed class TradovateFeed : IMarketDataFeed, IKlineHistory, IDayDownload
             var (_, name) = await _conn.ContractAsync("ES", DateTime.UtcNow, ct).ConfigureAwait(false);
             var res = await _conn.Md.RequestAsync("md/subscribeQuote", new JsonObject { ["symbol"] = name }, ct).ConfigureAwait(false);
             data = res.ValueKind == JsonValueKind.String && (res.GetString() ?? "").Contains("inaccessible", StringComparison.OrdinalIgnoreCase)
-                ? "Sin datos de mercado por API (hacen falta los datos de CME para API): podés operar desde gráficos de Rithmic."
-                : "Datos de mercado por API disponibles.";
+                ? "No market data over the API (CME data for API is required): you can trade from Rithmic charts."
+                : "Market data over the API available.";
             _ = _conn.Md.RequestAsync("md/unsubscribeQuote", new JsonObject { ["symbol"] = name }, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            data = "Datos de mercado: " + ex.Message;
+            data = "Market data: " + ex.Message;
         }
 
-        return (true, $"Sesión iniciada como {_conn.UserName} ({(_conn.IsDemo ? "demo" : "real")}): {n} cuenta(s). {data}");
+        return (true, $"Signed in as {_conn.UserName} ({(_conn.IsDemo ? "demo" : "real")}): {n} account(s). {data}");
     }
 
     public void Dispose() => _conn.Dispose();

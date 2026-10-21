@@ -36,17 +36,17 @@ internal static class Sk
     }, w);
 }
 
-/// <summary>Una etiqueta de valor para el eje de precios.</summary>
+/// <summary>A value label for the price axis.</summary>
 internal readonly record struct AxisLabel(float Y, string Text, SKColor Background, SKColor Foreground);
 
-/// <summary>Dibuja las series y objetos de los indicadores.</summary>
+/// <summary>Draws the indicators' series and objects.</summary>
 internal sealed class SeriesRenderer
 {
     private readonly SKPaint _stroke = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeJoin = SKStrokeJoin.Round, StrokeCap = SKStrokeCap.Round };
     private readonly SKPaint _fill = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
     private readonly SKPaint _text = new() { IsAntialias = true };
 
-    /// <summary>Colores de vela pedidos por indicadores (PaintbarsDataSeries).</summary>
+    /// <summary>Candle colors requested by indicators (PaintbarsDataSeries).</summary>
     public Dictionary<int, SKColor> CollectPaintBars(ChartModel model, ChartLayout layout)
     {
         var res = new Dictionary<int, SKColor>();
@@ -58,7 +58,7 @@ internal sealed class SeriesRenderer
                 if (s is not PaintbarsDataSeries pb || !pb.Visible) continue;
                 for (int i = layout.FirstVisible; i <= layout.LastVisible && i < pb.Count; i++)
                 {
-                    // transparente = el indicador oculta esa vela del gráfico (así lo hace Heikin Ashi de ATAS)
+                    // transparent = the indicator hides that candle of the chart (that is how ATAS's Heikin Ashi does it)
                     var c = pb[i];
                     if (c.HasValue) res[i] = c.Value.ToSk();
                 }
@@ -69,8 +69,8 @@ internal sealed class SeriesRenderer
     }
 
     /// <summary>
-    /// Si algún indicador visible del panel de precio reemplaza las velas del gráfico: pide ocultarlas
-    /// (PaintbarsDataSeries.HideChart) o dibuja sus propias velas sobre el precio (Heikin Ashi, etc.).
+    /// Whether some visible indicator of the price panel replaces the chart's candles: it asks to hide them
+    /// (PaintbarsDataSeries.HideChart) or draws its own candles over the price (Heikin Ashi, etc.).
     /// </summary>
     public static bool ChartReplacedByIndicator(ChartModel model, ChartLayout layout)
     {
@@ -91,7 +91,7 @@ internal sealed class SeriesRenderer
         return false;
     }
 
-    /// <summary>Rellenos de bandas (van debajo de las velas).</summary>
+    /// <summary>Band fills (they go below the candles).</summary>
     public void RenderBands(SKCanvas canvas, ChartLayout layout, PanelLayout panel, IEnumerable<IndicatorSlot> slots)
     {
         foreach (var slot in slots)
@@ -105,7 +105,7 @@ internal sealed class SeriesRenderer
         }
     }
 
-    /// <summary>Líneas, histogramas, marcadores y velas de los indicadores de un panel.</summary>
+    /// <summary>Lines, histograms, markers and candles of a panel's indicators.</summary>
     public void RenderSeries(SKCanvas canvas, ChartModel model, ChartLayout layout, PanelLayout panel, IEnumerable<IndicatorSlot> slots, List<AxisLabel> axisLabels)
     {
         foreach (var slot in slots)
@@ -146,7 +146,7 @@ internal sealed class SeriesRenderer
 
     private static bool IsEmpty(decimal v, ValueDataSeries vs, bool isPrice) => v == 0 && (isPrice || !vs.ShowZeroValue);
 
-    /// <summary>Y de un precio de nivel (centro de su fila) o de un precio cualquiera.</summary>
+    /// <summary>Y of a level price (the center of its row) or of any price.</summary>
     private static float YLevel(PanelLayout panel, decimal price) =>
         panel.IsPrice && panel.RowCenterOf != null && panel.RowSize > 0 && price % panel.RowSize == 0
             ? panel.Y(panel.RowCenterOf(price))
@@ -478,7 +478,7 @@ internal sealed class SeriesRenderer
         }
     }
 
-    /// <summary>Objetos de dibujo de los indicadores: líneas de tendencia, líneas hasta toque, rectángulos y textos.</summary>
+    /// <summary>Drawing objects of the indicators: trend lines, lines until touched, rectangles and texts.</summary>
     public void RenderDrawingObjects(SKCanvas canvas, ChartModel model, ChartLayout layout, PanelLayout panel, IEnumerable<IndicatorSlot> slots)
     {
         foreach (var slot in slots)
@@ -575,7 +575,7 @@ internal sealed class SeriesRenderer
         _stroke.PathEffect = Sk.Dash(pen.DashStyle, pen.Width);
     }
 
-    /// <summary>Rango de valores de los indicadores de un panel en las barras visibles (para la autoescala).</summary>
+    /// <summary>Value range of a panel's indicators on the visible bars (for the autoscale).</summary>
     public static (double Min, double Max) ValueRange(IEnumerable<IndicatorSlot> slots, int first, int last, bool isPrice)
     {
         double min = double.MaxValue, max = double.MinValue;

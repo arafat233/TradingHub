@@ -5,39 +5,39 @@ using TradingHub.Market;
 namespace TradingHub.Data;
 
 /// <summary>
-/// Historia larga en velas del exchange (1, 5 o 15 minutos): se baja en segundos aunque sean años, se
-/// guarda en caché por mes y se convierte en operaciones sintéticas que respetan exactamente el OHLC,
-/// el volumen y el delta de cada vela. Las operaciones sintéticas tienen id negativo: las velas que
-/// arman se marcan (<see cref="Candle.IsSynthetic"/>) para no inventar un footprint.
+/// Long history in exchange candles (1, 5 or 15 minutes): it downloads in seconds even for years, is
+/// cached per month and is turned into synthetic trades that exactly respect the OHLC,
+/// the volume and the delta of each candle. The synthetic trades have a negative id: the candles that
+/// are built get marked (<see cref="Candle.IsSynthetic"/>) so no footprint is invented.
 /// </summary>
 public static class KlineHistory
 {
-    /// <summary>Carpeta de la caché (la fija la app). Sin carpeta no se guarda nada.</summary>
+    /// <summary>Cache folder (the app sets it). With no folder nothing is stored.</summary>
     public static string? CacheRoot { get; set; }
 
-    /// <summary>Base de los ids sintéticos (siempre negativos y crecientes con el tiempo).</summary>
+    /// <summary>Base of the synthetic ids (always negative and increasing with time).</summary>
     public const long SyntheticIdBase = long.MinValue / 2;
 
     public static bool IsSynthetic(long tradeId) => tradeId < 0;
 
-    /// <summary>Resolución según el largo del rango: menos memoria cuando son años.</summary>
+    /// <summary>Resolution based on the range's length: less memory when it spans years.</summary>
     public static int MinutesFor(TimeSpan range) => range.TotalDays <= 400 ? 1 : range.TotalDays <= 1500 ? 5 : 15;
 
-    /// <summary>Operaciones sintéticas aproximadas que genera un rango (para avisar antes de cargar).</summary>
+    /// <summary>Approximate synthetic trades a range generates (to warn before loading).</summary>
     public static long EstimateTrades(TimeSpan range) => (long)(range.TotalMinutes / MinutesFor(range) * 4);
 
     private static long ToMs(DateTime t) => new DateTimeOffset(DateTime.SpecifyKind(t, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 
     private static DateTime FromMs(long ms) => DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime;
 
-    /// <summary>Velas entre dos instantes, usando la caché para los meses ya cerrados.</summary>
+    /// <summary>Candles between two instants, using the cache for the months already closed.</summary>
     public static async Task<List<Kline>> LoadAsync(IKlineHistory source, Instrument inst, DateTime fromUtc, DateTime toUtc, int minutes, decimal endPrice,
         IProgress<double>? progress, CancellationToken ct)
     {
         var result = new List<Kline>();
         if (toUtc <= fromUtc) return result;
 
-        // el simulador genera la historia hacia atrás desde el precio actual: de una sola vez y sin caché
+        // the simulator generates the history backwards from the current price: all at once and with no cache
         if (inst.FeedId == SimulatedFeed.FeedId || CacheRoot == null)
         {
             await source.LoadKlinesAsync(inst, fromUtc, toUtc, minutes, endPrice, batch =>
@@ -56,7 +56,7 @@ public static class KlineHistory
             ct.ThrowIfCancellationRequested();
             var monthStart = months[i];
             var monthEnd = monthStart.AddMonths(1);
-            // un mes se da por cerrado (y se guarda) dos días después de terminar
+            // a month is considered closed (and stored) two days after it ends
             bool closed = monthEnd <= DateTime.UtcNow.AddDays(-2);
             int index = i;
             var sub = new Progress<double>(p => progress?.Report((index + Math.Clamp(p, 0, 1)) / months.Count));
@@ -114,7 +114,7 @@ public static class KlineHistory
         }
         catch
         {
-            return null; // caché dañada: se vuelve a bajar
+            return null; // corrupt cache: it is downloaded again
         }
     }
 
@@ -145,14 +145,14 @@ public static class KlineHistory
         }
         catch
         {
-            // sin caché: la próxima vez se baja de nuevo
+            // no cache: next time it is downloaded again
         }
     }
 
     /// <summary>
-    /// Convierte velas en operaciones sintéticas: cuatro por vela (apertura, mínimo/máximo, máximo/mínimo y
-    /// cierre), con el volumen comprador y vendedor exacto. Solo usa las velas que caen enteras dentro de
-    /// alguna de las ventanas (los huecos sin ticks reales).
+    /// Turns candles into synthetic trades: four per candle (open, low/high, high/low and
+    /// close), with the exact buy and sell volume. It only uses the candles that fall entirely inside
+    /// one of the windows (the gaps with no real ticks).
     /// </summary>
     public static void Synthesize(IReadOnlyList<Kline> klines, Instrument inst, int minutes, IReadOnlyList<(DateTime From, DateTime To)> windows, List<Trade> output)
     {
@@ -179,8 +179,8 @@ public static class KlineHistory
             prices[2] = up ? h : l;
             prices[3] = c;
 
-            // compras en la apertura y el extremo a favor, ventas en el otro extremo y el cierre;
-            // si un lado no tiene volumen, el otro se reparte en los cuatro puntos (así el OHLC queda exacto)
+            // buys at the open and the favorable extreme, sells at the other extreme and the close;
+            // if one side has no volume, the other is spread over the four points (so the OHLC comes out exact)
             if (buy <= 0)
                 for (int j = 0; j < 4; j++) prints[j] = (sell / 4, TradeSide.Sell);
             else if (sell <= 0)
@@ -200,8 +200,8 @@ public static class KlineHistory
     }
 
     /// <summary>
-    /// Intervalos donde hay ticks reales (los cortes de más de 3 minutos los separan), redondeados a minutos
-    /// completos para que ninguna vela se superponga con operaciones reales.
+    /// Intervals where there are real ticks (cuts of more than 3 minutes separate them), rounded to whole
+    /// minutes so no candle overlaps real trades.
     /// </summary>
     public static List<(DateTime From, DateTime To)> Coverage(IReadOnlyList<Trade> real)
     {
@@ -226,7 +226,7 @@ public static class KlineHistory
         return res;
     }
 
-    /// <summary>Resta a las ventanas los tramos cubiertos.</summary>
+    /// <summary>Subtracts the covered stretches from the windows.</summary>
     public static List<(DateTime From, DateTime To)> Subtract(IReadOnlyList<(DateTime From, DateTime To)> windows, IReadOnlyList<(DateTime From, DateTime To)> covered)
     {
         var res = new List<(DateTime, DateTime)>();
@@ -257,7 +257,7 @@ public static class KlineHistory
         return res.OrderBy(p => p.Item1).ToList();
     }
 
-    /// <summary>Une dos listas ordenadas por tiempo.</summary>
+    /// <summary>Merges two lists sorted by time.</summary>
     public static List<Trade> MergeByTime(List<Trade> a, List<Trade> b)
     {
         if (a.Count == 0) return b;
@@ -270,7 +270,7 @@ public static class KlineHistory
         return res;
     }
 
-    /// <summary>Lee un CSV de velas de los archivos públicos de Binance (con o sin encabezado).</summary>
+    /// <summary>Reads a candle CSV from the Binance public archives (with or without a header).</summary>
     public static List<Kline> ParseBinanceCsv(TextReader reader)
     {
         var list = new List<Kline>(45_000);
@@ -281,7 +281,7 @@ public static class KlineHistory
             var f = line.Split(',');
             if (f.Length < 10) continue;
             long t = long.Parse(f[0], CultureInfo.InvariantCulture);
-            if (t > 100_000_000_000_000) t /= 1000; // desde 2025 spot viene en microsegundos
+            if (t > 100_000_000_000_000) t /= 1000; // from 2025 spot comes in microseconds
             decimal D(int k) => decimal.Parse(f[k], NumberStyles.Float, CultureInfo.InvariantCulture);
             list.Add(new Kline(t, D(1), D(2), D(3), D(4), D(5), D(9), true));
         }

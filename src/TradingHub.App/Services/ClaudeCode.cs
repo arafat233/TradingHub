@@ -5,20 +5,20 @@ using Avalonia.Threading;
 
 namespace TradingHub.App.Services;
 
-/// <summary>Resultado de un pedido a Claude Code.</summary>
+/// <summary>Result of a request to Claude Code.</summary>
 public sealed record ClaudeResult(bool IsError, string Text, double CostUsd, double Seconds, bool NeedsLogin);
 
 /// <summary>
-/// Puente con Claude Code (la CLI <c>claude</c> instalada en la Mac, con la sesión de la suscripción
-/// del usuario). Corre en modo no interactivo dentro de la carpeta de estrategias, con permiso solo
-/// para leer y editar archivos de esa carpeta, y transmite la respuesta a medida que llega.
+/// Bridge to Claude Code (the <c>claude</c> CLI installed on the Mac, using the user's subscription
+/// session). Runs non-interactively inside the strategies folder, with permission only to read and
+/// edit files in that folder, and streams the response as it arrives.
 /// </summary>
 public sealed class ClaudeCodeBridge
 {
     private static string? _helpText;
     private static string? _helpCli;
 
-    /// <summary>¿La CLI instalada conoce esta opción? (se lee una vez su --help)</summary>
+    /// <summary>Does the installed CLI know this option? (its --help is read once)</summary>
     public static async Task<Func<string, bool>> SupportsAsync(string cli)
     {
         if (_helpText == null || _helpCli != cli)
@@ -36,7 +36,7 @@ public sealed class ClaudeCodeBridge
             }
             catch
             {
-                // sin ayuda: solo las opciones básicas
+                // no help available: only the basic options
             }
 
             _helpText = text;
@@ -50,38 +50,38 @@ public sealed class ClaudeCodeBridge
     private Process? _proc;
     private bool _streamedText;
 
-    /// <summary>Id de la conversación (para seguirla con --resume).</summary>
+    /// <summary>Conversation id (to continue it with --resume).</summary>
     public string? SessionId { get; private set; }
 
     public bool IsRunning => _proc is { HasExited: false };
 
-    /// <summary>Texto de Claude a medida que lo escribe.</summary>
+    /// <summary>Claude's text as it is written.</summary>
     public event Action<string>? Text;
 
-    /// <summary>Claude usó una herramienta (leyó, creó o editó un archivo).</summary>
+    /// <summary>Claude used a tool (read, created or edited a file).</summary>
     public event Action<string, string?>? ToolUsed;
 
-    /// <summary>Terminó una herramienta (por ejemplo, ya se escribió el archivo).</summary>
+    /// <summary>A tool finished (for example, the file has already been written).</summary>
     public event Action? ToolFinished;
 
     public event Action<ClaudeResult>? Finished;
 
     public void NewConversation() => SessionId = null;
 
-    /// <summary>Sigue una conversación guardada (el próximo mensaje va con --resume a esa sesión).</summary>
+    /// <summary>Continues a saved conversation (the next message goes with --resume to that session).</summary>
     public void Resume(string? sessionId) => SessionId = sessionId;
 
     private static string? _best;
     private static DateTime _bestAt;
     private static readonly Dictionary<string, (DateTime Stamp, Version? Version)> Versions = new();
 
-    /// <summary>Modelo y esfuerzo con que trabaja Claude en Trading Hub (Opus 5.5 con esfuerzo extra).</summary>
+    /// <summary>Model and effort Claude works with in Trading Hub (Opus 5.5 with extra effort).</summary>
     public static string Model { get; set; } = "claude-opus-5-5";
     public static string Effort { get; set; } = "xhigh";
 
     /// <summary>
-    /// Ruta de la CLI de Claude Code (o null si no está instalada). Si hay varias (la de la Terminal, la que trae la app
-    /// de Claude…) usa la más nueva: los modelos nuevos (Opus 5.5) piden una versión reciente.
+    /// Path to the Claude Code CLI (or null if it is not installed). If there are several (the Terminal one, the one bundled
+    /// with the Claude app…) it uses the newest: the new models (Opus 5.5) require a recent version.
     /// </summary>
     public static string? FindCli()
     {
@@ -110,7 +110,7 @@ public sealed class ClaudeCodeBridge
         };
         foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries))
             list.Add(Path.Combine(dir, "claude"));
-        // la que trae la app de Claude (se actualiza sola): …/claude-code/2.1.295/<id>/claude.app/Contents/MacOS/claude
+        // the one bundled with the Claude app (self-updating): …/claude-code/2.1.295/<id>/claude.app/Contents/MacOS/claude
         var bundled = Path.Combine(home, "Library", "Application Support", "Claude", "claude-code");
         try
         {
@@ -121,13 +121,13 @@ public sealed class ClaudeCodeBridge
         }
         catch (Exception)
         {
-            // sin permiso para mirar: se usan las otras
+            // no permission to look: the others are used
         }
 
         return list;
     }
 
-    /// <summary>Versión de una CLI ("2.1.295 (Claude Code)" → 2.1.295), con caché por archivo.</summary>
+    /// <summary>Version of a CLI ("2.1.295 (Claude Code)" → 2.1.295), cached per file.</summary>
     private static Version? VersionOf(string path)
     {
         try
@@ -151,7 +151,7 @@ public sealed class ClaudeCodeBridge
         }
     }
 
-    /// <summary>Versión instalada ("2.1.251 (Claude Code)") o null.</summary>
+    /// <summary>Installed version ("2.1.251 (Claude Code)") or null.</summary>
     public static async Task<string?> VersionAsync()
     {
         var cli = FindCli();
@@ -171,7 +171,7 @@ public sealed class ClaudeCodeBridge
         }
     }
 
-    /// <summary>Abre la Terminal con Claude Code para iniciar sesión (/login) con la suscripción.</summary>
+    /// <summary>Opens the Terminal with Claude Code to log in (/login) with the subscription.</summary>
     public static void OpenLoginTerminal()
     {
         var cli = FindCli() ?? "claude";
@@ -186,7 +186,7 @@ public sealed class ClaudeCodeBridge
         }
         catch
         {
-            // sin Terminal: el usuario puede escribir "claude" a mano
+            // no Terminal: the user can type "claude" by hand
         }
     }
 
@@ -202,7 +202,7 @@ public sealed class ClaudeCodeBridge
             StandardOutputEncoding = Encoding.UTF8,
         };
 
-        // entorno limpio: que no herede credenciales temporales de otra sesión de Claude
+        // clean environment: do not inherit temporary credentials from another Claude session
         foreach (var key in psi.Environment.Keys.ToList())
             if (key.StartsWith("CLAUDE", StringComparison.Ordinal) || key.StartsWith("ANTHROPIC", StringComparison.Ordinal))
                 psi.Environment.Remove(key);
@@ -211,17 +211,17 @@ public sealed class ClaudeCodeBridge
         return psi;
     }
 
-    /// <summary>Herramientas del laboratorio (servidor MCP de Trading Hub).</summary>
+    /// <summary>Lab tools (Trading Hub MCP server).</summary>
     public static readonly string[] LabTools =
     {
         "list_strategies", "compile_strategy", "list_data", "download_data", "run_backtest", "run_optimization", "run_walk_forward", "list_runs",
         "analyze_portfolio", "suggest_portfolio", "live_portfolio", "propose_sizing", "save_report", "list_indicators", "compile_indicator", "chart_snapshot",
     };
 
-    /// <summary>Config MCP que levanta Trading Hub en modo laboratorio (el mismo ejecutable con --mcp).</summary>
+    /// <summary>MCP config that starts Trading Hub in lab mode (the same executable with --mcp).</summary>
     internal static string WriteLabConfig()
     {
-        // TRADINGHUB_MCP_COMMAND: otro ejecutable de Trading Hub (para pruebas); si no, este mismo
+        // TRADINGHUB_MCP_COMMAND: another Trading Hub executable (for testing); otherwise this same one
         var exe = Environment.GetEnvironmentVariable("TRADINGHUB_MCP_COMMAND") is { Length: > 0 } custom ? custom : Environment.ProcessPath ?? "TradingHub";
         var env = new Dictionary<string, string>();
         if (Environment.GetEnvironmentVariable("DOTNET_ROOT") is { Length: > 0 } root) env["DOTNET_ROOT"] = root;
@@ -238,14 +238,14 @@ public sealed class ClaudeCodeBridge
         return path;
     }
 
-    /// <summary>Manda un pedido. Los eventos llegan en el hilo de UI. Con <paramref name="lab"/> Claude puede correr pruebas.</summary>
+    /// <summary>Sends a request. Events arrive on the UI thread. With <paramref name="lab"/> Claude can run tests.</summary>
     public async Task SendAsync(string prompt, string workDir, string systemPrompt, bool lab = false, IReadOnlyList<string>? extraDirs = null)
     {
         if (IsRunning) return;
         var cli = FindCli();
         if (cli == null)
         {
-            Post(() => Finished?.Invoke(new ClaudeResult(true, "No encontré Claude Code en esta Mac. Instalalo desde claude.com/claude-code y volvé a intentar.", 0, 0, false)));
+            Post(() => Finished?.Invoke(new ClaudeResult(true, "Claude Code was not found on this Mac. Install it from claude.com/claude-code and try again.", 0, 0, false)));
             return;
         }
 
@@ -262,7 +262,7 @@ public sealed class ClaudeCodeBridge
                      "--strict-mcp-config",
                  })
             psi.ArgumentList.Add(a);
-        // Opus 5.5 con esfuerzo extra (las opciones que esta CLI no conoce se omiten)
+        // Opus 5.5 with extra effort (options this CLI does not know are omitted)
         var supports = await SupportsAsync(cli);
         if (!string.IsNullOrWhiteSpace(Model))
         {
@@ -276,7 +276,7 @@ public sealed class ClaudeCodeBridge
             psi.ArgumentList.Add(Effort);
         }
 
-        // otras carpetas donde puede escribir (por ejemplo la de indicadores)
+        // other folders it may write to (for example the indicators one)
         foreach (var dir in extraDirs ?? Array.Empty<string>())
         {
             if (!Directory.Exists(dir) || !supports("--add-dir")) continue;
@@ -286,12 +286,12 @@ public sealed class ClaudeCodeBridge
 
         if (lab)
         {
-            // laboratorio: Trading Hub como servidor MCP (backtest, optimización, walk-forward, reportes)
+            // lab: Trading Hub as MCP server (backtest, optimization, walk-forward, reports)
             psi.ArgumentList.Add("--mcp-config");
             psi.ArgumentList.Add(WriteLabConfig());
             psi.ArgumentList.Add("--allowedTools");
             psi.ArgumentList.Add(string.Join(",", LabTools.Select(t => "mcp__tradinghub__" + t)));
-            // una optimización o un walk-forward pueden tardar varios minutos
+            // an optimization or a walk-forward can take several minutes
             psi.Environment["MCP_TOOL_TIMEOUT"] = "3600000";
             psi.Environment["MCP_TIMEOUT"] = "60000";
         }
@@ -347,7 +347,7 @@ public sealed class ClaudeCodeBridge
                 }
                 catch (JsonException)
                 {
-                    // línea que no es JSON: se ignora
+                    // line that is not JSON: ignored
                 }
             }
 
@@ -355,13 +355,13 @@ public sealed class ClaudeCodeBridge
             if (!gotResult)
             {
                 isError = true;
-                finalText.Append(stderr.Length > 0 ? stderr.ToString().Trim() : $"Claude Code terminó sin respuesta (código {_proc.ExitCode}).");
+                finalText.Append(stderr.Length > 0 ? stderr.ToString().Trim() : $"Claude Code finished with no response (exit code {_proc.ExitCode}).");
             }
         }
         catch (Exception ex)
         {
             isError = true;
-            finalText.Append("No se pudo ejecutar Claude Code: " + ex.Message);
+            finalText.Append("Could not run Claude Code: " + ex.Message);
         }
         finally
         {
@@ -410,7 +410,7 @@ public sealed class ClaudeCodeBridge
                     else if (input.TryGetProperty("pattern", out var pat)) file = pat.GetString();
                     else if (name.StartsWith("mcp__", StringComparison.Ordinal))
                     {
-                        // laboratorio: estrategia, instrumento y rango
+                        // lab: strategy, instrument and range
                         string S(string k) => input.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
                         var parts = new[] { S("file"), S("symbol"), S("from").Length > 0 ? $"{S("from")} → {S("to")}" : "", S("title") }.Where(x => x.Length > 0);
                         file = string.Join(" · ", parts);
@@ -432,153 +432,153 @@ public sealed class ClaudeCodeBridge
         }
         catch
         {
-            // ya terminó
+            // already finished
         }
     }
 
     private static void Post(Action a) => Dispatcher.UIThread.Post(a);
 
-    /// <summary>Método de trabajo del laboratorio (se suma a las instrucciones de estrategias).</summary>
+    /// <summary>Lab working method (added to the strategy instructions).</summary>
     public const string LabSystemPrompt = """
 
-        MODO LABORATORIO. Tenés las herramientas mcp__tradinghub__* para evaluar estrategias por tu cuenta, sin pedirle nada al usuario:
-        list_strategies, compile_strategy, list_data, download_data, run_backtest (con monte_carlo_runs), run_optimization,
-        run_walk_forward, list_runs y save_report. Todo lo que corrés queda guardado en el historial de la estrategia en Trading Hub.
+        LAB MODE. You have the mcp__tradinghub__* tools to evaluate strategies on your own, without asking the user for anything:
+        list_strategies, compile_strategy, list_data, download_data, run_backtest (with monte_carlo_runs), run_optimization,
+        run_walk_forward, list_runs and save_report. Everything you run is saved in the strategy history in Trading Hub.
 
-        Método (decidí vos los parámetros, rangos y datos; iterá hasta tener una conclusión firme):
-        1. Revisá la estrategia (list_strategies / leé el archivo) y los datos (list_data). Si hay pocos días y el feed es
-           binance-futures, binance-spot o bybit-linear, bajá más con download_data (apuntá a 30-90 días; cada día tarda ~5 s).
-        2. Backtest base con los parámetros por defecto (comisión 0.04% y 1 tick de deslizamiento, salvo que el usuario diga otra cosa).
-        3. Optimización con rangos razonables (menos de ~2000 combinaciones), métrica NetProfitOverDrawdown o Sharpe y
-           min_trades ≥ 30. Mirá cuántas combinaciones dan ganancia (robustez), no solo la mejor.
-        4. Walk-forward con los mismos rangos (ventana de optimización 3-4 veces la de prueba). Lo que vale es el resultado
-           fuera de muestra: eficiencia, % de ventanas ganadoras, PF y drawdown fuera de muestra.
-        5. Monte Carlo (monte_carlo_runs: 1000) sobre los mejores parámetros validados.
-        6. Si la lógica tiene fallas claras, mejorá el código (editá el .cs), compilá con compile_strategy y repetí la evaluación.
-           Compará siempre contra la versión anterior y no te quedes con cambios que solo mejoran dentro de muestra.
-        7. Veredicto:
-           - ganadora: fuera de muestra positiva, eficiencia walk-forward ≥ 0.5, PF fuera de muestra ≥ 1.2, ≥ 30 operaciones,
-             drawdown p95 de Monte Carlo razonable para el capital y resultados estables entre ventanas.
-           - prometedora: resultados positivos pero con poca muestra o algo de inestabilidad: hace falta más datos.
-           - perdedora: pierde fuera de muestra o solo gana sobreajustada.
-           - descartada: no compila, no opera o la idea no tiene sentido con estos datos.
-        8. Portafolios: si hay varias estrategias (o la misma en varios instrumentos) con backtests, usá analyze_portfolio para
-           medir la correlación de sus resultados diarios y suggest_portfolio para buscar combinaciones poco correlacionadas
-           (correlación < 0.5) que mejoren el Sharpe y bajen el drawdown del conjunto.
-        Cartera en vivo: si te piden revisar las estrategias que operan en vivo, usá live_portfolio (resultado, PF total y de
-        las últimas 20 operaciones, drawdown actual y máximo de cada una) y proponé con propose_sizing: más tamaño (hasta ×3) a
-        las que rinden de forma consistente, menos o pausa (0) a las que se degradan, siempre con un motivo concreto basado en
-        los números. Con menos de ~10 operaciones no saques conclusiones. Nunca se aplica nada solo: el usuario aprueba cada
-        cambio. En ese caso no hace falta save_report salvo que lo pidan.
-        9. Terminá SIEMPRE con save_report (cuando evaluaste estrategias). Trading Hub arma solo el informe profesional con TODAS las métricas, tablas y gráficos a
-           partir de las corridas (pasale backtest_run_id —el mejor validado, con Monte Carlo—, optimization_run_id y
-           walk_forward_run_id; si evaluaste un portafolio, también «portfolio»). Vos escribís: verdict, summary (2 a 5 líneas),
-           analysis (qué funciona y qué no, robustez según la sensibilidad de la optimización, eficiencia y estabilidad del
-           walk-forward, Monte Carlo, comparación entre versiones del código), risks y next_steps, en Markdown y en español.
-           Si cambiaste el código, explicalo en extra_markdown.
-        No inventes resultados: todo número que escribas tiene que salir de una herramienta. En el chat, al final, contestá en
-        2 a 4 líneas con el veredicto y los números clave (el detalle va en el informe).
-        Ver el gráfico: con chart_snapshot corrés la estrategia en un rango y te queda una imagen del gráfico (velas, entradas y
-        salidas, sus dibujos y líneas) que mirás con Read, más la lista de velas, operaciones, dibujos y registro con hora
-        local. Usalo cuando el usuario te pregunta por algo que ve en su gráfico («marca la ruptura a las 7:15 pero entra a las
-        8:45») o para revisar que lo que programaste hace lo que dice: mirá la vela exacta, los valores de sus líneas y la orden.
+        Method (you decide the parameters, ranges and data; iterate until you have a firm conclusion):
+        1. Review the strategy (list_strategies / read the file) and the data (list_data). If there are few days and the feed is
+           binance-futures, binance-spot or bybit-linear, download more with download_data (aim for 30-90 days; each day takes ~5 s).
+        2. Baseline backtest with the default parameters (0.04% commission and 1 tick of slippage, unless the user says otherwise).
+        3. Optimization with reasonable ranges (fewer than ~2000 combinations), NetProfitOverDrawdown or Sharpe metric and
+           min_trades >= 30. Look at how many combinations are profitable (robustness), not just the best one.
+        4. Walk-forward with the same ranges (optimization window 3-4 times the test one). What matters is the out-of-sample
+           result: efficiency, % of winning windows, out-of-sample PF and drawdown.
+        5. Monte Carlo (monte_carlo_runs: 1000) on the best validated parameters.
+        6. If the logic has clear flaws, improve the code (edit the .cs), compile with compile_strategy and repeat the evaluation.
+           Always compare against the previous version and do not keep changes that only improve in-sample results.
+        7. Verdict:
+           - winner: positive out-of-sample, walk-forward efficiency >= 0.5, out-of-sample PF >= 1.2, >= 30 trades,
+             Monte Carlo p95 drawdown reasonable for the capital and stable results across windows.
+           - promising: positive results but with a small sample or some instability: more data is needed.
+           - loser: loses out-of-sample or only wins when overfitted.
+           - discarded: does not compile, does not trade or the idea makes no sense with this data.
+        8. Portfolios: if there are several strategies (or the same one on several instruments) with backtests, use analyze_portfolio
+           to measure the correlation of their daily results and suggest_portfolio to look for lightly correlated combinations
+           (correlation < 0.5) that improve the Sharpe and lower the drawdown of the whole.
+        Live portfolio: if you are asked to review the strategies trading live, use live_portfolio (result, total PF and PF of
+        the last 20 trades, current and maximum drawdown of each one) and make proposals with propose_sizing: more size (up to x3)
+        for the ones performing consistently, less or a pause (0) for the ones degrading, always with a concrete reason based on
+        the numbers. With fewer than ~10 trades do not draw conclusions. Nothing is ever applied on its own: the user approves
+        every change. In that case save_report is not needed unless they ask for it.
+        9. ALWAYS finish with save_report (when you evaluated strategies). Trading Hub builds the professional report on its own with ALL the metrics, tables and charts
+           from the runs (pass it backtest_run_id -the best validated one, with Monte Carlo-, optimization_run_id and
+           walk_forward_run_id; if you evaluated a portfolio, also "portfolio"). You write: verdict, summary (2 to 5 lines),
+           analysis (what works and what does not, robustness based on the sensitivity of the optimization, efficiency and
+           stability of the walk-forward, Monte Carlo, comparison between code versions), risks and next_steps, in Markdown and in English.
+           If you changed the code, explain it in extra_markdown.
+        Do not make up results: every number you write has to come from a tool. In the chat, at the end, answer in
+        2 to 4 lines with the verdict and the key numbers (the detail goes in the report).
+        Seeing the chart: with chart_snapshot you run the strategy over a range and get an image of the chart (candles, entries
+        and exits, its drawings and lines) that you look at with Read, plus the list of candles, trades, drawings and log with
+        local time. Use it when the user asks you about something they see on their chart ("it marks the breakout at 7:15 but
+        enters at 8:45") or to check that what you programmed does what it says: look at the exact candle, the values of its lines and the order.
         """;
 
-    /// <summary>Instrucciones para que Claude escriba indicadores propios (además de estrategias).</summary>
+    /// <summary>Instructions for Claude to write custom indicators (in addition to strategies).</summary>
     public const string IndicatorSystemPrompt = """
 
-        INDICADORES (cuando te piden un indicador y no una estrategia):
-        - Van en la carpeta de indicadores del usuario (te paso la ruta en el contexto; tenés permiso para escribir ahí), un
-          archivo .cs por indicador con la clase del mismo nombre. Se compilan solos al guardar y aparecen en el gráfico en
-          Indicadores → «Mis indicadores». No los pongas en la carpeta de estrategias.
-        - usings: System.ComponentModel, System.ComponentModel.DataAnnotations, System.Drawing (colores: Color.Orange,
-          Color.FromArgb(a, r, g, b)), TradingHub.Indicators, TradingHub.Indicators.Drawing y, si dibujás vos, TradingHub.Rendering.Context y
-          TradingHub.Rendering.Tools. System, System.Linq y System.Collections.Generic ya están.
-        - `[DisplayName("Nombre visible")] [Category("Mis indicadores")] public class MiIndicador : Indicator` con constructor
-          sin parámetros.
-        - Series que se dibujan solas (campos): ValueDataSeries (línea o histograma:
-          `new ValueDataSeries("Id", "Nombre") { Color = Color.Orange, Width = 2, VisualType = VisualMode.Line }`, también
-          VisualMode.Histogram), RangeDataSeries (bandas: `_banda[bar] = new RangeValue { Upper = a, Lower = b }`) y
-          PaintbarsDataSeries (pintar velas: `_velas[bar] = Color.Lime`). En el constructor: `DataSeries[0] = _serie;` (la
-          principal) y `DataSeries.Add(_otra);` para las demás.
-        - Panel: por defecto sobre el precio; para uno propio abajo (osciladores) `Panel = IndicatorDataProvider.NewPanel;`
-          en el constructor.
-        - Parámetros: propiedades públicas con `[Display(Name = "Período", GroupName = "Configuración")]` y `[Range(1, 1000)]`;
-          en el set guardá el valor y llamá `RecalculateValues();`.
-        - Cálculo: `protected override void OnCalculate(int bar, decimal value)` se llama para cada vela (bar = índice desde 0,
-          value = cierre). `GetCandle(bar)` → Open, High, Low, Close, Volume, Ask, Bid, Delta, MaxDelta, MinDelta, Time.
-          `CurrentBar` = cantidad de velas. Escribí `_serie[bar] = valor;` y leé las anteriores con `_serie[bar - 1]` (cuidá
-          los índices negativos: al principio no hay suficientes velas).
-        - Dibujo propio (opcional, por ejemplo rangos o etiquetas): en el constructor `EnableCustomDrawing = true;
-          SubscribeToDrawingEvents(DrawingLayouts.Final);` y `protected override void OnRender(RenderContext context,
-          DrawingLayouts layout)` con `ChartInfo.GetXByBar(bar)`, `ChartInfo.GetYByPrice(precio)`,
+        INDICATORS (when you are asked for an indicator and not a strategy):
+        - They go in the user's indicators folder (I give you the path in the context; you have permission to write there), one
+          .cs file per indicator with a class of the same name. They compile on their own when saved and show up on the chart
+          under Indicators -> "My indicators". Do not put them in the strategies folder.
+        - usings: System.ComponentModel, System.ComponentModel.DataAnnotations, System.Drawing (colors: Color.Orange,
+          Color.FromArgb(a, r, g, b)), TradingHub.Indicators, TradingHub.Indicators.Drawing and, if you draw yourself, TradingHub.Rendering.Context and
+          TradingHub.Rendering.Tools. System, System.Linq and System.Collections.Generic are already there.
+        - `[DisplayName("Display name")] [Category("My indicators")] public class MyIndicator : Indicator` with a parameterless
+          constructor.
+        - Series that draw themselves (fields): ValueDataSeries (line or histogram:
+          `new ValueDataSeries("Id", "Name") { Color = Color.Orange, Width = 2, VisualType = VisualMode.Line }`, also
+          VisualMode.Histogram), RangeDataSeries (bands: `_band[bar] = new RangeValue { Upper = a, Lower = b }`) and
+          PaintbarsDataSeries (painting candles: `_candles[bar] = Color.Lime`). In the constructor: `DataSeries[0] = _series;` (the
+          main one) and `DataSeries.Add(_other);` for the rest.
+        - Panel: on the price by default; for your own one below (oscillators) `Panel = IndicatorDataProvider.NewPanel;`
+          in the constructor.
+        - Parameters: public properties with `[Display(Name = "Period", GroupName = "Settings")]` and `[Range(1, 1000)]`;
+          in the setter store the value and call `RecalculateValues();`.
+        - Calculation: `protected override void OnCalculate(int bar, decimal value)` is called for each candle (bar = index from 0,
+          value = close). `GetCandle(bar)` -> Open, High, Low, Close, Volume, Ask, Bid, Delta, MaxDelta, MinDelta, Time.
+          `CurrentBar` = number of candles. Write `_series[bar] = value;` and read the previous ones with `_series[bar - 1]` (watch
+          out for negative indices: at the start there are not enough candles).
+        - Your own drawing (optional, for example ranges or labels): in the constructor `EnableCustomDrawing = true;
+          SubscribeToDrawingEvents(DrawingLayouts.Final);` and `protected override void OnRender(RenderContext context,
+          DrawingLayouts layout)` with `ChartInfo.GetXByBar(bar)`, `ChartInfo.GetYByPrice(price)`,
           `context.DrawLine(new RenderPen(color, 1), x1, y1, x2, y2)`, `context.FillRectangle(color, new Rectangle(x, y, w, h))`,
-          `context.DrawString(texto, new RenderFont("Arial", 9), color, x, y)`. Velas visibles: FirstVisibleBarNumber y
+          `context.DrawString(text, new RenderFont("Arial", 9), color, x, y)`. Visible candles: FirstVisibleBarNumber and
           LastVisibleBarNumber.
-        - Con las herramientas del laboratorio, compilalo con compile_indicator (y list_indicators para ver los que hay) y
-          corregí hasta que compile. Sin laboratorio, Trading Hub lo compila al terminar y te pasa los errores.
+        - With the lab tools, compile it with compile_indicator (and list_indicators to see the existing ones) and
+          fix it until it compiles. Without the lab, Trading Hub compiles it when you finish and passes you the errors.
         """;
 
-    /// <summary>Instrucciones para que Claude escriba estrategias que compilen en Trading Hub.</summary>
+    /// <summary>Instructions for Claude to write strategies that compile in Trading Hub.</summary>
     public const string StrategySystemPrompt = """
-        Sos el asistente de estrategias de Trading Hub, una plataforma de trading de escritorio. Trabajás dentro de la
-        carpeta de estrategias del usuario (el directorio actual). Respondé siempre en español rioplatense, breve.
+        You are the strategy assistant of Trading Hub, a desktop trading platform. You work inside the user's
+        strategies folder (the current directory). Always answer in English, briefly.
 
-        Cómo es una estrategia de Trading Hub:
-        - Un archivo .cs por estrategia en el directorio actual. El nombre de la clase es igual al nombre del archivo.
-        - `using TradingHub.Strategies;` (System, System.Linq y System.Collections.Generic ya están disponibles).
-        - `[Strategy("Nombre visible", Description = "...")] public class MiEstrategia : Strategy { ... }` con constructor sin parámetros.
-        - Parámetros editables: propiedades públicas con `[Parameter("Nombre")]`; para optimizarlas, además `[Optimize(mín, máx, paso)]`.
-        - Ciclo: `protected override void OnInit()` (crear indicadores), `protected override void OnBar(Bar bar)` (al cerrar cada vela),
-          opcional `OnTick(Trade trade)`, `OnOrderFilled(StrategyOrder order)`, `OnSessionStart(DateOnly session)`, `OnStop()`.
-        - Datos: `Bars[0]` última vela cerrada, `Bars[1]` la anterior. `Bar`: Open, High, Low, Close, Volume, BuyVolume, SellVolume,
+        What a Trading Hub strategy looks like:
+        - One .cs file per strategy in the current directory. The class name is the same as the file name.
+        - `using TradingHub.Strategies;` (System, System.Linq and System.Collections.Generic are already available).
+        - `[Strategy("Display name", Description = "...")] public class MyStrategy : Strategy { ... }` with a parameterless constructor.
+        - Editable parameters: public properties with `[Parameter("Name")]`; to optimize them, also `[Optimize(min, max, step)]`.
+        - Lifecycle: `protected override void OnInit()` (create indicators), `protected override void OnBar(Bar bar)` (when each candle closes),
+          optional `OnTick(Trade trade)`, `OnOrderFilled(StrategyOrder order)`, `OnSessionStart(DateOnly session)`, `OnStop()`.
+        - Data: `Bars[0]` last closed candle, `Bars[1]` the previous one. `Bar`: Open, High, Low, Close, Volume, BuyVolume, SellVolume,
           Delta, MaxDelta, MinDelta, Trades, PocPrice, IsBullish, IsBearish, Range, Body, Typical, Time, CloseTime, Index.
-          `bar.Levels` (precio → (Buy, Sell)) solo si en OnInit se pone `UseFootprint = true`.
-          También: Price, Time (UTC), LocalTime, TickSize, CurrentBar, Instrument, IsBacktest.
-        - Indicadores (crear en OnInit y guardar en campos): Sma(n), Ema(n), Rsi(n), Atr(n), Vwap(), Bollinger(n, k) (.Upper/.Lower/.Middle),
-          Macd(12,26,9) (.Signal/.Histogram), Highest(n), Lowest(n), StdDev(n), CumulativeDelta(), Custom("nombre", bars => valor).
-          Se leen como serie: `ind[0]` actual, `ind[1]` anterior, `ind.Value`, `ind.IsReady`. PriceSource: Close, Open, High, Low, Typical, Median, Volume, Delta.
-        - Órdenes: EnterLong(), EnterShort() (dan vuelta si hace falta), Buy(cant), Sell(cant), BuyLimit(precio), SellLimit(precio),
-          BuyStop(precio), SellStop(precio), ClosePosition(), CancelAll(), Cancel(orden), Modify(orden, precio).
-          Gestión automática (OCO): propiedades StopLossTicks, TakeProfitTicks, TrailingStopTicks (se pueden fijar en el constructor).
-          Quantity = cantidad por defecto.
-        - Posición: Position (>0 largo, <0 corto), IsFlat, IsLong, IsShort, AveragePrice, OpenPnL, NetProfit, ActiveOrders.
-        - Ayudas: CrossAbove(a, b), CrossBelow(a, b) (series o series contra un número), Ticks(n), Round(precio),
-          TimeBetween(TimeSpan desde, TimeSpan hasta) (hora local de la sesión), Log("texto").
-        - Precios y volúmenes son decimal (convertí double con (decimal) cuando haga falta).
-        - Dibujos en el gráfico (se ven al ponerla en un gráfico, en la historia y en vivo). Tiempos UTC (bar.Time,
-          Bars[n].Time); color "#RRGGBB", "#AARRGGBB" o un nombre ("verde", "rojo", "azul", "celeste", "amarillo", "naranja",
-          "violeta", "rosa", "gris", "blanco"); sin color, el de la estrategia. Repetir el mismo id reemplaza el dibujo (sirve
-          para estirar el rango del día vela a vela); usá ids distintos para cosas distintas, por ejemplo $"rango-{bar.Time:yyyyMMdd}".
-            DrawBox(id, desde, precio1, hasta, precio2, color, fillOpacity: 15, text) → rectángulo (rangos, zonas)
-            DrawLine(id, tiempo1, precio1, tiempo2, precio2, color, width, LineStyle.Solid|Dashed|Dotted)
-            DrawHorizontalLine(id, precio, desde: null, color, width, style, text) → nivel hasta el borde derecho
-            DrawArrowUp(id, tiempo, precio, color, text) / DrawArrowDown(...) → flecha con la punta en el precio
-            DrawMarker(id, tiempo, precio, MarkerShape.Circle|Square|Diamond|Cross|ArrowUp|ArrowDown, color, text)
-            DrawText(id, tiempo, precio, "texto", color)
-            Plot("nombre", valor, color, width, style) → línea continua vela a vela (llamala en OnBar; null la corta)
+          `bar.Levels` (price -> (Buy, Sell)) only if `UseFootprint = true` is set in OnInit.
+          Also: Price, Time (UTC), LocalTime, TickSize, CurrentBar, Instrument, IsBacktest.
+        - Indicators (create in OnInit and store in fields): Sma(n), Ema(n), Rsi(n), Atr(n), Vwap(), Bollinger(n, k) (.Upper/.Lower/.Middle),
+          Macd(12,26,9) (.Signal/.Histogram), Highest(n), Lowest(n), StdDev(n), CumulativeDelta(), Custom("name", bars => value).
+          They are read as a series: `ind[0]` current, `ind[1]` previous, `ind.Value`, `ind.IsReady`. PriceSource: Close, Open, High, Low, Typical, Median, Volume, Delta.
+        - Orders: EnterLong(), EnterShort() (they reverse if needed), Buy(qty), Sell(qty), BuyLimit(price), SellLimit(price),
+          BuyStop(price), SellStop(price), ClosePosition(), CancelAll(), Cancel(order), Modify(order, price).
+          Automatic management (OCO): StopLossTicks, TakeProfitTicks, TrailingStopTicks properties (they can be set in the constructor).
+          Quantity = default size.
+        - Position: Position (>0 long, <0 short), IsFlat, IsLong, IsShort, AveragePrice, OpenPnL, NetProfit, ActiveOrders.
+        - Helpers: CrossAbove(a, b), CrossBelow(a, b) (series, or a series against a number), Ticks(n), Round(price),
+          TimeBetween(TimeSpan from, TimeSpan to) (local session time), Log("text").
+        - Prices and volumes are decimal (cast double with (decimal) when needed).
+        - Chart drawings (visible when you put it on a chart, in history and live). UTC times (bar.Time,
+          Bars[n].Time); color "#RRGGBB", "#AARRGGBB" or a name ("green", "red", "blue", "cyan", "yellow", "orange",
+          "purple", "pink", "gray", "white"); with no color, the strategy's own. Repeating the same id replaces the drawing (handy
+          for stretching the day range candle by candle); use different ids for different things, for example $"range-{bar.Time:yyyyMMdd}".
+            DrawBox(id, from, price1, to, price2, color, fillOpacity: 15, text) -> rectangle (ranges, zones)
+            DrawLine(id, time1, price1, time2, price2, color, width, LineStyle.Solid|Dashed|Dotted)
+            DrawHorizontalLine(id, price, from: null, color, width, style, text) -> level up to the right edge
+            DrawArrowUp(id, time, price, color, text) / DrawArrowDown(...) -> arrow with its tip at the price
+            DrawMarker(id, time, price, MarkerShape.Circle|Square|Diamond|Cross|ArrowUp|ArrowDown, color, text)
+            DrawText(id, time, price, "text", color)
+            Plot("name", value, color, width, style) -> continuous line candle by candle (call it in OnBar; null breaks it)
             RemoveDrawing(id), ClearDrawings()
-          Ejemplo: en OnBar, `Plot("Techo", _max[0], "verde"); Plot("Piso", _min[0], "rojo");` y en una ruptura
-          `DrawArrowUp($"ruptura-{bar.Time:yyyyMMddHHmm}", bar.Time, bar.Close, "verde", "ruptura");`. Hay un tope de
-          3.000 dibujos (se van los más viejos): no dibujes en cada vela algo que no lo necesita.
-        - Contexto del mercado (con velas ya cerradas, sin mirar el futuro): MarketTrend (eficiencia de la tendencia de las
-          últimas 24 h: 0 = rango puro, 1 = tendencia limpia; al azar ~0,2), Regime (MarketRegime.Range si ≤ 0,15, Mixed,
-          Trend si ≥ 0,35, Unknown sin datos), MarketDirection (1 si en esas 24 h subió, -1 si bajó: una tendencia es
-          alcista o bajista según eso), MarketChange (movimiento neto de 24 h, en %), MarketVolatility (desvío de los
-          retornos por hora de 24 h, en %) y VolatilityRank (percentil de esa volatilidad en el último mes: 0 = la más baja,
-          100 = la más alta). Pueden ser null. En vivo arrancan con el último mes de historia por hora.
-        - Filtro de contexto (todas las estrategias lo traen, sin escribir código): parámetros RegimeFilter (All, RangeOnly,
+          Example: in OnBar, `Plot("Ceiling", _max[0], "green"); Plot("Floor", _min[0], "red");` and on a breakout
+          `DrawArrowUp($"breakout-{bar.Time:yyyyMMddHHmm}", bar.Time, bar.Close, "green", "breakout");`. There is a cap of
+          3,000 drawings (the oldest ones are dropped): do not draw something on every candle that does not need it.
+        - Market context (with closed candles only, no peeking at the future): MarketTrend (trend efficiency of the
+          last 24 h: 0 = pure range, 1 = clean trend; random is ~0.2), Regime (MarketRegime.Range if <= 0.15, Mixed,
+          Trend if >= 0.35, Unknown with no data), MarketDirection (1 if it rose over those 24 h, -1 if it fell: a trend is
+          up or down based on that), MarketChange (net 24 h move, in %), MarketVolatility (standard deviation of the
+          hourly returns over 24 h, in %) and VolatilityRank (percentile of that volatility over the last month: 0 = the lowest,
+          100 = the highest). They can be null. Live, they start with the last month of hourly history.
+        - Context filter (every strategy has it, with no code to write): RegimeFilter parameters (All, RangeOnly,
           NoTrend, TrendOnly, NoRange, UpTrendOnly, DownTrendOnly, MixedOnly, RangeOrUpTrend, RangeOrDownTrend, MixedOrUpTrend,
-          MixedOrDownTrend, NoDownTrend, NoUpTrend, NoMixed: cualquier combinación de rango, mixto y tendencia alcista o bajista),
-          MinVolatilityRank y MaxVolatilityRank (0 a 100). Fuera de ese contexto la estrategia
-          no abre ni aumenta posiciones (las salidas siempre pasan). Se pueden fijar como parámetros en el backtest, la
-          optimización, el walk-forward y en vivo. ContextAllowsEntries dice si ahora deja entrar.
+          MixedOrDownTrend, NoDownTrend, NoUpTrend, NoMixed: any combination of range, mixed and up or down trend),
+          MinVolatilityRank and MaxVolatilityRank (0 to 100). Outside that context the strategy
+          does not open or add to positions (exits always go through). They can be set as parameters in the backtest, the
+          optimization, the walk-forward and live. ContextAllowsEntries tells you whether entries are allowed right now.
 
-        Reglas:
-        - Escribí código que compile en C# 13 sin paquetes externos. Nada de archivos, red, hilos ni Random sin semilla.
-        - Comentarios cortos en español explicando la lógica.
-        - Para crear una estrategia nueva creá un archivo nuevo con un nombre claro en PascalCase; para modificar, editá el archivo indicado.
-        - Si te pasan errores de compilación, corregí el archivo.
-        - Al terminar, explicá en 2 a 5 líneas qué hace la estrategia o qué cambiaste (sin pegar el código: el usuario lo ve en el editor).
+        Rules:
+        - Write code that compiles in C# 13 with no external packages. No files, network, threads or unseeded Random.
+        - Short comments in English explaining the logic.
+        - To create a new strategy, create a new file with a clear PascalCase name; to modify one, edit the file indicated.
+        - If you are given compilation errors, fix the file.
+        - When you finish, explain in 2 to 5 lines what the strategy does or what you changed (without pasting the code: the user sees it in the editor).
         """;
 }

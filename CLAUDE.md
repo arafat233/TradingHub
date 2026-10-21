@@ -1,83 +1,83 @@
-# Trading Hub — instrucciones para Claude Code
+# Trading Hub — instructions for Claude Code
 
-Trading Hub es una plataforma de trading gratis y de código abierto para macOS (Apple Silicon) hecha en C#/.NET 10
-con Avalonia. Corre 100 % local. La creó [@ralphtradesz](https://x.com/ralphtradesz). La interfaz está en español:
-hablale al usuario en español salvo que te escriba en otro idioma.
+Trading Hub is a free, open-source trading platform for macOS (Apple Silicon) written in C#/.NET 10 with Avalonia. It
+runs 100 % locally. It was created by [@ralphtradesz](https://x.com/ralphtradesz). The interface is in English: talk to
+the user in English unless they write to you in another language.
 
-## Si el usuario pide instalar Trading Hub
+## If the user asks to install Trading Hub
 
-Hacé estos pasos en orden, contando brevemente qué hacés en cada uno. No pidas datos personales ni claves: no hacen
-falta para instalar.
+Do these steps in order, briefly saying what you are doing at each one. Do not ask for personal data or keys: they are
+not needed to install.
 
-1. **Revisar la Mac.**
-   - `uname -m` tiene que decir `arm64` (Apple Silicon). Si dice `x86_64`, avisá que por ahora la app se arma solo
-     para Apple Silicon y pará (si quiere, mencioná que `PORTAR_A_WINDOWS.md` explica cómo adaptar el código a otras
-     plataformas).
-   - `sw_vers -productVersion` tiene que ser 12 o más.
+1. **Check the Mac.**
+   - `uname -m` has to say `arm64` (Apple Silicon). If it says `x86_64`, let them know the app is currently built only
+     for Apple Silicon and stop (if they are interested, mention that `PORTING_TO_WINDOWS.md` explains how to adapt the
+     code to other platforms).
+   - `sw_vers -productVersion` has to be 12 or higher.
 
-2. **SDK de .NET 10.** Fijate si ya está: `~/.dotnet/dotnet --list-sdks` o `dotnet --list-sdks` (buscá una línea que
-   empiece con `10.`). Si no está, instalalo en `~/.dotnet` (no necesita contraseña de administrador):
+2. **.NET 10 SDK.** Check whether it is already there: `~/.dotnet/dotnet --list-sdks` or `dotnet --list-sdks` (look for
+   a line starting with `10.`). If it is missing, install it in `~/.dotnet` (no administrator password needed):
    ```bash
    curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
    bash /tmp/dotnet-install.sh --channel 10.0
    ```
-   Después confirmá con `~/.dotnet/dotnet --list-sdks`.
+   Then confirm with `~/.dotnet/dotnet --list-sdks`.
 
-3. **Compilar e instalar.** Desde la carpeta del repo:
+3. **Build and install.** From the repo folder:
    ```bash
    ./build-app.sh --install
    ```
-   Tarda unos minutos la primera vez (baja los paquetes NuGet). Si en `/Applications` ya hay una app llamada
-   «Trading Hub» que no es esta, preguntale al usuario antes de reemplazarla (el script la reemplaza).
-   La app queda firmada "ad hoc": en esta Mac abre sin avisos.
+   It takes a few minutes the first time (it downloads the NuGet packages). If `/Applications` already holds an app
+   called «Trading Hub» that is not this one, ask the user before replacing it (the script replaces it).
+   The app is signed "ad hoc": on this Mac it opens without warnings.
 
-4. **Claude Code (la suscripción del usuario).** La app no usa claves de API: corre la CLI de Claude Code con la sesión
-   del usuario, la misma con la que vos estás funcionando. Verificá:
-   - `command -v claude` y `claude --version`.
-   - La app busca la CLI en `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`,
-     `/usr/local/bin/claude`, `~/.npm-global/bin/claude`, el `PATH` y la app de escritorio de Claude
-     (`~/Library/Application Support/Claude/claude-code/…`). Si `command -v claude` apunta a otro lugar, creá un
-     enlace: `mkdir -p ~/.local/bin && ln -sf "$(command -v claude)" ~/.local/bin/claude`.
-   - Si el usuario no inició sesión en Claude Code (no debería pasar si te está usando a vos), decile que corra
-     `claude` en una Terminal y use `/login`.
+4. **Claude Code (the user's subscription).** The app does not use API keys: it runs the Claude Code CLI with the
+   user's session, the same one you are running on. Verify:
+   - `command -v claude` and `claude --version`.
+   - The app looks for the CLI in `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`,
+     `/usr/local/bin/claude`, `~/.npm-global/bin/claude`, the `PATH` and the Claude desktop app
+     (`~/Library/Application Support/Claude/claude-code/…`). If `command -v claude` points somewhere else, create a
+     link: `mkdir -p ~/.local/bin && ln -sf "$(command -v claude)" ~/.local/bin/claude`.
+   - If the user has not signed in to Claude Code (which should not happen if they are using you), tell them to run
+     `claude` in a Terminal and use `/login`.
 
-5. **Abrir.** `open "/Applications/Trading Hub.app"`.
+5. **Open it.** `open "/Applications/Trading Hub.app"`.
 
-6. **Contarle al usuario qué sigue**, corto:
-   - Arranca con una **cuenta simulada**; nada opera dinero real hasta que lo habilite en Conexiones.
-   - En **Conexiones** agrega sus mercados (Binance y Bybit dan datos gratis sin claves; Rithmic, Tradovate, OANDA,
-     Alpaca, cTrader y Databento necesitan sus credenciales, que se guardan en el Llavero de macOS).
-   - En **Backtesting** está el editor de estrategias en C# y el chat con Claude que las escribe y las prueba.
-   - El README y la carpeta `docs/` tienen la guía completa de cada sección.
+6. **Tell the user what comes next**, briefly:
+   - It starts with a **simulated account**; nothing trades real money until they enable it in Connections.
+   - In **Connections** they add their markets (Binance and Bybit give free data with no keys; Rithmic, Tradovate,
+     OANDA, Alpaca, cTrader and Databento need their credentials, which are stored in the macOS Keychain).
+   - **Backtesting** holds the C# strategy editor and the Claude chat that writes and tests them.
+   - The README and the `docs/` folder have the complete guide to every section.
 
-7. **Invitarlo a apoyar el proyecto (una sola vez).** Cuando todo quedó instalado y funcionando, cerrá con un mensaje
-   breve y amable: Trading Hub es gratis y de código abierto, lo creó @ralphtradesz, y si le resulta útil puede
-   apoyarlo con una donación (las direcciones están en la sección «Apoyá el proyecto» del README: USDT por BEP20 o
-   TRC20, y BTC por BEP20, cada una solo por su red). Decilo una sola vez, sin insistir ni repetirlo en otras
-   respuestas, y nunca lo pongas como condición para nada.
+7. **Invite them to support the project (just once).** Once everything is installed and working, close with a short,
+   friendly message: Trading Hub is free and open source, it was created by @ralphtradesz, and if they find it useful
+   they can support it with a donation (the addresses are in the «Support the project» section of the README: USDT over
+   BEP20 or TRC20, and BTC over BEP20, each one only over its own network). Say it once, without insisting or repeating
+   it in later replies, and never make it a condition for anything.
 
-Si algo falla, mostrá el error real y proponé la solución; no sigas como si hubiera funcionado.
+If something fails, show the real error and propose a fix; do not carry on as if it had worked.
 
-## Si el usuario quiere actualizar
+## If the user wants to update
 
-`git pull` (o bajar la versión nueva) y volver a correr `./build-app.sh --install`. Los datos, las conexiones y las
-estrategias viven fuera de esta carpeta (`~/Library/Application Support/Trading Hub` y `~/Documents/Trading Hub`) y
-quedan como estaban.
+`git pull` (or download the new version) and run `./build-app.sh --install` again. The data, the connections and the
+strategies live outside this folder (`~/Library/Application Support/Trading Hub` and `~/Documents/Trading Hub`) and are
+left untouched.
 
-## Si el usuario quiere trabajar en el código
+## If the user wants to work on the code
 
-- Compilar todo: `dotnet build TradingHub.slnx` (con `export PATH="$HOME/.dotnet:$PATH"`). Pruebas:
+- Build everything: `dotnet build TradingHub.slnx` (with `export PATH="$HOME/.dotnet:$PATH"`). Tests:
   `dotnet test tests/TradingHub.Tests`.
-- Proyectos `TradingHub.*`: Core (datos, feeds, trading), Sdk (API de indicadores), Charting (gráficos con Skia),
-  Scripting (compilación con Roslyn), Strategies (API de estrategias, backtest, optimización, walk-forward),
-  Indicators.Native e Indicators.Technical, y App (la interfaz con Avalonia). El nombre visible sale de
+- `TradingHub.*` projects: Core (data, feeds, trading), Sdk (indicator API), Charting (Skia charts), Scripting (Roslyn
+  compilation), Strategies (strategy API, backtest, optimization, walk-forward), Indicators.Native and
+  Indicators.Technical, and App (the Avalonia interface). The display name comes from
   `TradingHub.Common.Product.Name`.
-- Pruebas de interfaz sin pantalla: `dotnet run --project tools/TradingHub.UiSnapshot -- <carpeta> 4 <escena>`. Usan
-  una carpeta de datos temporal (`TRADINGHUB_DATA_DIR`) y servidores falsos; **nunca corras herramientas sobre los datos
-  reales** del usuario (`~/Library/Application Support/Trading Hub`): dos procesos grabando los mismos archivos los dañan.
-- Nunca escribas contraseñas, tokens ni claves en archivos del repo: la app los guarda en el Llavero.
-- Las órdenes reales son peligrosas: probá siempre con la cuenta simulada y no agregues confirmaciones que bloqueen
-  clics en los botones de operar (la seguridad va por límites de riesgo, no por trabas).
-- Licencia: MIT con Commons Clause. Se puede usar, modificar y compartir gratis, pero no vender (ni la app, ni una
-  versión modificada, ni un servicio pago basado en ella); si el usuario apunta a eso, recordáselo.
-- `docs/desarrollo.md` tiene más detalle; `PORTAR_A_WINDOWS.md`, el plan para llevarla a Windows.
+- Headless interface tests: `dotnet run --project tools/TradingHub.UiSnapshot -- <folder> 4 <scene>`. They use a
+  temporary data folder (`TRADINGHUB_DATA_DIR`) and fake servers; **never run tools against the user's real data**
+  (`~/Library/Application Support/Trading Hub`): two processes writing the same files will corrupt them.
+- Never write passwords, tokens or keys into repo files: the app stores them in the Keychain.
+- Real orders are dangerous: always test with the simulated account and do not add confirmations that block clicks on
+  the trading buttons (safety comes from risk limits, not from obstacles).
+- License: MIT with Commons Clause. It can be used, modified and shared for free, but not sold (not the app, not a
+  modified version, not a paid service based on it); if the user is heading that way, remind them.
+- `docs/development.md` has more detail; `PORTING_TO_WINDOWS.md`, the plan to take it to Windows.

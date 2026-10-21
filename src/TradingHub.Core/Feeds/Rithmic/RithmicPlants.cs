@@ -2,13 +2,13 @@ using TradingHub.Market;
 
 namespace TradingHub.Feeds.Rithmic;
 
-/// <summary>Contrato del mes (ES → ESZ6) y hora de la última operación conocida.</summary>
+/// <summary>Front-month contract (ES -> ESZ6) and time of the last known trade.</summary>
 internal sealed record RithmicContract(string Symbol, string Exchange, DateTime? LastTrade, DateTime When);
 
 /// <summary>
-/// La única sesión de cotizaciones de una conexión de Rithmic. Rithmic deja una sola sesión por usuario en cada
-/// planta: una segunda corta la primera. Por eso todos los gráficos (ES, MES, NQ…), el cross trading y las
-/// consultas de contrato comparten esta conexión, y se reconecta una sola vez para todos.
+/// The single quote session of a Rithmic connection. Rithmic allows a single session per user on each
+/// plant: a second one cuts the first. That is why every chart (ES, MES, NQ…), cross trading and the
+/// contract queries share this connection, and it reconnects just once for all of them.
 /// </summary>
 internal sealed class RithmicTickerPlant : IDisposable
 {
@@ -49,7 +49,7 @@ internal sealed class RithmicTickerPlant : IDisposable
     public FeedStatus Status { get; private set; } = FeedStatus.Disconnected;
     public string? StatusMessage { get; private set; }
 
-    /// <summary>Veces que inició sesión (para las pruebas: tiene que ser una sola por conexión).</summary>
+    /// <summary>Times it logged in (for the tests: it has to be a single one per connection).</summary>
     public int Logins { get; private set; }
 
     public bool IsConnected => Status == FeedStatus.Connected;
@@ -71,7 +71,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         w.TrySetResult();
     }
 
-    /// <summary>Corta la conexión y vuelve a entrar (por ejemplo tras cambiar la configuración o al despertar la Mac).</summary>
+    /// <summary>Drops the connection and logs in again (for example after changing the configuration or when the Mac wakes up).</summary>
     public void Reconnect()
     {
         lock (_gate) _conn?.Cancel();
@@ -89,11 +89,11 @@ internal sealed class RithmicTickerPlant : IDisposable
         }
         catch (TimeoutException)
         {
-            return (false, StatusMessage ?? "Rithmic no respondió a tiempo");
+            return (false, StatusMessage ?? "Rithmic did not respond in time");
         }
     }
 
-    // ------------------------------------------------------------------ suscripciones
+    // ------------------------------------------------------------------ subscriptions
 
     private Sub GetOrCreate(Instrument instrument)
     {
@@ -114,7 +114,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         if (Status == FeedStatus.Connected)
             sink.OnStatus(instrument, FeedStatus.Connected, sub.Subscribed ? $"Rithmic: {sub.Symbol} ({_settings().System})" : StatusMessage);
         else
-            sink.OnStatus(instrument, Status == FeedStatus.Disconnected ? FeedStatus.Connecting : Status, StatusMessage ?? "Conectando a Rithmic…");
+            sink.OnStatus(instrument, Status == FeedStatus.Disconnected ? FeedStatus.Connecting : Status, StatusMessage ?? "Connecting to Rithmic…");
         _ = KickAsync(sub);
     }
 
@@ -128,7 +128,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         }
     }
 
-    /// <summary>Saca la suscripción si ya nadie la usa (y avisa a Rithmic si el contrato quedó sin interesados).</summary>
+    /// <summary>Removes the subscription if nobody is using it any more (and tells Rithmic if the contract was left with no takers).</summary>
     private void Cleanup(Sub sub)
     {
         if (sub.Sinks.Count > 0 || sub.Probes > 0) return;
@@ -137,7 +137,7 @@ internal sealed class RithmicTickerPlant : IDisposable
             _ = SafeSend(c, MarketData(sub.Symbol, sub.Exchange, 2), CancellationToken.None);
     }
 
-    /// <summary>Contrato del mes y última operación: de la suscripción en vivo si la hay, si no una consulta corta.</summary>
+    /// <summary>Front-month contract and last trade: from the live subscription if there is one, otherwise a short query.</summary>
     public async Task<RithmicContract> ResolveAsync(Instrument instrument, CancellationToken ct)
     {
         Sub sub;
@@ -156,7 +156,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         }
         catch (TimeoutException)
         {
-            throw new TimeoutException("Rithmic no respondió el contrato del mes: " + (StatusMessage ?? "sin conexión"));
+            throw new TimeoutException("Rithmic did not reply with the front-month contract: " + (StatusMessage ?? "not connected"));
         }
         finally
         {
@@ -168,7 +168,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         }
     }
 
-    /// <summary>Si ya hay sesión, pide el contrato del mes de una suscripción nueva.</summary>
+    /// <summary>If there is already a session, it requests the front-month contract of a new subscription.</summary>
     private async Task KickAsync(Sub sub)
     {
         RithmicClient? c;
@@ -190,7 +190,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         }
         catch (Exception)
         {
-            // la conexión se cayó: el ciclo principal reconecta y vuelve a pedir todo
+            // the connection dropped: the main loop reconnects and requests everything again
         }
     }
 
@@ -250,7 +250,7 @@ internal sealed class RithmicTickerPlant : IDisposable
             sink.OnStatus(sub.Instrument, status, message);
     }
 
-    // ------------------------------------------------------------------ conexión
+    // ------------------------------------------------------------------ connection
 
     private async Task WaitWake(TimeSpan max, CancellationToken stop)
     {
@@ -283,7 +283,7 @@ internal sealed class RithmicTickerPlant : IDisposable
             var s = _settings();
             if (string.IsNullOrWhiteSpace(s.User))
             {
-                Broadcast(FeedStatus.Error, "Configurá tu usuario de Rithmic en Conexiones");
+                Broadcast(FeedStatus.Error, "Set your Rithmic user in Connections");
                 SetConnected(false, StatusMessage!);
                 await WaitWake(TimeSpan.FromMinutes(5), stop).ConfigureAwait(false);
                 ResetConnected();
@@ -296,14 +296,14 @@ internal sealed class RithmicTickerPlant : IDisposable
             var client = new RithmicClient();
             try
             {
-                Broadcast(FeedStatus.Connecting, $"Conectando a Rithmic ({s.System})…");
+                Broadcast(FeedStatus.Connecting, $"Connecting to Rithmic ({s.System})…");
                 var aggregated = await RithmicClient.AggregatedQuotesFor(s.Uri, s.System, s.AggregatedQuotes, ct).ConfigureAwait(false);
                 await client.ConnectAsync(s.Uri, ct, s.TimeoutMs).ConfigureAwait(false);
                 var login = await client.LoginAsync(s.User, s.Password, s.System, s.AppName, s.AppVersion, 1, ct, aggregated).ConfigureAwait(false);
                 Logins++;
                 if (!login.Ok)
                 {
-                    // usuario, contraseña o permiso: no se insiste en bucle (se reintenta al cambiar la configuración)
+                    // user, password or permission: it does not keep retrying in a loop (it is retried when the configuration changes)
                     Broadcast(FeedStatus.Error, login.Message);
                     SetConnected(false, login.Message);
                     await client.DisposeAsync().ConfigureAwait(false);
@@ -327,11 +327,11 @@ internal sealed class RithmicTickerPlant : IDisposable
                     }
                 }
 
-                Broadcast(FeedStatus.Connected, $"Rithmic conectado ({s.System})");
+                Broadcast(FeedStatus.Connected, $"Rithmic connected ({s.System})");
                 SetConnected(true, login.Message);
                 foreach (var sub in AllSubs()) await AskFrontMonth(client, sub, ct).ConfigureAwait(false);
 
-                // una sola lectura pendiente a la vez (dos a la vez rompen el WebSocket y forzaban reconexiones)
+                // a single pending read at a time (two at once break the WebSocket and were forcing reconnects)
                 Task<ProtoMessage?>? pending = null;
                 while (!ct.IsCancellationRequested && client.IsOpen)
                 {
@@ -353,12 +353,12 @@ internal sealed class RithmicTickerPlant : IDisposable
             }
             catch (OperationCanceledException)
             {
-                // reconexión pedida (cambio de configuración, "Reconectar ahora")
+                // reconnect requested (configuration change, "Reconnect now")
             }
             catch (Exception ex)
             {
                 failures++;
-                Broadcast(FeedStatus.Reconnecting, $"Reconectando a Rithmic · intento {failures} ({ex.Message})");
+                Broadcast(FeedStatus.Reconnecting, $"Reconnecting to Rithmic · attempt {failures} ({ex.Message})");
             }
             finally
             {
@@ -374,7 +374,7 @@ internal sealed class RithmicTickerPlant : IDisposable
             }
 
             if (stop.IsCancellationRequested) break;
-            if (Status != FeedStatus.Error) Broadcast(FeedStatus.Reconnecting, failures > 0 ? $"Reconectando a Rithmic · intento {failures}" : "Reconectando a Rithmic…");
+            if (Status != FeedStatus.Error) Broadcast(FeedStatus.Reconnecting, failures > 0 ? $"Reconnecting to Rithmic · attempt {failures}" : "Reconnecting to Rithmic…");
             await Task.WhenAny(Task.Delay(LiveSubscription.Backoff(failures), stop), WakeTask()).ContinueWith(_ => { }).ConfigureAwait(false);
         }
 
@@ -386,7 +386,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         lock (_gate) return _wake.Task;
     }
 
-    /// <summary>Plazos: sin contrato a los 3 s se suscribe al símbolo tal cual; sin foto a los 4 s se da por listo.</summary>
+    /// <summary>Deadlines: with no contract after 3 s it subscribes to the symbol as is; with no snapshot after 4 s it is considered ready.</summary>
     private async Task TimersAsync(RithmicClient c, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
@@ -405,7 +405,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         lock (_gate) return _subs.Values.Where(s => s.Subscribed && s.Symbol == symbol && (exchange == null || s.Exchange == exchange)).ToArray();
     }
 
-    /// <summary>Atiende un mensaje; devuelve false si Rithmic cerró la sesión.</summary>
+    /// <summary>Handles a message; returns false if Rithmic closed the session.</summary>
     private async Task<bool> HandleAsync(RithmicClient c, ProtoMessage m, CancellationToken ct)
     {
         string tag = m.Strings(Rp.UserMsg).FirstOrDefault() ?? "";
@@ -429,7 +429,7 @@ internal sealed class RithmicTickerPlant : IDisposable
                 var parts = tag.Split('|');
                 foreach (var sub in ByContract(parts.ElementAtOrDefault(1), parts.ElementAtOrDefault(2)))
                 {
-                    foreach (var sink in Sinks(sub)) sink.OnStatus(sub.Instrument, FeedStatus.Error, $"Rithmic rechazó la suscripción a {sub.Symbol}: {string.Join(" ", codes)}");
+                    foreach (var sink in Sinks(sub)) sink.OnStatus(sub.Instrument, FeedStatus.Error, $"Rithmic rejected the subscription to {sub.Symbol}: {string.Join(" ", codes)}");
                     MarkReady(sub);
                 }
 
@@ -444,7 +444,7 @@ internal sealed class RithmicTickerPlant : IDisposable
                 foreach (var sub in ByContract(m.String(Rp.Symbol), m.String(Rp.Exchange)))
                 {
                     if (time != null) sub.LastTrade = time;
-                    // la primera foto dice cuándo fue la última operación (con el mercado cerrado, la historia termina ahí)
+                    // the first snapshot says when the last trade was (with the market closed, the history ends there)
                     if (!sub.Ready && (time != null || snapshot)) MarkReady(sub);
                     if (snapshot || size <= 0) continue;
                     decimal price = (decimal)m.Double(Rp.TradePrice);
@@ -464,7 +464,7 @@ internal sealed class RithmicTickerPlant : IDisposable
                     DepthUpdate update;
                     lock (sub.Book)
                     {
-                        // solo mejor bid/ask: se borra el nivel anterior cuando cambia el precio
+                        // best bid/ask only: the previous level is cleared when the price changes
                         if (m.Has(Rp.BidPrice))
                         {
                             long bid = inst.ToTicks((decimal)m.Double(Rp.BidPrice));
@@ -490,8 +490,8 @@ internal sealed class RithmicTickerPlant : IDisposable
 
                 break;
             }
-            case 77: // ForcedLogout: otro programa entró con el mismo usuario
-                Broadcast(FeedStatus.Reconnecting, "Rithmic cortó la sesión: otro programa entró con tu usuario (¿ATAS o R|Trader conectados al mismo tiempo?). Reintentando…");
+            case 77: // ForcedLogout: another program logged in with the same user
+                Broadcast(FeedStatus.Reconnecting, "Rithmic dropped the session: another program signed in with your user (ATAS or R|Trader connected at the same time?). Retrying…");
                 return false;
         }
 
@@ -506,8 +506,8 @@ internal sealed class RithmicTickerPlant : IDisposable
 }
 
 /// <summary>
-/// La única sesión de historia de una conexión de Rithmic: los pedidos (ticks y velas de cualquier contrato)
-/// van de a uno por la misma conexión, así nunca hay dos sesiones de historia que se corten entre sí.
+/// The single history session of a Rithmic connection: the requests (ticks and candles of any contract)
+/// go one at a time over the same connection, so there are never two history sessions cutting each other off.
 /// </summary>
 internal sealed class RithmicHistoryPlant : IDisposable
 {
@@ -521,10 +521,10 @@ internal sealed class RithmicHistoryPlant : IDisposable
         _settings = settings;
     }
 
-    /// <summary>Veces que inició sesión (para las pruebas).</summary>
+    /// <summary>Times it logged in (for the tests).</summary>
     public int Logins { get; private set; }
 
-    /// <summary>Corre un pedido con la sesión de historia (cada uno con su etiqueta para no mezclar respuestas).</summary>
+    /// <summary>Runs a request with the history session (each one with its own tag so responses do not get mixed).</summary>
     public async Task RunAsync(Func<RithmicClient, string, CancellationToken, Task> work, CancellationToken ct)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -534,14 +534,14 @@ internal sealed class RithmicHistoryPlant : IDisposable
             {
                 await DropAsync().ConfigureAwait(false);
                 var s = _settings();
-                if (string.IsNullOrWhiteSpace(s.User)) throw new InvalidOperationException("Configurá tu usuario de Rithmic en Conexiones");
+                if (string.IsNullOrWhiteSpace(s.User)) throw new InvalidOperationException("Set your Rithmic user in Connections");
                 var c = new RithmicClient();
                 try
                 {
                     await c.ConnectAsync(s.Uri, ct, s.TimeoutMs).ConfigureAwait(false);
                     var login = await c.LoginAsync(s.User, s.Password, s.System, s.AppName, s.AppVersion, 3, ct).ConfigureAwait(false);
                     Logins++;
-                    if (!login.Ok) throw new InvalidOperationException("Historia de Rithmic: " + login.Message);
+                    if (!login.Ok) throw new InvalidOperationException("Rithmic history: " + login.Message);
                     _client = c;
                 }
                 catch
@@ -558,7 +558,7 @@ internal sealed class RithmicHistoryPlant : IDisposable
             }
             catch
             {
-                // a medio pedido (cancelado o caído): se cierra la sesión para que no lleguen restos al próximo
+                // mid-request (cancelled or dropped): the session is closed so no leftovers reach the next one
                 await DropAsync().ConfigureAwait(false);
                 throw;
             }
@@ -576,7 +576,7 @@ internal sealed class RithmicHistoryPlant : IDisposable
         if (c != null) await c.DisposeAsync().ConfigureAwait(false);
     }
 
-    /// <summary>Cierra la sesión (la próxima vez entra con la configuración nueva).</summary>
+    /// <summary>Closes the session (next time it logs in with the new configuration).</summary>
     public void Reset()
     {
         _ = Task.Run(async () =>

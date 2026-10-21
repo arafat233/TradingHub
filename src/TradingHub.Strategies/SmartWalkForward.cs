@@ -4,20 +4,20 @@ using TradingHub.Data;
 
 namespace TradingHub.Strategies;
 
-/// <summary>Cómo se buscan los parámetros en cada ventana del walk-forward.</summary>
+/// <summary>How the parameters are searched for in each walk-forward window.</summary>
 public enum SearchMode
 {
-    /// <summary>Grilla completa si es chica (el mapa entero, para ver la meseta); bayesiana si es grande.</summary>
+    /// <summary>The full grid if it is small (the whole map, to see the plateau); Bayesian if it is large.</summary>
     Auto,
 
-    /// <summary>Todas las combinaciones.</summary>
+    /// <summary>Every combination.</summary>
     Grid,
 
-    /// <summary>Optimización bayesiana (TPE): prueba primero donde es más probable que haya algo bueno.</summary>
+    /// <summary>Bayesian optimization (TPE): it tries first where something good is most likely to be.</summary>
     Bayesian,
 }
 
-/// <summary>Un camino fuera de muestra de la validación cruzada combinatoria purgada (CPCV).</summary>
+/// <summary>An out-of-sample path of the purged combinatorial cross-validation (CPCV).</summary>
 public sealed class CpcvPath
 {
     public int Number { get; set; }
@@ -27,7 +27,7 @@ public sealed class CpcvPath
     public int Days { get; set; }
 }
 
-/// <summary>Los valores posibles de cada parámetro que se optimiza (por índice) y cómo se arma cada combinación.</summary>
+/// <summary>The possible values of each optimized parameter (by index) and how each combination is built.</summary>
 public sealed class ParameterSpace
 {
     private readonly List<(string Name, Type Type, double[] Values)> _dims = new();
@@ -40,7 +40,7 @@ public sealed class ParameterSpace
         {
             if (r.IsPeriod)
             {
-                // el período de las velas: una dimensión más, cuyos valores son los lugares en la lista (de corto a largo)
+                // the candle period: one more dimension, whose values are the slots in the list (from short to long)
                 if (!r.Enabled || r.Choices.Count == 0) continue;
                 _choices[_dims.Count] = r.Choices.ToArray();
                 _dims.Add((r.Name, typeof(string), Enumerable.Range(0, r.Choices.Count).Select(i => (double)i).ToArray()));
@@ -50,10 +50,10 @@ public sealed class ParameterSpace
         }
     }
 
-    /// <summary>Los períodos de las velas que se prueban (vacío si el período no se optimiza).</summary>
+    /// <summary>The candle periods that are tried (empty if the period is not optimized).</summary>
     public IReadOnlyList<string> Periods => _choices.Values.FirstOrDefault() ?? Array.Empty<string>();
 
-    /// <summary>Para pruebas: dimensiones con estos tamaños (valores 0, 1, 2…).</summary>
+    /// <summary>For tests: dimensions with these sizes (values 0, 1, 2…).</summary>
     public ParameterSpace(params int[] sizes)
     {
         for (int k = 0; k < sizes.Length; k++) _dims.Add(($"p{k}", typeof(int), Enumerable.Range(0, sizes[k]).Select(v => (double)v).ToArray()));
@@ -73,7 +73,7 @@ public sealed class ParameterSpace
 
     public static string Key(int[] idx) => string.Join(",", idx);
 
-    /// <summary>Todas las combinaciones (la grilla).</summary>
+    /// <summary>Every combination (the grid).</summary>
     public IEnumerable<int[]> All()
     {
         var idx = new int[_dims.Count];
@@ -92,7 +92,7 @@ public sealed class ParameterSpace
         }
     }
 
-    /// <summary>Cuántos pasos de grilla las separan en el parámetro que más difiere (1 = vecinas).</summary>
+    /// <summary>How many grid steps separate them on the parameter that differs most (1 = neighbours).</summary>
     public static int Distance(int[] a, int[] b)
     {
         int d = 0;
@@ -101,30 +101,30 @@ public sealed class ParameterSpace
     }
 }
 
-/// <summary>Una combinación corrida una sola vez sobre toda la historia.</summary>
+/// <summary>A combination run just once over the whole history.</summary>
 internal sealed class ConfigRun
 {
     public required int[] Index { get; init; }
     public required Dictionary<string, object?> Parameters { get; init; }
 
-    /// <summary>Operaciones ordenadas por hora de entrada.</summary>
+    /// <summary>Trades sorted by entry time.</summary>
     public ClosedTrade[] Trades { get; init; } = Array.Empty<ClosedTrade>();
 
-    /// <summary>Capital por hora: la hora del último punto, el último valor y el mínimo de esa hora.</summary>
+    /// <summary>Equity per hour: the hour of the last point, the last value and the minimum of that hour.</summary>
     public long[] HourTimes { get; init; } = Array.Empty<long>();
     public float[] HourLast { get; init; } = Array.Empty<float>();
     public float[] HourMin { get; init; } = Array.Empty<float>();
     public string? Error { get; init; }
     public bool Ok => Error == null;
 
-    /// <summary>Lo medido en cada ventana (desde, hasta).</summary>
+    /// <summary>What was measured in each window (from, to).</summary>
     public ConcurrentDictionary<(long, long), PerformanceMetrics> Windows { get; } = new();
 }
 
 /// <summary>
-/// Cada combinación se corre una sola vez sobre toda la historia, con los indicadores calientes y el contexto de mercado
-/// como en vivo, y las ventanas se miden recortando ese resultado: el walk-forward y la validación cruzada no repiten
-/// backtests. Una ventana solo usa lo que pasó dentro de ella (el motor nunca mira hacia adelante).
+/// Each combination is run just once over the whole history, with the indicators warm and the market context
+/// as it is live, and the windows are measured by trimming that result: the walk-forward and the cross-validation do not repeat
+/// backtests. A window only uses what happened inside it (the engine never looks ahead).
 /// </summary>
 internal sealed class ConfigCache
 {
@@ -153,7 +153,7 @@ internal sealed class ConfigCache
     public bool Crypto { get; }
     public decimal Capital => _settings.InitialCapital;
 
-    /// <summary>Combinaciones distintas que se corrieron.</summary>
+    /// <summary>Distinct combinations that were run.</summary>
     public int Count => _runs.Count;
 
     public IEnumerable<ConfigRun> Done => _runs.Values.Where(l => l.IsValueCreated).Select(l => l.Value);
@@ -163,7 +163,7 @@ internal sealed class ConfigCache
 
     public bool Has(int[] idx) => _runs.TryGetValue(ParameterSpace.Key(idx), out var l) && l.IsValueCreated;
 
-    /// <summary>Corre en paralelo las que falten.</summary>
+    /// <summary>Runs the missing ones in parallel.</summary>
     public void Ensure(IReadOnlyList<int[]> list, int maxParallel, Action? done)
     {
         var options = new ParallelOptions { CancellationToken = _ct, MaxDegreeOfParallelism = maxParallel };
@@ -186,7 +186,7 @@ internal sealed class ConfigCache
         var r = new BacktestEngine(s, _data, settings) { ContextHistory = _context }.Run(_ct);
         if (!r.Ok) return new ConfigRun { Index = idx, Parameters = pars, Error = r.Error };
 
-        // capital por hora (último y mínimo): alcanza para el drawdown y los retornos diarios de cualquier ventana
+        // equity per hour (last and minimum): enough for the drawdown and the daily returns of any window
         var times = new List<long>();
         var last = new List<float>();
         var min = new List<float>();
@@ -221,8 +221,8 @@ internal sealed class ConfigCache
     }
 
     /// <summary>
-    /// Cómo le fue a una combinación en [desde, hasta): las operaciones que entraron en ese rango y el capital de esas
-    /// horas (llevado al capital inicial al empezar el rango).
+    /// How a combination did in [from, to): the trades that entered in that range and the equity of those
+    /// hours (rebased to the initial capital at the start of the range).
     /// </summary>
     public PerformanceMetrics Measure(ConfigRun run, DateTime from, DateTime to) =>
         run.Windows.GetOrAdd((from.Ticks, to.Ticks), _ =>
@@ -231,7 +231,7 @@ internal sealed class ConfigCache
             return PerformanceMetrics.Compute(trades, equity, Capital, Crypto, 0, 0);
         });
 
-    /// <summary>Las operaciones y el capital de un rango, empezando en <paramref name="capital"/>.</summary>
+    /// <summary>The trades and the equity of a range, starting at <paramref name="capital"/>.</summary>
     public (List<ClosedTrade> Trades, List<EquityPoint> Equity) Slice(ConfigRun run, DateTime from, DateTime to, decimal capital)
     {
         var trades = new List<ClosedTrade>();
@@ -250,7 +250,7 @@ internal sealed class ConfigCache
         return (trades, equity);
     }
 
-    /// <summary>Resultado de cada día de <paramref name="days"/> (cambio del capital de punta a punta del día).</summary>
+    /// <summary>Result of each day of <paramref name="days"/> (change in equity from end to end of the day).</summary>
     public static double[] Daily(ConfigRun run, IReadOnlyList<DateOnly> days, double capital)
     {
         var pnl = new double[days.Count];
@@ -273,7 +273,7 @@ internal sealed class ConfigCache
         return pnl;
     }
 
-    /// <summary>Operaciones que entraron cada día.</summary>
+    /// <summary>Trades that entered each day.</summary>
     public static int[] TradesPerDay(ConfigRun run, IReadOnlyList<DateOnly> days)
     {
         var map = new Dictionary<DateOnly, int>();
@@ -313,13 +313,13 @@ internal sealed class ConfigCache
 }
 
 /// <summary>
-/// Optimización bayesiana con TPE (Tree-structured Parzen Estimator, Bergstra y otros, 2011) sobre una grilla discreta:
-/// arranca con puntos bien repartidos (hipercubo latino) y después propone donde la densidad de las combinaciones buenas
-/// supera a la de las malas. Evalúa de a tandas para usar todos los núcleos.
+/// Bayesian optimization with TPE (Tree-structured Parzen Estimator, Bergstra et al., 2011) over a discrete grid:
+/// it starts with well spread out points (Latin hypercube) and afterwards proposes where the density of the good combinations
+/// beats that of the bad ones. It evaluates in batches to use every core.
 /// </summary>
 public static class TpeSearch
 {
-    /// <param name="evaluate">Devuelve el puntaje de cada combinación (−∞ si no sirve, por ejemplo por falta de operaciones).</param>
+    /// <param name="evaluate">Returns the score of each combination (-infinity if it is no good, for example for lack of trades).</param>
     public static List<(int[] Idx, double Score)> Run(ParameterSpace space, Func<IReadOnlyList<int[]>, double[]> evaluate, int budget, int seed, int batch,
         CancellationToken ct = default)
     {
@@ -361,7 +361,7 @@ public static class TpeSearch
             if (seen.Add(ParameterSpace.Key(idx))) points.Add(idx);
         }
 
-        // si el hipercubo repitió puntos (dimensiones chicas), se completa al azar
+        // if the hypercube repeated points (small dimensions), it is filled in at random
         for (int tries = 0; points.Count < n && tries < n * 20; tries++)
         {
             var idx = RandomPoint(space, rnd);
@@ -384,7 +384,7 @@ public static class TpeSearch
         var result = new List<int[]>();
         if (finite.Count < 2)
         {
-            // todavía no hay nada bueno que imitar: al azar
+            // there is nothing good to imitate yet: at random
             for (int tries = 0; result.Count < want && tries < want * 50; tries++)
             {
                 var idx = RandomPoint(space, rnd);
@@ -408,7 +408,7 @@ public static class TpeSearch
             pb[k] = Parzen(bad.Select(x => x[k]), len, h);
         }
 
-        // muchas candidatas sacadas de la densidad de las buenas; se quedan las de mejor cociente buenas/malas
+        // many candidates drawn from the density of the good ones; the best good/bad ratio ones are kept
         var cands = new Dictionary<string, (int[] Idx, double Score)>();
         for (int c = 0; c < Math.Max(48, want * 24); c++)
         {
@@ -436,7 +436,7 @@ public static class TpeSearch
         return result;
     }
 
-    /// <summary>Densidad de Parzen sobre los índices de un parámetro (con un piso para no descartar nada del todo).</summary>
+    /// <summary>Parzen density over the indices of a parameter (with a floor so nothing is ruled out entirely).</summary>
     private static double[] Parzen(IEnumerable<int> points, int len, double h)
     {
         var p = new double[len];
@@ -467,9 +467,9 @@ public static class TpeSearch
 }
 
 /// <summary>
-/// La mejor meseta, no el mejor pico: el puntaje de cada combinación es el promedio con sus vecinas (un paso de grilla en
-/// cada parámetro), achicado hacia la mediana cuando tiene pocas vecinas medidas. Una combinación que gana sola entre
-/// vecinas que pierden es casi siempre suerte; una zona entera que gana, no.
+/// The best plateau, not the best peak: the score of each combination is the average with its neighbours (one grid step in
+/// each parameter), shrunk towards the median when it has few measured neighbours. A combination that wins alone among
+/// neighbours that lose is almost always luck; a whole zone that wins is not.
 /// </summary>
 public static class RobustSelection
 {
@@ -506,14 +506,14 @@ public static class RobustSelection
     }
 }
 
-/// <summary>Medidas de sobreoptimización sobre el resultado diario de todas las combinaciones probadas.</summary>
+/// <summary>Overoptimization measures over the daily result of every combination tested.</summary>
 public static class Overfitting
 {
     /// <summary>
-    /// Probabilidad de sobreoptimización con validación cruzada combinatoriamente simétrica (Bailey, Borwein, López de
-    /// Prado y Zhu, «The Probability of Backtest Overfitting», 2017): parte la historia en bloques y, para cada forma de
-    /// elegir la mitad como «dentro de muestra», toma la combinación con mejor Sharpe ahí y mira dónde queda en la otra
-    /// mitad. PBO = proporción de veces que queda por debajo de la mediana; Loss = proporción de veces que pierde plata.
+    /// Probability of overfitting with combinatorially symmetric cross-validation (Bailey, Borwein, Lopez de
+    /// Prado and Zhu, "The Probability of Backtest Overfitting", 2017): it splits the history into blocks and, for each way of
+    /// picking half of them as "in sample", takes the combination with the best Sharpe there and looks at where it lands in the other
+    /// half. PBO = share of times it lands below the median; Loss = share of times it loses money.
     /// </summary>
     public static (double Pbo, double Loss, int Splits)? Pbo(IReadOnlyList<double[]> daily, int blocks = 10)
     {
@@ -570,7 +570,7 @@ public static class Overfitting
             for (int c = 1; c < n; c++)
                 if (isPerf[c] > isPerf[star])
                     star = c;
-            // rango relativo fuera de muestra (1 = la peor): ω = rango / (n + 1); λ = log(ω / (1 − ω)) ≤ 0 → mitad de abajo
+            // relative out-of-sample rank (1 = the worst): w = rank / (n + 1); lambda = log(w / (1 - w)) <= 0 -> bottom half
             int rank = 1;
             for (int c = 0; c < n; c++)
                 if (c != star && osPerf[c] < osPerf[star])
@@ -585,14 +585,14 @@ public static class Overfitting
     }
 
     /// <summary>
-    /// Validación cruzada combinatoria purgada (López de Prado, «Advances in Financial Machine Learning», 2018): parte la
-    /// historia en grupos seguidos; para cada par de grupos de prueba elige la combinación (por meseta) con los demás días
-    /// —sin los pegados a la prueba (purga y embargo)— y mide cómo le fue en esos dos grupos. Con eso se arman varios
-    /// caminos fuera de muestra completos en vez de uno solo.
+    /// Purged combinatorial cross-validation (Lopez de Prado, "Advances in Financial Machine Learning", 2018): it splits the
+    /// history into consecutive groups; for each pair of test groups it picks the combination (by plateau) using the other days
+    /// -without the ones adjacent to the test (purge and embargo)- and measures how it did on those two groups. With that, several
+    /// complete out-of-sample paths are built instead of just one.
     /// </summary>
-    /// <param name="index">Índice de grilla de cada combinación (para la meseta).</param>
-    /// <param name="daily">Resultado diario de cada combinación.</param>
-    /// <param name="tradesPerDay">Operaciones que entraron cada día, por combinación.</param>
+    /// <param name="index">Grid index of each combination (for the plateau).</param>
+    /// <param name="daily">Daily result of each combination.</param>
+    /// <param name="tradesPerDay">Trades that entered each day, per combination.</param>
     public static List<CpcvPath> Cpcv(IReadOnlyList<int[]> index, IReadOnlyList<double[]> daily, IReadOnlyList<int[]> tradesPerDay, int minTrades,
         double capital, bool crypto, int groups = 8, int embargo = 1)
     {
@@ -608,7 +608,7 @@ public static class Overfitting
         foreach (var pair in Combinations(groups, 2))
         {
             int a = pair[0], b = pair[1];
-            // días de entrenamiento: los que no son de prueba ni están a menos de «embargo» días de un grupo de prueba
+            // training days: the ones that are not test days and are not within "embargo" days of a test group
             var train = new bool[days];
             for (int d = 0; d < days; d++) train[d] = true;
             foreach (var g in new[] { a, b })
@@ -636,7 +636,7 @@ public static class Overfitting
             foreach (var g in new[] { a, b }) pieces[g].Add(daily[pick][bounds[g]..bounds[g + 1]]);
         }
 
-        // cada grupo fue de prueba en (grupos − 1) pares: el camino j toma la j-ésima vez de cada grupo
+        // each group was a test group in (groups - 1) pairs: path j takes the j-th time of each group
         int count = pieces.Min(p => p.Count);
         double ann = Math.Sqrt(crypto ? 365 : 252);
         for (int j = 0; j < count; j++)
@@ -667,7 +667,7 @@ public static class Overfitting
         return paths;
     }
 
-    /// <summary>Sharpe (sin anualizar) de una suma de días: media sobre desvío.</summary>
+    /// <summary>Sharpe (not annualized) of a sum of days: mean over standard deviation.</summary>
     private static double Sharpe(double sum, double sq, int n)
     {
         if (n < 2) return n == 1 ? sum : 0;
@@ -676,7 +676,7 @@ public static class Overfitting
         return var > 0 ? mean / Math.Sqrt(var) : mean > 0 ? 1e6 : mean < 0 ? -1e6 : 0;
     }
 
-    /// <summary>Todas las formas de elegir k de n (en orden).</summary>
+    /// <summary>Every way of picking k out of n (in order).</summary>
     public static IEnumerable<int[]> Combinations(int n, int k)
     {
         var c = Enumerable.Range(0, k).ToArray();

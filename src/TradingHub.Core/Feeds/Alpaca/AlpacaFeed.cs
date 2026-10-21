@@ -6,26 +6,26 @@ using TradingHub.Market;
 
 namespace TradingHub.Feeds.Alpaca;
 
-/// <summary>Conexión de Alpaca: claves de la cuenta (la de práctica alcanza y es gratis en todo el mundo).</summary>
+/// <summary>Alpaca connection: account keys (the practice one is enough and is free worldwide).</summary>
 public sealed class AlpacaSettings
 {
     public string KeyId { get; set; } = "";
     public string Secret { get; set; } = "";
 
-    /// <summary>Datos en vivo: iex (plan gratis) o sip (plan pago, todas las bolsas).</summary>
+    /// <summary>Live data: iex (free plan) or sip (paid plan, every exchange).</summary>
     public string LiveFeed { get; set; } = "iex";
 
-    /// <summary>Servidores alternativos (pruebas).</summary>
+    /// <summary>Alternative servers (tests).</summary>
     public string? DataUrl { get; set; }
     public string? TradingUrl { get; set; }
     public string? StreamUrl { get; set; }
 }
 
 /// <summary>
-/// Acciones y ETFs de EE.UU. por Alpaca: historia tick a tick de TODAS las bolsas (SIP) desde 2016 gratis con el plan
-/// básico (salvo los últimos 15 minutos), velas de 1 minuto y precios en vivo de IEX. SPY, QQQ, IWM y DIA sirven para
-/// estudiar el S&amp;P 500, el Nasdaq 100, el Russell 2000 y el Dow con operaciones reales. Las operaciones no traen el
-/// lado agresor: sale de si el precio subió o bajó (regla del tick).
+/// US stocks and ETFs through Alpaca: tick-by-tick history from EVERY exchange (SIP) since 2016, free on the
+/// basic plan (except the last 15 minutes), 1-minute candles and live IEX prices. SPY, QQQ, IWM and DIA are useful for
+/// studying the S&amp;P 500, the Nasdaq 100, the Russell 2000 and the Dow with real trades. The trades do not carry the
+/// aggressor side: it comes from whether the price went up or down (the tick rule).
 /// </summary>
 public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 {
@@ -48,17 +48,17 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
     public string DisplayName => "Alpaca";
     public bool SupportsHistory => true;
     public bool IsLive => true;
-    public string HistoryNote => "operaciones de todas las bolsas de EE.UU. (SIP) por Alpaca, gratis desde 2016";
+    public string HistoryNote => "trades from every US exchange (SIP) via Alpaca, free since 2016";
 
     private string Data => (_s.DataUrl ?? "https://data.alpaca.markets").TrimEnd('/');
     private string Trading => (_s.TradingUrl ?? "https://paper-api.alpaca.markets").TrimEnd('/');
     private string Stream => (_s.StreamUrl ?? "wss://stream.data.alpaca.markets/v2/" + (_s.LiveFeed == "sip" ? "sip" : "iex")).TrimEnd('/');
 
-    /// <summary>GET con el límite del plan gratis (200 por minuto) y reintento si Alpaca pide esperar.</summary>
+    /// <summary>GET with the free plan's limit (200 per minute) and a retry if Alpaca asks us to wait.</summary>
     private async Task<JsonDocument> GetAsync(string url, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_s.KeyId) || string.IsNullOrWhiteSpace(_s.Secret))
-            throw new InvalidOperationException("Faltan la API key y el secret de Alpaca (se generan gratis en tu cuenta de práctica).");
+            throw new InvalidOperationException("The Alpaca API key and secret are missing (they are generated for free in your practice account).");
         for (int attempt = 0; ; attempt++)
         {
             await _rate.WaitAsync(ct).ConfigureAwait(false);
@@ -83,7 +83,7 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 
             if (!resp.IsSuccessStatusCode)
             {
-                // Alpaca a veces responde una página HTML (nginx): se muestra solo el código
+                // Alpaca sometimes answers with an HTML page (nginx): only the code is shown
                 string msg = body.TrimStart().StartsWith('<') ? resp.ReasonPhrase ?? "" : body;
                 try
                 {
@@ -96,8 +96,8 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 
                 throw new HttpRequestException(resp.StatusCode switch
                 {
-                    System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => "Alpaca rechazó las claves (o tu plan no incluye esos datos): " + msg,
-                    _ => $"Alpaca respondió {(int)resp.StatusCode}: {msg}",
+                    System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => "Alpaca rejected the keys (or your plan does not include that data): " + msg,
+                    _ => $"Alpaca replied {(int)resp.StatusCode}: {msg}",
                 });
             }
 
@@ -133,7 +133,7 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 
     private static string Rfc(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", Inv);
 
-    /// <summary>Lo más nuevo que deja pedir el plan gratis (SIP con 15 minutos de demora).</summary>
+    /// <summary>The newest the free plan allows requesting (SIP with a 15-minute delay).</summary>
     private static DateTime Latest => DateTime.UtcNow.AddMinutes(-16);
 
     public async Task LoadTradesAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc, long? fromId,
@@ -186,7 +186,7 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
         return list.Count > 0 ? list : null;
     }
 
-    // ===================================================================== velas
+    // ===================================================================== candles
 
     public Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct) => Task.FromResult<DateTime?>(new DateTime(2016, 1, 4, 0, 0, 0, DateTimeKind.Utc));
 
@@ -224,7 +224,7 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 
     public string CacheTag => "alpaca";
 
-    // ===================================================================== en vivo (IEX en el plan gratis)
+    // ===================================================================== live (IEX on the free plan)
 
     public IDisposable Subscribe(Instrument instrument, IMarketDataSink sink)
     {
@@ -244,11 +244,11 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
         {
             using var ws = new ClientWebSocket();
             var conn = live.BeginConnection();
-            string reason = "se cortó la conexión";
+            string reason = "the connection dropped";
             bool any = false;
             try
             {
-                if (!ever) live.SetChannel("datos", FeedStatus.Connecting, "Conectando a Alpaca…");
+                if (!ever) live.SetChannel("data", FeedStatus.Connecting, "Connecting to Alpaca…");
                 using (var c = CancellationTokenSource.CreateLinkedTokenSource(conn.Token))
                 {
                     c.CancelAfter(TimeSpan.FromSeconds(15));
@@ -273,7 +273,7 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 
                     if (r.MessageType == WebSocketMessageType.Close)
                     {
-                        reason = "Alpaca cerró la conexión";
+                        reason = "Alpaca closed the connection";
                         break;
                     }
 
@@ -286,7 +286,7 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
                         switch (type)
                         {
                             case "success" when m.TryGetProperty("msg", out var msg) && msg.GetString() == "authenticated":
-                                live.SetChannel("datos", FeedStatus.Connected, null);
+                                live.SetChannel("data", FeedStatus.Connected, null);
                                 ever = true;
                                 failures = 0;
                                 break;
@@ -325,7 +325,7 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
             }
             catch (OperationCanceledException)
             {
-                reason = live.WasRequested(ref requested) ? "reconexión pedida" : "no respondió a tiempo";
+                reason = live.WasRequested(ref requested) ? "reconnection requested" : "it did not respond in time";
                 if (!any) failures++;
             }
             catch (Exception ex)
@@ -340,22 +340,22 @@ public sealed class AlpacaFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 
             if (ct.IsCancellationRequested) break;
             var wait = LiveSubscription.Backoff(failures);
-            live.SetChannel("datos", FeedStatus.Reconnecting, $"Reconectando en {wait.TotalSeconds:0} s ({reason})");
+            live.SetChannel("data", FeedStatus.Reconnecting, $"Reconnecting in {wait.TotalSeconds:0} s ({reason})");
             await Task.Delay(wait, ct).ContinueWith(_ => { }).ConfigureAwait(false);
         }
 
-        live.SetChannel("datos", FeedStatus.Disconnected, null);
+        live.SetChannel("data", FeedStatus.Disconnected, null);
     }
 
     private static Task SendAsync(ClientWebSocket ws, string text, CancellationToken ct) =>
         ws.SendAsync(Encoding.UTF8.GetBytes(text), WebSocketMessageType.Text, true, ct);
 
-    /// <summary>Prueba las claves pidiendo un día de operaciones de SPY.</summary>
+    /// <summary>Tests the keys by requesting a day of SPY trades.</summary>
     public async Task<(bool Ok, string Message)> TestAsync(CancellationToken ct)
     {
         using var doc = await GetAsync($"{Data}/v2/stocks/SPY/trades?start={Uri.EscapeDataString(Rfc(DateTime.UtcNow.AddDays(-5)))}&end={Uri.EscapeDataString(Rfc(Latest))}&limit=5&feed=sip", ct).ConfigureAwait(false);
         int n = doc.RootElement.TryGetProperty("trades", out var t) && t.ValueKind == JsonValueKind.Array ? t.GetArrayLength() : 0;
-        return (true, n > 0 ? "Claves OK: historia tick a tick de todas las bolsas (SIP) disponible (SPY, QQQ…)." : "Claves OK, pero no llegaron operaciones de SPY de los últimos días.");
+        return (true, n > 0 ? "Keys OK: tick-by-tick history for every exchange (SIP) available (SPY, QQQ…)." : "Keys OK, but no SPY trades arrived for the last few days.");
     }
 
     public void Dispose() => _http.Dispose();

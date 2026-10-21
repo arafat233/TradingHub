@@ -1,19 +1,19 @@
 namespace TradingHub.Market;
 
-/// <summary>Lado agresor de una operación.</summary>
+/// <summary>Aggressor side of a trade.</summary>
 public enum TradeSide : byte
 {
-    /// <summary>Desconocido / entre bid y ask.</summary>
+    /// <summary>Unknown / between bid and ask.</summary>
     None = 0,
 
-    /// <summary>Comprador agresivo: pegó contra el ask (suma al volumen Ask).</summary>
+    /// <summary>Aggressive buyer: it hit the ask (adds to the Ask volume).</summary>
     Buy = 1,
 
-    /// <summary>Vendedor agresivo: pegó contra el bid (suma al volumen Bid).</summary>
+    /// <summary>Aggressive seller: it hit the bid (adds to the Bid volume).</summary>
     Sell = 2,
 }
 
-/// <summary>Una operación (tick) del tape.</summary>
+/// <summary>A trade (tick) from the tape.</summary>
 public readonly struct Trade
 {
     public readonly long Id;

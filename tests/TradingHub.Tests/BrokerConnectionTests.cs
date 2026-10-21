@@ -11,7 +11,7 @@ using TradingHub.Trading;
 
 namespace TradingHub.Tests;
 
-/// <summary>cTrader (Open API JSON) y Tradovate (REST + WebSocket) contra servidores de mentira con sus mensajes reales.</summary>
+/// <summary>cTrader (Open API JSON) and Tradovate (REST + WebSocket) against fake servers with their real messages.</summary>
 public class BrokerConnectionTests
 {
     private static readonly DateOnly Day = new(2026, 10, 12);
@@ -47,13 +47,13 @@ public class BrokerConnectionTests
     // ===================================================================== cTrader
 
     [Fact]
-    public async Task CTrader_autentica_elige_la_cuenta_demo_y_lista_los_simbolos()
+    public async Task CTrader_authenticates_picks_the_demo_account_and_lists_the_symbols()
     {
         using var fake = new FakeCTrader();
         using var feed = new CTraderFeed(() => fake.Settings());
         var (ok, msg) = await feed.TestAsync(CancellationToken.None);
         Assert.True(ok);
-        Assert.Contains("FakeBroker 5012345", msg); // la demo, no la real
+        Assert.Contains("FakeBroker 5012345", msg); // the demo one, not the real one
         var list = await feed.GetInstrumentsAsync(CancellationToken.None);
         Assert.Equal("US100", list[0].Symbol);
         Assert.Equal(0.01m, list[0].TickSize);
@@ -63,7 +63,7 @@ public class BrokerConnectionTests
     }
 
     [Fact]
-    public async Task CTrader_baja_ticks_con_paginas_y_diferencias_sin_perder_ni_repetir()
+    public async Task CTrader_downloads_ticks_with_pages_and_differences_without_losing_or_repeating()
     {
         using var fake = new FakeCTrader { TickPage = 30 };
         using var feed = new CTraderFeed(() => fake.Settings());
@@ -74,12 +74,12 @@ public class BrokerConnectionTests
         Assert.Equal(20000.00m, trades[0].Price);
         Assert.Equal(20000.99m, trades[^1].Price);
         Assert.True(trades.Zip(trades.Skip(1)).All(p => p.Second.Time > p.First.Time && p.Second.Id > p.First.Id));
-        Assert.All(trades.Skip(1), t => Assert.Equal(TradeSide.Buy, t.Side)); // siempre sube
-        Assert.True(fake.TickRequests >= 4); // 100 ticks de a 30
+        Assert.All(trades.Skip(1), t => Assert.Equal(TradeSide.Buy, t.Side)); // it always rises
+        Assert.True(fake.TickRequests >= 4); // 100 ticks, 30 at a time
     }
 
     [Fact]
-    public async Task CTrader_da_velas_y_precios_en_vivo()
+    public async Task CTrader_gives_candles_and_live_prices()
     {
         using var fake = new FakeCTrader();
         using var feed = new CTraderFeed(() => fake.Settings());
@@ -100,12 +100,12 @@ public class BrokerConnectionTests
             await Until(() => sink.Trades.Count >= 3);
         }
 
-        Assert.Equal(new[] { 20001.00m, 20001.01m, 20001.02m }, sink.Trades.Select(t => t.Price)); // al bid
+        Assert.Equal(new[] { 20001.00m, 20001.01m, 20001.02m }, sink.Trades.Select(t => t.Price)); // at the bid
         Assert.NotEmpty(sink.Depth);
     }
 
     [Fact]
-    public async Task CTrader_con_secret_malo_explica_el_error()
+    public async Task CTrader_with_a_bad_secret_explains_the_error()
     {
         using var fake = new FakeCTrader();
         using var feed = new CTraderFeed(() => fake.Settings("MAL"));
@@ -119,16 +119,16 @@ public class BrokerConnectionTests
     private static readonly Instrument Es = new() { Symbol = "ES", FeedId = TradovateFeed.FeedId, Exchange = "CME", TickSize = 0.25m, VolumeStep = 1, PointValue = 50 };
 
     [Fact]
-    public async Task Tradovate_inicia_sesion_con_la_api_key_y_comparte_un_solo_token()
+    public async Task Tradovate_logs_in_with_the_api_key_and_shares_a_single_token()
     {
         using var fake = new FakeTradovate();
         using var feed = new TradovateFeed(() => fake.Settings());
         var (ok, msg) = await feed.TestAsync(CancellationToken.None);
         Assert.True(ok);
         Assert.Contains("demo", msg);
-        Assert.Contains("1 cuenta", msg);
-        Assert.Equal(1, fake.Logins); // un login: REST y los sockets usan el mismo token
-        Assert.Equal("MD1", fake.MdToken); // el socket de datos usa el token de datos
+        Assert.Contains("1 account", msg);
+        Assert.Equal(1, fake.Logins); // one login: REST and the sockets use the same token
+        Assert.Equal("MD1", fake.MdToken); // the data socket uses the data token
 
         using var bad = new TradovateFeed(() => fake.Settings("mal"));
         var ex = await Assert.ThrowsAsync<TradovateException>(() => bad.TestAsync(CancellationToken.None));
@@ -136,25 +136,25 @@ public class BrokerConnectionTests
     }
 
     [Fact]
-    public async Task Tradovate_baja_historia_tick_a_tick_paginada_con_el_lado_agresor()
+    public async Task Tradovate_downloads_paginated_tick_by_tick_history_with_the_aggressor_side()
     {
         using var fake = new FakeTradovate();
         using var feed = new TradovateFeed(() => fake.Settings());
         var trades = new List<Trade>();
         var from = Day.ToDateTime(new TimeOnly(14, 0), DateTimeKind.Utc);
         await feed.LoadTradesAsync(Es, from, from.AddHours(1), null, b => { trades.AddRange(b); return true; }, null, CancellationToken.None);
-        Assert.Equal(12, trades.Count); // de a 5 por pedido, sin repetir
+        Assert.Equal(12, trades.Count); // 5 at a time per request, with no repeats
         Assert.True(fake.ChartRequests >= 3);
         Assert.Equal(5000m, trades[0].Price);
         Assert.Equal(5002.75m, trades[^1].Price);
         Assert.True(trades.Zip(trades.Skip(1)).All(p => p.Second.Time > p.First.Time && p.Second.Id > p.First.Id));
-        // id par: operó al ask (compra); impar: al bid (venta)
+        // even id: it traded at the ask (a buy); odd: at the bid (a sell)
         Assert.Equal(Enumerable.Range(0, 12).Select(i => i % 2 == 0 ? TradeSide.Buy : TradeSide.Sell), trades.Select(t => t.Side));
         Assert.Contains("md/cancelChart", fake.MdRequests);
     }
 
     [Fact]
-    public async Task Tradovate_en_vivo_manda_la_cinta_y_el_libro()
+    public async Task Tradovate_live_sends_the_tape_and_the_book()
     {
         using var fake = new FakeTradovate();
         using var feed = new TradovateFeed(() => fake.Settings());
@@ -164,16 +164,16 @@ public class BrokerConnectionTests
             await Until(() => sink.Trades.Count >= 2 && sink.Depth.Count >= 1);
         }
 
-        Assert.Equal(2, sink.Trades.Count); // el tick de historia de la suscripción no se repite
+        Assert.Equal(2, sink.Trades.Count); // the subscription's history tick is not repeated
         Assert.Equal(5000.25m, sink.Trades[0].Price);
-        Assert.Equal(TradeSide.Buy, sink.Trades[0].Side); // al ask
-        Assert.Equal(TradeSide.Sell, sink.Trades[1].Side); // al bid
+        Assert.Equal(TradeSide.Buy, sink.Trades[0].Side); // at the ask
+        Assert.Equal(TradeSide.Sell, sink.Trades[1].Side); // at the bid
         Assert.Contains(sink.Status, s => s.Item1 == FeedStatus.Connected);
         Assert.Contains("md/subscribeDOM", fake.MdRequests);
     }
 
     [Fact]
-    public async Task Tradovate_opera_la_cuenta_con_ordenes_ejecuciones_y_posicion()
+    public async Task Tradovate_trades_the_account_with_orders_fills_and_position()
     {
         using var fake = new FakeTradovate();
         using var feed = new TradovateFeed(() => fake.Settings());
@@ -200,10 +200,10 @@ public class BrokerConnectionTests
         Assert.Equal(fake.Contract, sent["symbol"]!.GetValue<string>());
         Assert.False(sent["isAutomated"]!.GetValue<bool>());
 
-        // límite: queda activa, se modifica y se cancela
-        var limit = broker.Limit(OrderDirections.Buy, 1, 4990, "Estrategia: entrada");
+        // limit: it stays active, is modified and is cancelled
+        var limit = broker.Limit(OrderDirections.Buy, 1, 4990, "Strategy: entry");
         await Until(() => limit.ExchangeOrderId.Length > 0 && broker.ActiveOrders.Contains(limit));
-        Assert.True(fake.Orders[1]["isAutomated"]!.GetValue<bool>()); // de una estrategia
+        Assert.True(fake.Orders[1]["isAutomated"]!.GetValue<bool>()); // from a strategy
         Assert.Equal(4990m, fake.Orders[1]["price"]!.GetValue<decimal>());
         broker.Modify(limit, 4985);
         await Until(() => fake.Orders.Count >= 3);

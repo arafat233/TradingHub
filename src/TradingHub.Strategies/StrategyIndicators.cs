@@ -1,6 +1,6 @@
 namespace TradingHub.Strategies;
 
-/// <summary>Dato de la vela que usa un indicador.</summary>
+/// <summary>Candle data an indicator uses.</summary>
 public enum PriceSource
 {
     Close,
@@ -14,8 +14,8 @@ public enum PriceSource
 }
 
 /// <summary>
-/// Serie de valores por vela. El índice cuenta hacia atrás: <c>serie[0]</c> es el valor de la
-/// última vela cerrada, <c>serie[1]</c> el anterior, etc.
+/// Series of values per candle. The index counts backwards: <c>series[0]</c> is the value of the
+/// last closed candle, <c>series[1]</c> the previous one, etc.
 /// </summary>
 public class Series
 {
@@ -23,13 +23,13 @@ public class Series
 
     public string Name { get; protected init; } = "";
 
-    /// <summary>Valor de hace <paramref name="ago"/> velas (0 si todavía no hay datos).</summary>
+    /// <summary>Value from <paramref name="ago"/> candles ago (0 if there is no data yet).</summary>
     public decimal this[int ago] => ago >= 0 && ago < Values.Count ? Values[Values.Count - 1 - ago] : 0m;
 
     public decimal Value => this[0];
     public int Count => Values.Count;
 
-    /// <summary>Si ya tiene velas suficientes para que el valor sea válido.</summary>
+    /// <summary>Whether it already has enough candles for the value to be valid.</summary>
     public virtual bool IsReady => Values.Count > 0;
 
     public static implicit operator decimal(Series s) => s.Value;
@@ -55,7 +55,7 @@ public class Series
     public override string ToString() => $"{Name} = {Value}";
 }
 
-/// <summary>Serie calculada con una función propia (para combinar indicadores).</summary>
+/// <summary>Series computed with a custom function (to combine indicators).</summary>
 public sealed class CustomSeries : Series
 {
     private readonly Func<BarSeries, decimal> _calc;
@@ -69,7 +69,7 @@ public sealed class CustomSeries : Series
     internal override void Update(BarSeries bars) => Push(_calc(bars));
 }
 
-/// <summary>Media móvil simple.</summary>
+/// <summary>Simple moving average.</summary>
 public sealed class Sma : Series
 {
     private readonly int _period;
@@ -96,7 +96,7 @@ public sealed class Sma : Series
     }
 }
 
-/// <summary>Media móvil exponencial.</summary>
+/// <summary>Exponential moving average.</summary>
 public sealed class Ema : Series
 {
     private readonly int _period;
@@ -122,7 +122,7 @@ public sealed class Ema : Series
         _n++;
         if (_n <= _period)
         {
-            // arranca con la media simple de las primeras velas
+            // it starts with the simple average of the first candles
             _sum += v;
             return _sum / _n;
         }
@@ -133,7 +133,7 @@ public sealed class Ema : Series
     internal void PushValue(decimal v) => Push(v);
 }
 
-/// <summary>RSI de Wilder (0–100).</summary>
+/// <summary>Wilder's RSI (0-100).</summary>
 public sealed class Rsi : Series
 {
     private readonly int _period;
@@ -180,7 +180,7 @@ public sealed class Rsi : Series
     }
 }
 
-/// <summary>Rango verdadero promedio (volatilidad, en precio).</summary>
+/// <summary>Average true range (volatility, in price).</summary>
 public sealed class Atr : Series
 {
     private readonly int _period;
@@ -206,7 +206,7 @@ public sealed class Atr : Series
     }
 }
 
-/// <summary>Máximo de las últimas N velas.</summary>
+/// <summary>Highest of the last N candles.</summary>
 public sealed class Highest : Series
 {
     private readonly int _period;
@@ -216,7 +216,7 @@ public sealed class Highest : Series
     {
         _period = Math.Max(1, period);
         _source = source;
-        Name = $"Máximo({_period})";
+        Name = $"Highest({_period})";
     }
 
     public override bool IsReady => Values.Count >= _period;
@@ -229,7 +229,7 @@ public sealed class Highest : Series
     }
 }
 
-/// <summary>Mínimo de las últimas N velas.</summary>
+/// <summary>Lowest of the last N candles.</summary>
 public sealed class Lowest : Series
 {
     private readonly int _period;
@@ -239,7 +239,7 @@ public sealed class Lowest : Series
     {
         _period = Math.Max(1, period);
         _source = source;
-        Name = $"Mínimo({_period})";
+        Name = $"Lowest({_period})";
     }
 
     public override bool IsReady => Values.Count >= _period;
@@ -252,7 +252,7 @@ public sealed class Lowest : Series
     }
 }
 
-/// <summary>Desvío estándar de las últimas N velas.</summary>
+/// <summary>Standard deviation of the last N candles.</summary>
 public sealed class StdDev : Series
 {
     private readonly int _period;
@@ -263,7 +263,7 @@ public sealed class StdDev : Series
     {
         _period = Math.Max(2, period);
         _source = source;
-        Name = $"Desvío({_period})";
+        Name = $"StdDev({_period})";
     }
 
     public override bool IsReady => _window.Count >= _period;
@@ -278,7 +278,7 @@ public sealed class StdDev : Series
     }
 }
 
-/// <summary>Bandas de Bollinger.</summary>
+/// <summary>Bollinger bands.</summary>
 public sealed class Bollinger : Series
 {
     private readonly Sma _mid;
@@ -311,7 +311,7 @@ public sealed class Bollinger : Series
     }
 }
 
-/// <summary>MACD: diferencia de dos EMAs, su señal y el histograma.</summary>
+/// <summary>MACD: difference of two EMAs, its signal and the histogram.</summary>
 public sealed class Macd : Series
 {
     private readonly Ema _fast, _slow, _signal;
@@ -341,7 +341,7 @@ public sealed class Macd : Series
     }
 }
 
-/// <summary>VWAP de la sesión (se reinicia al cambiar de día de sesión).</summary>
+/// <summary>Session VWAP (it resets when the session day changes).</summary>
 public sealed class Vwap : Series
 {
     private readonly Func<DateTime, DateOnly> _session;
@@ -370,7 +370,7 @@ public sealed class Vwap : Series
     }
 }
 
-/// <summary>Delta acumulado (opcionalmente reiniciado en cada sesión).</summary>
+/// <summary>Cumulative delta (optionally reset on each session).</summary>
 public sealed class CumulativeDelta : Series
 {
     private readonly Func<DateTime, DateOnly>? _session;
@@ -380,7 +380,7 @@ public sealed class CumulativeDelta : Series
     internal CumulativeDelta(Func<DateTime, DateOnly>? session)
     {
         _session = session;
-        Name = "Delta acumulado";
+        Name = "Cumulative delta";
     }
 
     internal override void Update(BarSeries bars)

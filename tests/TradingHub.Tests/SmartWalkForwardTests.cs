@@ -4,12 +4,12 @@ using TradingHub.Strategies;
 
 namespace TradingHub.Tests;
 
-/// <summary>El motor de validación: sesiones, ticks comprimidos, búsqueda bayesiana, meseta, PBO y CPCV.</summary>
+/// <summary>The validation engine: sessions, compressed ticks, Bayesian search, plateau, PBO and CPCV.</summary>
 public class SmartWalkForwardTests
 {
     private static readonly Instrument Inst = new() { Symbol = "TEST", FeedId = "test", TickSize = 1m, VolumeStep = 1m, PointValue = 1m };
 
-    /// <summary>Anota cada sesión nueva que le avisa el motor.</summary>
+    /// <summary>Records every new session the engine reports.</summary>
     private sealed class SessionSpy : Strategy
     {
         public List<DateOnly> Sessions { get; } = new();
@@ -22,7 +22,7 @@ public class SmartWalkForwardTests
     }
 
     [Fact]
-    public void La_sesion_cambia_en_los_mismos_ticks_tambien_con_cambio_de_horario()
+    public void The_session_changes_on_the_same_ticks_even_across_a_daylight_saving_change()
     {
         var tz = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
         var session = new SessionSettings { TimeZone = tz, Start = TimeSpan.FromHours(18) };
@@ -32,7 +32,7 @@ public class SmartWalkForwardTests
             for (int i = 0; i < 6 * 24 * 12; i++) list.Add(new Trade(i + 1, start.AddMinutes(5 * i), 100 + i % 9, 1, TradeSide.Buy));
             var data = TickData.FromTrades(Inst, list);
 
-            // lo que tiene que dar: la fecha de sesión de cada tick, como antes (con zona horaria en cada uno)
+            // what it has to give: the session date of each tick, as before (converting time zones on every one)
             var expected = new List<DateOnly>();
             DateOnly last = default;
             foreach (var t in list)
@@ -55,8 +55,8 @@ public class SmartWalkForwardTests
     }
 
     /// <summary>
-    /// Minutos con ráfagas: varias operaciones seguidas al mismo precio y lado en el mismo segundo (como en un futuro de
-    /// verdad), una tendencia suave con vaivén y algo de ruido.
+    /// Minutes with bursts: several trades in a row at the same price and side within the same second (as on a real
+    /// future), a gentle trend with back-and-forth and some noise.
     /// </summary>
     private static TickData Bursty(int days, int seed = 3)
     {
@@ -84,7 +84,7 @@ public class SmartWalkForwardTests
         CommissionPercent = 0, CommissionPerUnit = 0.5m, SlippageTicks = 1, InitialCapital = 100_000,
     };
 
-    /// <summary>Compra cuando rompe el máximo de las últimas N velas y sale a las «Hold» velas (con stop).</summary>
+    /// <summary>Buys when it breaks the high of the last N candles and exits after "Hold" candles (with a stop).</summary>
     private sealed class Breakout : Strategy
     {
         [Parameter, Optimize(4, 40, 4)]
@@ -109,7 +109,7 @@ public class SmartWalkForwardTests
         }
     }
 
-    /// <summary>Lo mismo pero mirando cada operación (no se puede comprimir).</summary>
+    /// <summary>The same but looking at every trade (it cannot be compressed).</summary>
     private sealed class TickWatcher : Strategy
     {
         protected override void OnTick(Trade trade)
@@ -118,16 +118,16 @@ public class SmartWalkForwardTests
     }
 
     [Fact]
-    public void Juntar_los_ticks_repetidos_no_cambia_las_velas_ni_las_operaciones()
+    public void Merging_the_repeated_ticks_changes_neither_the_candles_nor_the_trades()
     {
         var data = Bursty(4);
         var packed = data.Compress();
-        Assert.True(packed.Compressed && packed.Count < data.Count * 0.6, $"{packed.Count} de {data.Count}");
+        Assert.True(packed.Compressed && packed.Count < data.Count * 0.6, $"{packed.Count} of {data.Count}");
         var settings = Days(data);
         var a = new BacktestEngine(new Breakout(), data, settings).Run();
         var b = new BacktestEngine(new Breakout(), packed, settings).Run();
         Assert.True(a.Ok && b.Ok, a.Error ?? b.Error);
-        Assert.True(a.Trades.Count > 10, $"{a.Trades.Count} operaciones");
+        Assert.True(a.Trades.Count > 10, $"{a.Trades.Count} trades");
         Assert.Equal(a.Trades.Count, b.Trades.Count);
         for (int i = 0; i < a.Trades.Count; i++)
         {
@@ -143,7 +143,7 @@ public class SmartWalkForwardTests
     }
 
     [Fact]
-    public void La_bayesiana_encuentra_lo_bueno_con_muchas_menos_pruebas_que_la_grilla()
+    public void The_bayesian_search_finds_the_good_part_with_far_fewer_trials_than_the_grid()
     {
         var space = new ParameterSpace(30, 30);
         double F(int[] x) => 100 * Math.Exp(-(Math.Pow(x[0] - 21, 2) + Math.Pow(x[1] - 8, 2)) / 40.0);
@@ -153,20 +153,20 @@ public class SmartWalkForwardTests
             calls += pts.Count;
             return pts.Select(F).ToArray();
         }, budget: 80, seed: 5, batch: 8);
-        Assert.True(calls <= 80, $"{calls} pruebas");
+        Assert.True(calls <= 80, $"{calls} tests");
         double best = found.Max(f => f.Score);
-        Assert.True(best >= 90, $"mejor {best:0.0} de 100 con {calls} pruebas de 900");
+        Assert.True(best >= 90, $"best {best:0.0} of 100 with {calls} trials out of 900");
     }
 
     [Fact]
-    public void La_meseta_le_gana_al_pico_aislado()
+    public void The_plateau_beats_the_isolated_peak()
     {
         var space = new ParameterSpace(9, 9);
         var rows = space.All().Select(x =>
         {
             double f = -5;
-            if (x[0] == 1 && x[1] == 1) f = 10; // pico solo: las vecinas pierden
-            if (Math.Abs(x[0] - 6) <= 1 && Math.Abs(x[1] - 6) <= 1) f = 6; // zona entera que gana
+            if (x[0] == 1 && x[1] == 1) f = 10; // a lone peak: the neighbours lose
+            if (Math.Abs(x[0] - 6) <= 1 && Math.Abs(x[1] - 6) <= 1) f = 6; // a whole zone that wins
             return (x, f);
         }).ToList();
         int pick = RobustSelection.Select(rows);
@@ -174,23 +174,23 @@ public class SmartWalkForwardTests
     }
 
     [Fact]
-    public void PBO_con_puro_ruido_es_alto_y_con_ventaja_real_es_bajo()
+    public void PBO_is_high_with_pure_noise_and_low_with_a_real_edge()
     {
         var rnd = new Random(11);
         double Gauss() => Math.Sqrt(-2 * Math.Log(1 - rnd.NextDouble())) * Math.Sin(2 * Math.PI * rnd.NextDouble());
-        // con puro ruido la PBO vale 0,5 en promedio (en una sola historia puede caer lejos): se promedian varias
+        // with pure noise the PBO is 0.5 on average (on a single history it can land far off): several are averaged
         var noise = Enumerable.Range(0, 10).Select(_ => Overfitting.Pbo(Enumerable.Range(0, 24).Select(_ => Enumerable.Range(0, 500).Select(_ => Gauss() * 100).ToArray()).ToList())!.Value).ToList();
         var edge = Enumerable.Range(0, 24).Select(i => Enumerable.Range(0, 500).Select(_ => 6.0 * i + Gauss() * 100).ToArray()).ToList();
         var e = Overfitting.Pbo(edge)!.Value;
         Assert.All(noise, n => Assert.Equal(252, n.Splits));
         double pbo = noise.Average(n => n.Pbo), loss = noise.Average(n => n.Loss);
         Assert.InRange(pbo, 0.3, 0.7);
-        Assert.True(e.Pbo < 0.15 && e.Loss < 0.05, $"con ventaja: PBO {e.Pbo:0.00}, pérdida {e.Loss:0.00}");
-        Assert.True(loss > e.Loss + 0.2, $"ruido {loss:0.00} vs ventaja {e.Loss:0.00}");
+        Assert.True(e.Pbo < 0.15 && e.Loss < 0.05, $"with an edge: PBO {e.Pbo:0.00}, loss {e.Loss:0.00}");
+        Assert.True(loss > e.Loss + 0.2, $"noise {loss:0.00} vs edge {e.Loss:0.00}");
     }
 
     [Fact]
-    public void La_CPCV_arma_varios_caminos_completos_fuera_de_muestra()
+    public void The_CPCV_builds_several_complete_out_of_sample_paths()
     {
         var rnd = new Random(2);
         double Gauss() => Math.Sqrt(-2 * Math.Log(1 - rnd.NextDouble())) * Math.Sin(2 * Math.PI * rnd.NextDouble());
@@ -205,7 +205,7 @@ public class SmartWalkForwardTests
     }
 
     [Fact]
-    public void El_walk_forward_corre_cada_combinacion_una_sola_vez_y_mide_el_sobreajuste()
+    public void The_walk_forward_runs_each_combination_just_once_and_measures_the_overfitting()
     {
         var data = Bursty(45, 7);
         var settings = Days(data);
@@ -215,17 +215,17 @@ public class SmartWalkForwardTests
             new() { Name = nameof(Breakout.Hold), Min = 2, Max = 6, Step = 2, IsInteger = true },
         };
         var wf = Optimizer.WalkForward(() => new Breakout(), new(), ranges, data, settings, FitnessMetric.NetProfit, 12, 6, false, 3, null, CancellationToken.None);
-        Assert.Equal("grilla", wf.Search);
+        Assert.Equal("grid", wf.Search);
         Assert.Equal(15, wf.SpaceSize);
-        Assert.Equal(15, wf.Evaluated); // 15 combinaciones, cada una una vez (no una por ventana)
-        Assert.True(wf.Compression < 0.7, $"compresión {wf.Compression}");
+        Assert.Equal(15, wf.Evaluated); // 15 combinations, each one once (not one per window)
+        Assert.True(wf.Compression < 0.7, $"compression {wf.Compression}");
         Assert.True(wf.Windows.Count >= 4);
-        // cada operación fuera de muestra entró dentro de una ventana fuera de muestra
+        // every out-of-sample trade entered inside an out-of-sample window
         Assert.All(wf.OutSampleTrades, t => Assert.Contains(wf.Windows, w => t.EntryTime >= w.OutSampleFrom && t.EntryTime < w.OutSampleTo));
         Assert.NotNull(wf.Pbo);
-        Assert.True(wf.PboSplits > 0 && wf.CpcvPaths.Count >= 3, $"PBO {wf.PboSplits} particiones, {wf.CpcvPaths.Count} caminos");
+        Assert.True(wf.PboSplits > 0 && wf.CpcvPaths.Count >= 3, $"PBO {wf.PboSplits} partitions, {wf.CpcvPaths.Count} paths");
 
-        // con muchas combinaciones busca con la bayesiana y corre bastante menos que la grilla
+        // with many combinations it searches with the Bayesian one and runs far fewer than the grid
         var big = new List<ParameterRange>
         {
             new() { Name = nameof(Breakout.Channel), Min = 2, Max = 40, Step = 1, IsInteger = true },
@@ -233,8 +233,8 @@ public class SmartWalkForwardTests
         };
         var tpe = Optimizer.WalkForward(() => new Breakout(), new(), big, data, settings, FitnessMetric.NetProfit, 12, 6, false, 3, null, CancellationToken.None,
             budget: 16);
-        Assert.Equal("bayesiana", tpe.Search);
-        Assert.True(tpe.SpaceSize == 780 && tpe.Evaluated < 780 / 3, $"corrió {tpe.Evaluated} de {tpe.SpaceSize}");
+        Assert.Equal("bayesian", tpe.Search);
+        Assert.True(tpe.SpaceSize == 780 && tpe.Evaluated < 780 / 3, $"it ran {tpe.Evaluated} of {tpe.SpaceSize}");
         Assert.True(tpe.Windows.Count >= 4);
     }
 }

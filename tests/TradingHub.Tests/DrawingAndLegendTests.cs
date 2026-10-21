@@ -9,7 +9,7 @@ using TradingHub.Market;
 
 namespace TradingHub.Tests;
 
-/// <summary>Posición larga/corta, compatibilidad de dibujos guardados y la leyenda estilo TradingView.</summary>
+/// <summary>Long/short position, compatibility of stored drawings and the TradingView-style legend.</summary>
 public class DrawingAndLegendTests
 {
     private static readonly Instrument Btc = new() { Symbol = "BTCUSDT", FeedId = "test", TickSize = 0.1m, VolumeStep = 0.001m };
@@ -31,41 +31,41 @@ public class DrawingAndLegendTests
     }
 
     [Fact]
-    public void La_posicion_larga_arranca_1_a_2_y_cada_manejador_mueve_lo_suyo()
+    public void The_long_position_starts_1_to_2_and_each_handler_moves_its_own_part()
     {
         var d = new ChartDrawing { Kind = DrawingKind.LongPosition, Points = { new ChartPoint(T0, 100) } };
         d.InitPosition(5, T0.AddMinutes(30));
-        Assert.Equal(110, d.Points[1].Price); // objetivo 2R
+        Assert.Equal(110, d.Points[1].Price); // target 2R
         Assert.Equal(95, d.Points[2].Price);  // stop 1R
 
-        d.MoveHandle(1, new ChartPoint(T0.AddMinutes(99), 120)); // objetivo: solo el precio
+        d.MoveHandle(1, new ChartPoint(T0.AddMinutes(99), 120)); // target: the price only
         Assert.Equal(120, d.Points[1].Price);
         Assert.Equal(T0.AddMinutes(30), d.Points[1].Time);
-        d.MoveHandle(3, new ChartPoint(T0.AddMinutes(45), 1)); // largo: solo hasta cuándo
+        d.MoveHandle(3, new ChartPoint(T0.AddMinutes(45), 1)); // length: only until when
         Assert.Equal(T0.AddMinutes(45), d.Points[1].Time);
         Assert.Equal(T0.AddMinutes(45), d.Points[2].Time);
         Assert.Equal(95, d.Points[2].Price);
     }
 
     [Fact]
-    public void La_posicion_marca_si_toco_el_objetivo_o_el_stop()
+    public void The_position_marks_whether_it_hit_the_target_or_the_stop()
     {
         var series = Series((101, 99), (104, 100), (111, 103), (112, 90));
         var d = new ChartDrawing { Kind = DrawingKind.LongPosition, Points = { new ChartPoint(T0, 100) } };
         d.InitPosition(5, T0.AddMinutes(10));
-        Assert.Equal(1, d.PositionOutcome(series).Outcome); // la vela 3 llega a 111 antes que el stop
+        Assert.Equal(1, d.PositionOutcome(series).Outcome); // candle 3 reaches 111 before the stop
 
         var shortPos = new ChartDrawing { Kind = DrawingKind.ShortPosition, Points = { new ChartPoint(T0, 100) } };
-        shortPos.InitPosition(3, T0.AddMinutes(10)); // stop 103, objetivo 94
-        Assert.Equal(-1, shortPos.PositionOutcome(series).Outcome); // la vela 2 llega a 104: stop
+        shortPos.InitPosition(3, T0.AddMinutes(10)); // stop 103, target 94
+        Assert.Equal(-1, shortPos.PositionOutcome(series).Outcome); // candle 2 reaches 104: stop
 
-        // en la misma vela toca los dos: se toma el peor caso (stop)
+        // in the same candle it touches both: the worst case is taken (the stop)
         var both = Series((100, 100), (120, 80));
         var d2 = new ChartDrawing { Kind = DrawingKind.LongPosition, Points = { new ChartPoint(T0, 100) } };
         d2.InitPosition(5, T0.AddMinutes(10));
         Assert.Equal(-1, d2.PositionOutcome(both).Outcome);
 
-        // recién puesta sobre la última vela: el rango de esa vela (de antes de entrar) no cuenta
+        // just placed on the last candle: that candle's range (from before entering) does not count
         var fresh = Series((101, 99), (103, 90));
         var d3 = new ChartDrawing { Kind = DrawingKind.LongPosition, Points = { new ChartPoint(T0.AddMinutes(1).AddSeconds(40), 100) } };
         d3.InitPosition(5, T0.AddMinutes(20));
@@ -73,7 +73,7 @@ public class DrawingAndLegendTests
     }
 
     [Fact]
-    public void Los_dibujos_viejos_se_siguen_leyendo_igual()
+    public void The_old_drawings_are_still_read_the_same()
     {
         const string json = """[{"Kind":0,"Points":[{"Time":"2026-10-01T12:00:00Z","Price":100}],"ColorArgb":4294049850,"Width":1.5,"Dashed":true,"Text":"alerta","Locked":false}]""";
         var list = System.Text.Json.JsonSerializer.Deserialize<List<ChartDrawing>>(json)!;
@@ -83,7 +83,7 @@ public class DrawingAndLegendTests
         Assert.True(d.ShowPriceLabel);
         Assert.Null(d.OnlyPeriod);
 
-        // y lo nuevo sobrevive a guardar y leer
+        // and the new part survives saving and reading back
         d.LineStyle = LineStyleKind.Dotted;
         d.OnlyPeriod = "M5";
         d.Levels = new() { new FibLevel { Value = 0.5, ColorArgb = 0xFFFF0000 } };
@@ -94,14 +94,14 @@ public class DrawingAndLegendTests
         Assert.Equal(0.5, back.EffectiveLevels.Single().Value);
     }
 
-    /// <summary>Indicador mínimo para la leyenda.</summary>
+    /// <summary>Minimal indicator for the legend.</summary>
     private sealed class Line : Indicator
     {
         protected override void OnCalculate(int bar, decimal value) => this[bar] = value;
     }
 
     [Fact]
-    public void Desde_la_leyenda_se_oculta_se_quita_y_se_pliegan_los_nombres()
+    public void From_the_legend_it_is_hidden_removed_and_the_names_are_collapsed()
     {
         var data = new InstrumentData(Btc, new SimulatedFeed());
         long id = 1;
@@ -117,7 +117,7 @@ public class DrawingAndLegendTests
         renderer.Render(surface.Canvas, model, 900, 500, state);
         var name = state.Legend.First(h => h.Action == LegendAction.Name && ReferenceEquals(h.Slot, slot));
 
-        // con el mouse encima aparecen ojo, ajustes y quitar
+        // hovering shows eye, settings and remove
         state.MouseX = name.Rect.MidX;
         state.MouseY = name.Rect.MidY;
         renderer.Render(surface.Canvas, model, 900, 500, state);
@@ -135,12 +135,12 @@ public class DrawingAndLegendTests
         controller.MouseDown(gear.Rect.MidX, gear.Rect.MidY, PointerButton.Left, 1, InputModifiers.None);
         Assert.Same(slot, asked);
 
-        // la flechita pliega los nombres
+        // the little arrow collapses the names
         var arrow = state.Legend.First(h => h.Action == LegendAction.Collapse);
         controller.MouseDown(arrow.Rect.MidX, arrow.Rect.MidY, PointerButton.Left, 1, InputModifiers.None);
         Assert.False(model.Settings.ShowIndicatorNames);
 
-        // quitar (los iconos aparecen con el mouse sobre el nombre)
+        // remove (the icons appear with the mouse over the name)
         model.Settings.ShowIndicatorNames = true;
         state.MouseX = name.Rect.MidX;
         state.MouseY = name.Rect.MidY;
@@ -151,7 +151,7 @@ public class DrawingAndLegendTests
     }
 
     [Fact]
-    public void El_boton_de_ir_a_lo_ultimo_aparece_al_correrse_y_vuelve()
+    public void The_go_to_latest_button_appears_when_scrolled_and_goes_away()
     {
         var data = new InstrumentData(Btc, new SimulatedFeed());
         long id = 1;
@@ -165,7 +165,7 @@ public class DrawingAndLegendTests
         renderer.Render(surface.Canvas, model, 900, 500, state);
         Assert.Null(state.GoLatestButton);
 
-        model.Viewport.ScrollBars = 120; // corrido hacia atrás
+        model.Viewport.ScrollBars = 120; // scrolled back
         renderer.Render(surface.Canvas, model, 900, 500, state);
         var b = Assert.NotNull(state.GoLatestButton);
         controller.MouseDown(b.MidX, b.MidY, PointerButton.Left, 1, InputModifiers.None);

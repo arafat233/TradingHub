@@ -4,7 +4,7 @@ using TradingHub.Market;
 
 namespace TradingHub.Strategies;
 
-/// <summary>Nombre y descripción de una estrategia.</summary>
+/// <summary>Name and description of a strategy.</summary>
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class StrategyAttribute(string name) : Attribute
 {
@@ -12,7 +12,7 @@ public sealed class StrategyAttribute(string name) : Attribute
     public string Description { get; set; } = "";
 }
 
-/// <summary>Propiedad configurable de la estrategia (aparece en el panel de parámetros).</summary>
+/// <summary>Configurable property of the strategy (it shows up in the parameters panel).</summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class ParameterAttribute(string? name = null) : Attribute
 {
@@ -20,7 +20,7 @@ public sealed class ParameterAttribute(string? name = null) : Attribute
     public string Description { get; set; } = "";
 }
 
-/// <summary>Rango a recorrer en la optimización (mínimo, máximo y paso).</summary>
+/// <summary>Range to sweep in the optimization (minimum, maximum and step).</summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class OptimizeAttribute(double min, double max, double step) : Attribute
 {
@@ -49,7 +49,7 @@ public enum StrategyOrderState
     Canceled,
 }
 
-/// <summary>Una orden de la estrategia.</summary>
+/// <summary>An order from the strategy.</summary>
 public sealed class StrategyOrder
 {
     public long Id { get; internal init; }
@@ -63,7 +63,7 @@ public sealed class StrategyOrder
     public decimal FillPrice { get; internal set; }
     public DateTime FillTime { get; internal set; }
 
-    /// <summary>Stop/target automático de la posición.</summary>
+    /// <summary>Automatic stop/target of the position.</summary>
     public bool IsProtective { get; internal init; }
 
     internal long SubmittedAt { get; init; }
@@ -71,16 +71,16 @@ public sealed class StrategyOrder
     internal string? OcoGroup { get; init; }
     internal object? Live { get; set; }
 
-    /// <summary>En vivo: cantidad real enviada a la cuenta (con el tamaño de la cartera) y cuánto ya se contabilizó.</summary>
+    /// <summary>Live: real quantity sent to the account (with the portfolio size) and how much has already been booked.</summary>
     internal decimal LiveQuantity { get; set; }
     internal decimal Booked { get; set; }
 
     public bool IsActive => State == StrategyOrderState.Active;
 
-    public override string ToString() => $"{Name}: {(Side == OrderSide.Buy ? "compra" : "venta")} {Type} {Quantity}{(Type == StrategyOrderType.Market ? "" : " @ " + Price)}";
+    public override string ToString() => $"{Name}: {(Side == OrderSide.Buy ? "buy" : "sell")} {Type} {Quantity}{(Type == StrategyOrderType.Market ? "" : " @ " + Price)}";
 }
 
-/// <summary>Lo que la estrategia necesita del entorno (backtest o vivo).</summary>
+/// <summary>What the strategy needs from the environment (backtest or live).</summary>
 internal interface IStrategyHost
 {
     Instrument Instrument { get; }
@@ -104,107 +104,107 @@ internal interface IStrategyHost
 }
 
 /// <summary>
-/// Base de las estrategias. Sobrescribí <see cref="OnInit"/> para crear indicadores y
-/// <see cref="OnBar"/> (cierre de cada vela) u <see cref="OnTick"/> (cada operación) para decidir.
+/// Base class for strategies. Override <see cref="OnInit"/> to create indicators and
+/// <see cref="OnBar"/> (close of each candle) or <see cref="OnTick"/> (each trade) to decide.
 /// </summary>
 public abstract class Strategy
 {
     private readonly List<Series> _indicators = new();
     internal IStrategyHost Host = null!;
 
-    // ----------------------------------------------------------------- parámetros comunes
+    // ----------------------------------------------------------------- common parameters
 
-    /// <summary>Cantidad por defecto de cada orden.</summary>
-    [Parameter("Cantidad", Description = "Contratos o unidades por orden")]
+    /// <summary>Default quantity of each order.</summary>
+    [Parameter("Quantity", Description = "Contracts or units per order")]
     public decimal Quantity { get; set; } = 1;
 
-    /// <summary>Stop loss automático en ticks para cada posición (0 = sin stop).</summary>
-    [Parameter("Stop loss (ticks)", Description = "0 = sin stop automático")]
+    /// <summary>Automatic stop loss in ticks for each position (0 = no stop).</summary>
+    [Parameter("Stop loss (ticks)", Description = "0 = no automatic stop")]
     public int StopLossTicks { get; set; }
 
-    /// <summary>Take profit automático en ticks (0 = sin objetivo).</summary>
-    [Parameter("Take profit (ticks)", Description = "0 = sin objetivo automático")]
+    /// <summary>Automatic take profit in ticks (0 = no target).</summary>
+    [Parameter("Take profit (ticks)", Description = "0 = no automatic target")]
     public int TakeProfitTicks { get; set; }
 
-    /// <summary>Stop que sigue al precio a esta distancia en ticks (0 = no).</summary>
-    [Parameter("Trailing stop (ticks)", Description = "0 = sin trailing")]
+    /// <summary>Stop that follows the price at this distance in ticks (0 = no).</summary>
+    [Parameter("Trailing stop (ticks)", Description = "0 = no trailing")]
     public int TrailingStopTicks { get; set; }
 
-    /// <summary>Filtro de contexto: solo abre operaciones en esta condición de mercado (las salidas siempre pasan).</summary>
-    [Parameter("Filtro de régimen", Description = "Solo abre operaciones en esa condición de mercado (rango, mixto o tendencia —alcista o bajista— de las últimas 24 h). Todas = sin filtro")]
+    /// <summary>Context filter: it only opens trades in this market condition (exits always go through).</summary>
+    [Parameter("Regime filter", Description = "It only opens trades in that market condition (range, mixed or trend — up or down — over the last 24 h). All = no filter")]
     public RegimeFilter RegimeFilter { get; set; } = RegimeFilter.All;
 
-    /// <summary>Filtro de contexto: no abre si la volatilidad está por debajo de este percentil del último mes.</summary>
-    [Parameter("Volatilidad mínima (percentil)", Description = "0 a 100: no abre operaciones si la volatilidad de las últimas 24 h está por debajo de ese percentil del último mes. 0 = sin filtro")]
+    /// <summary>Context filter: it does not open if the volatility is below this percentile of the last month.</summary>
+    [Parameter("Minimum volatility (percentile)", Description = "0 to 100: it opens no trades if the last 24 h volatility is below that percentile of the last month. 0 = no filter")]
     public int MinVolatilityRank { get; set; }
 
-    /// <summary>Filtro de contexto: no abre si la volatilidad está por encima de este percentil del último mes.</summary>
-    [Parameter("Volatilidad máxima (percentil)", Description = "0 a 100: no abre operaciones si la volatilidad de las últimas 24 h está por encima de ese percentil del último mes. 100 = sin filtro")]
+    /// <summary>Context filter: it does not open if the volatility is above this percentile of the last month.</summary>
+    [Parameter("Maximum volatility (percentile)", Description = "0 to 100: it opens no trades if the last 24 h volatility is above that percentile of the last month. 100 = no filter")]
     public int MaxVolatilityRank { get; set; } = 100;
 
-    /// <summary>Si las velas guardan el volumen por precio (footprint). Activalo en OnInit si lo usás.</summary>
+    /// <summary>Whether the candles store volume by price (footprint). Enable it in OnInit if you use it.</summary>
     protected internal bool UseFootprint { get; set; }
 
-    /// <summary>Contexto del mercado (tendencia o rango y volatilidad), vela a vela.</summary>
+    /// <summary>Market context (trend or range and volatility), candle by candle.</summary>
     internal MarketContextTracker Context { get; set; } = new();
 
-    /// <summary>Lo que la estrategia dibuja en el gráfico (rangos, niveles, flechas, textos y líneas).</summary>
+    /// <summary>What the strategy draws on the chart (ranges, levels, arrows, texts and lines).</summary>
     public StrategyCanvas Canvas { get; } = new();
 
-    // ----------------------------------------------------------------- datos
+    // ----------------------------------------------------------------- data
 
     public Instrument Instrument => Host.Instrument;
     public ChartPeriod Period => Host.Period;
 
-    /// <summary>Velas cerradas: <c>Bars[0]</c> es la última, <c>Bars[1]</c> la anterior…</summary>
+    /// <summary>Closed candles: <c>Bars[0]</c> is the last one, <c>Bars[1]</c> the previous one…</summary>
     public BarSeries Bars => Host.Bars;
 
-    /// <summary>Última vela cerrada.</summary>
+    /// <summary>Last closed candle.</summary>
     public Bar Bar => Host.Bars[0];
 
-    /// <summary>Vela que se está formando (para usar en <see cref="OnTick"/>).</summary>
+    /// <summary>Candle currently forming (to use in <see cref="OnTick"/>).</summary>
     public Bar? FormingBar => Host.FormingBar;
 
     public int CurrentBar => Host.Bars.Count - 1;
 
-    /// <summary>Hora del mercado (UTC).</summary>
+    /// <summary>Market time (UTC).</summary>
     public DateTime Time => Host.Time;
 
-    /// <summary>Hora del mercado en la zona horaria de la sesión.</summary>
+    /// <summary>Market time in the session's time zone.</summary>
     public DateTime LocalTime => TimeZoneInfo.ConvertTimeFromUtc(Host.Time, Host.TimeZone);
 
     public decimal Price => Host.LastPrice;
     public decimal TickSize => Host.Instrument.TickSize;
     public bool IsBacktest => Host.IsBacktest;
 
-    // ----------------------------------------------------------------- contexto del mercado
+    // ----------------------------------------------------------------- market context
 
-    /// <summary>Eficiencia de la tendencia de las últimas 24 horas (0 = rango puro, 1 = tendencia limpia; al azar ~0,2). null sin datos.</summary>
+    /// <summary>Trend efficiency of the last 24 hours (0 = pure range, 1 = clean trend; random is ~0.2). null with no data.</summary>
     public double? MarketTrend => Context.Trend;
 
-    /// <summary>Hacia dónde se movió el mercado en esas 24 horas: 1 subió, -1 bajó, 0 igual (null sin datos).</summary>
+    /// <summary>Which way the market moved over those 24 hours: 1 up, -1 down, 0 flat (null with no data).</summary>
     public int? MarketDirection => Context.Direction;
 
-    /// <summary>Movimiento neto del mercado en esas 24 horas, en %.</summary>
+    /// <summary>Net market move over those 24 hours, in %.</summary>
     public double? MarketChange => Context.Change;
 
-    /// <summary>Volatilidad de las últimas 24 horas: desvío de los retornos por hora, en %.</summary>
+    /// <summary>Volatility of the last 24 hours: standard deviation of the hourly returns, in %.</summary>
     public double? MarketVolatility => Context.Volatility;
 
-    /// <summary>Percentil de esa volatilidad entre la del último mes (0 = la más baja, 100 = la más alta).</summary>
+    /// <summary>Percentile of that volatility among the last month's (0 = the lowest, 100 = the highest).</summary>
     public double? VolatilityRank => Context.VolatilityRank;
 
-    /// <summary>Condición del mercado: Range (eficiencia ≤ 0,15), Mixed o Trend (≥ 0,35); Unknown sin datos.</summary>
+    /// <summary>Market condition: Range (efficiency <= 0.15), Mixed or Trend (>= 0.35); Unknown with no data.</summary>
     public MarketRegime Regime => Context.Regime;
 
-    /// <summary>Si el filtro de contexto (RegimeFilter y percentiles de volatilidad) deja abrir operaciones ahora.</summary>
+    /// <summary>Whether the context filter (RegimeFilter and volatility percentiles) allows opening trades right now.</summary>
     public bool ContextAllowsEntries => !HasContextFilter || Context.Allows(RegimeFilter, MinVolatilityRank, MaxVolatilityRank);
 
     private bool HasContextFilter => RegimeFilter != RegimeFilter.All || MinVolatilityRank > 0 || MaxVolatilityRank < 100;
 
-    // ----------------------------------------------------------------- posición
+    // ----------------------------------------------------------------- position
 
-    /// <summary>Posición: positiva = largo, negativa = corto, 0 = sin posición.</summary>
+    /// <summary>Position: positive = long, negative = short, 0 = no position.</summary>
     public decimal Position => Host.Position;
 
     public bool IsFlat => Host.Position == 0;
@@ -215,20 +215,20 @@ public abstract class Strategy
     public decimal NetProfit => Host.RealizedPnL;
     public IReadOnlyList<StrategyOrder> ActiveOrders => Host.ActiveOrders;
 
-    // ----------------------------------------------------------------- órdenes
+    // ----------------------------------------------------------------- orders
 
-    protected StrategyOrder Buy(decimal? quantity = null, string name = "Compra") => Send(OrderSide.Buy, StrategyOrderType.Market, quantity ?? Quantity, 0, name);
-    protected StrategyOrder Sell(decimal? quantity = null, string name = "Venta") => Send(OrderSide.Sell, StrategyOrderType.Market, quantity ?? Quantity, 0, name);
-    protected StrategyOrder BuyLimit(decimal price, decimal? quantity = null, string name = "Compra límite") => Send(OrderSide.Buy, StrategyOrderType.Limit, quantity ?? Quantity, Round(price), name);
-    protected StrategyOrder SellLimit(decimal price, decimal? quantity = null, string name = "Venta límite") => Send(OrderSide.Sell, StrategyOrderType.Limit, quantity ?? Quantity, Round(price), name);
-    protected StrategyOrder BuyStop(decimal price, decimal? quantity = null, string name = "Compra stop") => Send(OrderSide.Buy, StrategyOrderType.Stop, quantity ?? Quantity, Round(price), name);
-    protected StrategyOrder SellStop(decimal price, decimal? quantity = null, string name = "Venta stop") => Send(OrderSide.Sell, StrategyOrderType.Stop, quantity ?? Quantity, Round(price), name);
+    protected StrategyOrder Buy(decimal? quantity = null, string name = "Buy") => Send(OrderSide.Buy, StrategyOrderType.Market, quantity ?? Quantity, 0, name);
+    protected StrategyOrder Sell(decimal? quantity = null, string name = "Sell") => Send(OrderSide.Sell, StrategyOrderType.Market, quantity ?? Quantity, 0, name);
+    protected StrategyOrder BuyLimit(decimal price, decimal? quantity = null, string name = "Buy limit") => Send(OrderSide.Buy, StrategyOrderType.Limit, quantity ?? Quantity, Round(price), name);
+    protected StrategyOrder SellLimit(decimal price, decimal? quantity = null, string name = "Sell limit") => Send(OrderSide.Sell, StrategyOrderType.Limit, quantity ?? Quantity, Round(price), name);
+    protected StrategyOrder BuyStop(decimal price, decimal? quantity = null, string name = "Buy stop") => Send(OrderSide.Buy, StrategyOrderType.Stop, quantity ?? Quantity, Round(price), name);
+    protected StrategyOrder SellStop(decimal price, decimal? quantity = null, string name = "Sell stop") => Send(OrderSide.Sell, StrategyOrderType.Stop, quantity ?? Quantity, Round(price), name);
 
     private DateTime _filterLogged = DateTime.MinValue;
 
     /// <summary>
-    /// Manda la orden pasando por el filtro de contexto: fuera del contexto elegido solo sale la parte que cierra lo que
-    /// hay abierto (nunca abre ni aumenta); si no queda nada, la orden vuelve cancelada.
+    /// Sends the order through the context filter: outside the chosen context only the part that closes what is
+    /// open goes out (it never opens or increases); if nothing is left, the order comes back cancelled.
     /// </summary>
     private StrategyOrder Send(OrderSide side, StrategyOrderType type, decimal quantity, decimal price, string name)
     {
@@ -238,31 +238,31 @@ public abstract class Strategy
         if (closing < quantity && Host.Time - _filterLogged >= (Host.IsBacktest ? TimeSpan.FromDays(1) : TimeSpan.FromHours(1)))
         {
             _filterLogged = Host.Time;
-            Host.Log($"Filtro de contexto: no abre operaciones ahora ({Context.Describe()})");
+            Host.Log($"Context filter: not opening trades right now ({Context.Describe()})");
         }
 
         if (closing > 0) return Host.Submit(side, type, closing, price, name);
-        return new StrategyOrder { Side = side, Type = type, Quantity = quantity, Price = price, Name = name + " (filtro de contexto)", State = StrategyOrderState.Canceled, Time = Host.Time };
+        return new StrategyOrder { Side = side, Type = type, Quantity = quantity, Price = price, Name = name + " (context filter)", State = StrategyOrderState.Canceled, Time = Host.Time };
     }
 
-    /// <summary>Entra largo a mercado (si estaba corto, da vuelta la posición).</summary>
-    protected void EnterLong(decimal? quantity = null, string name = "Largo")
+    /// <summary>Enters long at market (if it was short, it reverses the position).</summary>
+    protected void EnterLong(decimal? quantity = null, string name = "Long")
     {
         decimal q = quantity ?? Quantity;
         if (Position < 0) q += -Position;
         if (Position <= 0) Buy(q, name);
     }
 
-    /// <summary>Entra corto a mercado (si estaba largo, da vuelta la posición).</summary>
-    protected void EnterShort(decimal? quantity = null, string name = "Corto")
+    /// <summary>Enters short at market (if it was long, it reverses the position).</summary>
+    protected void EnterShort(decimal? quantity = null, string name = "Short")
     {
         decimal q = quantity ?? Quantity;
         if (Position > 0) q += Position;
         if (Position >= 0) Sell(q, name);
     }
 
-    /// <summary>Cierra la posición a mercado y cancela las órdenes de entrada pendientes.</summary>
-    protected void ClosePosition(string name = "Cierre")
+    /// <summary>Closes the position at market and cancels the pending entry orders.</summary>
+    protected void ClosePosition(string name = "Close")
     {
         foreach (var o in Host.ActiveOrders.Where(o => !o.IsProtective).ToList()) Host.Cancel(o);
         if (Position > 0) Sell(Position, name);
@@ -278,7 +278,7 @@ public abstract class Strategy
 
     protected void Modify(StrategyOrder order, decimal price) => Host.Modify(order, Round(price));
 
-    // ----------------------------------------------------------------- indicadores
+    // ----------------------------------------------------------------- indicators
 
     protected T Add<T>(T series) where T : Series
     {
@@ -286,7 +286,7 @@ public abstract class Strategy
         return series;
     }
 
-    /// <summary>Los indicadores que creó (para medir el calentamiento).</summary>
+    /// <summary>The indicators it created (to measure the warm-up).</summary>
     internal IReadOnlyList<Series> Indicators => _indicators;
 
     protected Sma Sma(int period, PriceSource source = PriceSource.Close) => Add(new Sma(period, source));
@@ -301,22 +301,22 @@ public abstract class Strategy
     protected Vwap Vwap() => Add(new Vwap(t => Host.Session.SessionDate(t)));
     protected CumulativeDelta CumulativeDelta(bool resetEachSession = true) => Add(new CumulativeDelta(resetEachSession ? t => Host.Session.SessionDate(t) : null));
 
-    /// <summary>Serie propia calculada en cada vela (por ejemplo, la diferencia entre dos medias).</summary>
+    /// <summary>Custom series computed on each candle (for example, the difference between two averages).</summary>
     protected CustomSeries Custom(string name, Func<BarSeries, decimal> calc) => Add(new CustomSeries(name, calc));
 
-    // ----------------------------------------------------------------- ayudas
+    // ----------------------------------------------------------------- helpers
 
     protected static bool CrossAbove(Series a, Series b) => a.Count > 1 && b.Count > 1 && a[1] <= b[1] && a[0] > b[0];
     protected static bool CrossBelow(Series a, Series b) => a.Count > 1 && b.Count > 1 && a[1] >= b[1] && a[0] < b[0];
     protected static bool CrossAbove(Series a, decimal level) => a.Count > 1 && a[1] <= level && a[0] > level;
     protected static bool CrossBelow(Series a, decimal level) => a.Count > 1 && a[1] >= level && a[0] < level;
 
-    /// <summary>Distancia de N ticks en precio.</summary>
+    /// <summary>Distance of N ticks in price.</summary>
     protected decimal Ticks(int n) => n * Host.Instrument.TickSize;
 
     protected decimal Round(decimal price) => Host.Instrument.RoundPrice(price);
 
-    /// <summary>Si la hora local de la sesión está entre dos horarios (ej. 09:30 y 16:00).</summary>
+    /// <summary>Whether the session's local time is between two times of day (e.g. 09:30 and 16:00).</summary>
     protected bool TimeBetween(TimeSpan from, TimeSpan to)
     {
         var t = LocalTime.TimeOfDay;
@@ -325,87 +325,87 @@ public abstract class Strategy
 
     protected void Log(string message) => Host.Log(message);
 
-    // ----------------------------------------------------------------- dibujos en el gráfico
+    // ----------------------------------------------------------------- chart drawings
 
     /// <summary>
-    /// Rectángulo (por ejemplo el rango de apertura): de <paramref name="from"/> a <paramref name="to"/> y entre dos precios.
-    /// Repetir el id lo reemplaza (sirve para estirarlo vela a vela). Color "#RRGGBB" o un nombre ("verde", "rojo"…).
+    /// Rectangle (for example the opening range): from <paramref name="from"/> to <paramref name="to"/> and between two prices.
+    /// Repeating the id replaces it (useful for stretching it candle by candle). Color "#RRGGBB" or a name ("green", "red"…).
     /// </summary>
     protected void DrawBox(string id, DateTime from, decimal price1, DateTime to, decimal price2, string? color = null, int fillOpacity = 15, string? text = null) =>
         Canvas.Set(new StrategyDrawing { Id = id, Kind = DrawingKind.Box, Time1 = from, Price1 = price1, Time2 = to, Price2 = price2, Color = color, FillOpacity = Math.Clamp(fillOpacity, 0, 100), Text = text ?? "" });
 
-    /// <summary>Línea de un punto (tiempo, precio) a otro.</summary>
+    /// <summary>Line from one point (time, price) to another.</summary>
     protected void DrawLine(string id, DateTime time1, decimal price1, DateTime time2, decimal price2, string? color = null, int width = 1, LineStyle style = LineStyle.Solid) =>
         Canvas.Set(new StrategyDrawing { Id = id, Kind = DrawingKind.Line, Time1 = time1, Price1 = price1, Time2 = time2, Price2 = price2, Color = color, Width = Math.Clamp(width, 1, 6), Style = style });
 
-    /// <summary>Nivel horizontal desde <paramref name="from"/> (o desde el principio) hasta el borde derecho, con una etiqueta opcional.</summary>
+    /// <summary>Horizontal level from <paramref name="from"/> (or from the start) to the right edge, with an optional label.</summary>
     protected void DrawHorizontalLine(string id, decimal price, DateTime? from = null, string? color = null, int width = 1, LineStyle style = LineStyle.Dashed, string? text = null) =>
         Canvas.Set(new StrategyDrawing { Id = id, Kind = DrawingKind.HorizontalLine, Time1 = from ?? DateTime.MinValue, Price1 = price, Price2 = price, Color = color, Width = Math.Clamp(width, 1, 6), Style = style, Text = text ?? "", ExtendRight = true });
 
-    /// <summary>Flecha hacia arriba con la punta en el precio (por ejemplo una ruptura alcista), con texto opcional.</summary>
+    /// <summary>Arrow pointing up with its tip at the price (for example an upside breakout), with optional text.</summary>
     protected void DrawArrowUp(string id, DateTime time, decimal price, string? color = null, string? text = null) => DrawMarker(id, time, price, MarkerShape.ArrowUp, color, text);
 
-    /// <summary>Flecha hacia abajo con la punta en el precio.</summary>
+    /// <summary>Arrow pointing down with its tip at the price.</summary>
     protected void DrawArrowDown(string id, DateTime time, decimal price, string? color = null, string? text = null) => DrawMarker(id, time, price, MarkerShape.ArrowDown, color, text);
 
-    /// <summary>Marca en un precio: flecha, círculo, cuadrado, rombo o cruz, con texto opcional.</summary>
+    /// <summary>Marker at a price: arrow, circle, square, diamond or cross, with optional text.</summary>
     protected void DrawMarker(string id, DateTime time, decimal price, MarkerShape shape = MarkerShape.Circle, string? color = null, string? text = null) =>
         Canvas.Set(new StrategyDrawing { Id = id, Kind = DrawingKind.Marker, Time1 = time, Price1 = price, Time2 = time, Price2 = price, Color = color, Shape = shape, Text = text ?? "" });
 
-    /// <summary>Texto en un punto del gráfico.</summary>
+    /// <summary>Text at a point on the chart.</summary>
     protected void DrawText(string id, DateTime time, decimal price, string text, string? color = null) =>
         Canvas.Set(new StrategyDrawing { Id = id, Kind = DrawingKind.Text, Time1 = time, Price1 = price, Time2 = time, Price2 = price, Color = color, Text = text });
 
     /// <summary>
-    /// Línea continua que se traza vela a vela (llamala en OnBar): por ejemplo Plot("Techo", _max[0]). null corta la línea
-    /// (por ejemplo fuera de la sesión). Cada nombre es una línea distinta.
+    /// Continuous line traced candle by candle (call it in OnBar): for example Plot("Ceiling", _max[0]). null breaks the line
+    /// (for example outside the session). Each name is a different line.
     /// </summary>
     protected void Plot(string name, decimal? value, string? color = null, int width = 1, LineStyle style = LineStyle.Solid) =>
         Canvas.Plot(name, Host.Bars.Count > 0 ? Host.Bars[0].Time : Host.Time, value, color, Math.Clamp(width, 1, 6), style);
 
-    /// <summary>Borra un dibujo por su id.</summary>
+    /// <summary>Removes a drawing by its id.</summary>
     protected void RemoveDrawing(string id) => Canvas.Remove(id);
 
-    /// <summary>Borra todos los dibujos y líneas.</summary>
+    /// <summary>Removes every drawing and line.</summary>
     protected void ClearDrawings() => Canvas.Clear();
 
-    // ----------------------------------------------------------------- ciclo de vida
+    // ----------------------------------------------------------------- lifecycle
 
-    /// <summary>Al empezar: creá acá los indicadores.</summary>
+    /// <summary>At the start: create the indicators here.</summary>
     protected virtual void OnInit()
     {
     }
 
-    /// <summary>Al cerrar cada vela.</summary>
+    /// <summary>On the close of each candle.</summary>
     protected virtual void OnBar(Bar bar)
     {
     }
 
-    /// <summary>En cada operación del mercado (más lento: usalo solo si lo necesitás).</summary>
+    /// <summary>On each market trade (slower: use it only if you need it).</summary>
     protected virtual void OnTick(Trade trade)
     {
     }
 
-    /// <summary>Cuando se ejecuta una orden.</summary>
+    /// <summary>When an order fills.</summary>
     protected virtual void OnOrderFilled(StrategyOrder order)
     {
     }
 
-    /// <summary>Al empezar una sesión nueva (día de trading).</summary>
+    /// <summary>At the start of a new session (trading day).</summary>
     protected virtual void OnSessionStart(DateOnly session)
     {
     }
 
-    /// <summary>Al terminar (fin del backtest o al detener la estrategia).</summary>
+    /// <summary>At the end (end of the backtest or when the strategy is stopped).</summary>
     protected virtual void OnStop()
     {
     }
 
-    // ----------------------------------------------------------------- llamado por el motor
+    // ----------------------------------------------------------------- called by the engine
 
     internal bool WantsTicks { get; private set; }
 
-    /// <summary>La estrategia mira cada operación (OnTick), no solo las velas.</summary>
+    /// <summary>The strategy looks at every trade (OnTick), not just the candles.</summary>
     public static bool UsesTicks(Type t)
     {
         var m = t.GetMethod(nameof(OnTick), BindingFlags.Instance | BindingFlags.NonPublic, new[] { typeof(Trade) });
@@ -434,12 +434,12 @@ public abstract class Strategy
     internal void InternalSession(DateOnly d) => OnSessionStart(d);
     internal void InternalStop() => OnStop();
 
-    // ----------------------------------------------------------------- metadatos
+    // ----------------------------------------------------------------- metadata
 
     public static string DisplayName(Type t) => t.GetCustomAttribute<StrategyAttribute>()?.Name ?? t.Name;
     public static string Description(Type t) => t.GetCustomAttribute<StrategyAttribute>()?.Description ?? "";
 
-    /// <summary>Propiedades configurables (con [Parameter]).</summary>
+    /// <summary>Configurable properties (with [Parameter]).</summary>
     public static IEnumerable<PropertyInfo> Parameters(Type t) =>
         t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.CanRead && p.CanWrite && p.GetCustomAttribute<ParameterAttribute>() != null)
@@ -448,10 +448,10 @@ public abstract class Strategy
 
     public static string ParameterName(PropertyInfo p) => p.GetCustomAttribute<ParameterAttribute>()?.Name ?? p.Name;
 
-    /// <summary>Valores actuales de los parámetros.</summary>
+    /// <summary>Current values of the parameters.</summary>
     public Dictionary<string, object?> GetParameters() => Parameters(GetType()).ToDictionary(p => p.Name, p => p.GetValue(this));
 
-    /// <summary>Asigna parámetros por nombre (convierte tipos numéricos).</summary>
+    /// <summary>Assigns parameters by name (it converts numeric types).</summary>
     public void SetParameters(IReadOnlyDictionary<string, object?> values)
     {
         foreach (var p in Parameters(GetType()))
@@ -469,7 +469,7 @@ public abstract class Strategy
             }
             catch
             {
-                // valor incompatible: se deja el actual
+                // incompatible value: the current one is kept
             }
         }
     }

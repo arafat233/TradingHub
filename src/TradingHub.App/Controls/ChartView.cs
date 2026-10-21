@@ -7,7 +7,7 @@ using TradingHub.Rendering;
 
 namespace TradingHub.App.Controls;
 
-/// <summary>Control de gráfico: dibuja un <see cref="ChartModel"/> y traduce el mouse/teclado al controlador.</summary>
+/// <summary>Chart control: draws a <see cref="ChartModel"/> and translates mouse/keyboard into controller calls.</summary>
 public sealed class ChartView : SkiaView
 {
     private readonly ChartRenderer _renderer = new();
@@ -42,36 +42,36 @@ public sealed class ChartView : SkiaView
     public event Action? ToolFinished;
     public event Action? DrawingsChanged;
 
-    /// <summary>Orden propia arrastrada a un nuevo precio.</summary>
+    /// <summary>One of your own orders dragged to a new price.</summary>
     public event Action<TradingHub.Trading.Order, decimal>? OrderDragged;
 
-    /// <summary>Stop/objetivo soltado (desde la posición o una orden pendiente).</summary>
+    /// <summary>Stop/target dropped (from the position or a pending order).</summary>
     public event Action<BracketDrag, decimal>? BracketDropped;
 
-    /// <summary>Pedido de menú contextual (clic derecho) con la posición.</summary>
+    /// <summary>Context menu request (right click) with the position.</summary>
     public event Action<ChartView, Point>? MenuRequested;
 
-    /// <summary>La cruz del cursor se movió (instante y precio bajo el mouse; null al salir del gráfico).</summary>
+    /// <summary>The crosshair moved (instant and price under the mouse; null on leaving the chart).</summary>
     public event Action<DateTime?, double?>? CrosshairMoved;
 
-    /// <summary>Doble clic sobre un dibujo (abre su panel de configuración).</summary>
+    /// <summary>Double click on a drawing (opens its settings panel).</summary>
     public event Action<TradingHub.Charting.Drawings.ChartDrawing>? DrawingDoubleClicked;
 
-    /// <summary>Se ocultó, mostró o quitó un indicador desde la leyenda.</summary>
+    /// <summary>An indicator was hidden, shown or removed from the legend.</summary>
     public event Action? IndicatorsChanged;
 
-    /// <summary>Ajustes de un indicador pedidos desde la leyenda.</summary>
+    /// <summary>Indicator settings requested from the legend.</summary>
     public event Action<IndicatorSlot>? IndicatorSettingsRequested;
 
-    /// <summary>Configurar o quitar una estrategia del gráfico (desde la leyenda).</summary>
+    /// <summary>Configure or remove a strategy from the chart (from the legend).</summary>
     public event Action<StrategyOverlay>? StrategySettingsRequested;
 
     public event Action<StrategyOverlay>? StrategyRemoveRequested;
 
-    /// <summary>Estilo por defecto de cada tipo de dibujo.</summary>
+    /// <summary>Default style for each kind of drawing.</summary>
     public Func<TradingHub.Charting.Drawings.DrawingKind, TradingHub.Charting.Drawings.ChartDrawing?>? DrawingDefaults { get; set; }
 
-    /// <summary>Muestra la cruz de otro gráfico vinculado (instante y, si es el mismo instrumento, precio).</summary>
+    /// <summary>Shows another linked chart's crosshair (instant and, if it is the same instrument, price).</summary>
     public void SetLinkedCrosshair(DateTime? time, double? price)
     {
         if (_state.LinkedTime == time && _state.LinkedPrice == price) return;

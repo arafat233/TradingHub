@@ -9,7 +9,7 @@ public class StrategyTests
     private static readonly Instrument Inst = new() { Symbol = "TEST", FeedId = "test", TickSize = 1m, VolumeStep = 1m, PointValue = 1m };
     private static readonly DateTime T0 = new(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>Una operación por segundo con los precios dados.</summary>
+    /// <summary>One trade per second with the given prices.</summary>
     private static TickData Ticks(params decimal[] prices)
     {
         var list = new List<Trade>();
@@ -29,7 +29,7 @@ public class StrategyTests
         InitialCapital = 1000,
     };
 
-    /// <summary>Compra en la primera vela cerrada y vende en la tercera.</summary>
+    /// <summary>Buys on the first closed candle and sells on the third.</summary>
     private sealed class BuyThenSell : Strategy
     {
         protected override void OnBar(Bar bar)
@@ -40,22 +40,22 @@ public class StrategyTests
     }
 
     [Fact]
-    public void Orden_a_mercado_se_llena_con_la_operacion_siguiente_al_cierre_de_la_vela()
+    public void A_market_order_fills_with_the_trade_after_the_candle_close()
     {
-        // 3 operaciones por vela de 1 minuto: 100,101,102 | 103,104,105 | 106,107,108 | 109
+        // 3 trades per 1-minute candle: 100,101,102 | 103,104,105 | 106,107,108 | 109
         var data = Ticks(100, 101, 102, 103, 104, 105, 106, 107, 108, 109);
         var r = new BacktestEngine(new BuyThenSell(), data, Settings()).Run();
         Assert.Null(r.Error);
         var t = Assert.Single(r.Trades);
         Assert.True(t.IsLong);
-        Assert.Equal(103m, t.EntryPrice); // primera operación de la vela 2
-        Assert.Equal(109m, t.ExitPrice);  // primera operación después del cierre de la vela 3
+        Assert.Equal(103m, t.EntryPrice); // first trade of candle 2
+        Assert.Equal(109m, t.ExitPrice);  // first trade after the close of candle 3
         Assert.Equal(12m, t.Pnl);         // (109 - 103) * 2
         Assert.Equal(12m, r.Metrics.NetProfit);
     }
 
     [Fact]
-    public void Comision_y_deslizamiento_se_descuentan()
+    public void Commission_and_slippage_are_deducted()
     {
         var s = Settings();
         s.SlippageTicks = 1;
@@ -66,11 +66,11 @@ public class StrategyTests
         Assert.Equal(104m, t.EntryPrice); // 103 + 1 tick
         Assert.Equal(108m, t.ExitPrice);  // 109 - 1 tick
         Assert.Equal(8m, t.Pnl);
-        Assert.Equal(2m, t.Commission);   // 2 unidades x 0,5 x 2 lados
+        Assert.Equal(2m, t.Commission);   // 2 units x 0.5 x 2 sides
         Assert.Equal(6m, r.Metrics.NetProfit);
     }
 
-    /// <summary>Entra largo con stop y target automáticos.</summary>
+    /// <summary>Enters long with an automatic stop and target.</summary>
     private sealed class Bracket : Strategy
     {
         public Bracket()
@@ -86,28 +86,28 @@ public class StrategyTests
     }
 
     [Fact]
-    public void Take_profit_cierra_y_cancela_el_stop()
+    public void Take_profit_closes_and_cancels_the_stop()
     {
         var data = Ticks(100, 100, 100, 100, 102, 104, 106, 103, 99, 98);
         var r = new BacktestEngine(new Bracket(), data, Settings()).Run();
         var t = Assert.Single(r.Trades);
         Assert.Equal(100m, t.EntryPrice);
-        Assert.Equal(105m, t.ExitPrice); // límite a +5 ticks, atravesado por 106
+        Assert.Equal(105m, t.ExitPrice); // limit at +5 ticks, crossed by 106
         Assert.Equal("Take profit", t.ExitName);
     }
 
     [Fact]
-    public void Stop_loss_se_ejecuta_como_mercado()
+    public void Stop_loss_executes_as_a_market_order()
     {
         var data = Ticks(100, 100, 100, 100, 99, 98, 96, 95, 99, 98);
         var r = new BacktestEngine(new Bracket(), data, Settings()).Run();
         var t = Assert.Single(r.Trades);
-        Assert.Equal(96m, t.ExitPrice); // el stop en 97 se dispara con 96 (hueco)
+        Assert.Equal(96m, t.ExitPrice); // the stop at 97 triggers with 96 (a gap)
         Assert.Equal(-4m, t.Pnl);
         Assert.Equal("Stop loss", t.ExitName);
     }
 
-    /// <summary>Límite de compra por debajo del precio.</summary>
+    /// <summary>Buy limit below the price.</summary>
     private sealed class LimitBuyer : Strategy
     {
         protected override void OnBar(Bar bar)
@@ -117,7 +117,7 @@ public class StrategyTests
     }
 
     [Fact]
-    public void Limite_solo_se_llena_si_el_precio_lo_atraviesa()
+    public void A_limit_only_fills_if_the_price_goes_through_it()
     {
         var touchOnly = Ticks(100, 100, 100, 99, 98, 99, 100, 101, 102, 103);
         var r = new BacktestEngine(new LimitBuyer(), touchOnly, Settings()).Run();
@@ -125,12 +125,12 @@ public class StrategyTests
 
         var through = Ticks(100, 100, 100, 99, 97, 99, 100, 101, 102, 103);
         var r2 = new BacktestEngine(new LimitBuyer(), through, Settings()).Run();
-        var t = Assert.Single(r2.Trades); // se cierra al final del backtest
+        var t = Assert.Single(r2.Trades); // it is closed at the end of the backtest
         Assert.Equal(98m, t.EntryPrice);
-        Assert.Equal("Fin del backtest", t.ExitName);
+        Assert.Equal("End of backtest", t.ExitName);
     }
 
-    /// <summary>Da vuelta la posición de largo a corto.</summary>
+    /// <summary>Reverses the position from long to short.</summary>
     private sealed class Reverser : Strategy
     {
         protected override void OnBar(Bar bar)
@@ -141,7 +141,7 @@ public class StrategyTests
     }
 
     [Fact]
-    public void Dar_vuelta_la_posicion_registra_dos_operaciones()
+    public void Reversing_the_position_records_two_trades()
     {
         var data = Ticks(100, 100, 100, 101, 102, 103, 104, 105, 106, 103);
         var r = new BacktestEngine(new Reverser(), data, Settings()).Run();
@@ -151,7 +151,7 @@ public class StrategyTests
         Assert.Equal(104m, r.Trades[0].ExitPrice);
         Assert.False(r.Trades[1].IsLong);
         Assert.Equal(104m, r.Trades[1].EntryPrice);
-        Assert.Equal(103m, r.Trades[1].ExitPrice); // fin del backtest
+        Assert.Equal(103m, r.Trades[1].ExitPrice); // end of the backtest
         Assert.Equal(4m, r.Metrics.NetProfit);
     }
 
@@ -176,7 +176,7 @@ public class StrategyTests
     }
 
     [Fact]
-    public void Optimizacion_prueba_todas_las_combinaciones_y_ordena_por_metrica()
+    public void The_optimization_tests_every_combination_and_sorts_by_metric()
     {
         var prices = Enumerable.Range(0, 600).Select(i => 1000m + (decimal)Math.Round(30 * Math.Sin(i / 15.0))).ToArray();
         var data = Ticks(prices);
@@ -193,7 +193,7 @@ public class StrategyTests
     }
 
     [Fact]
-    public void Huecos_de_historia_se_detectan_antes_entre_y_despues()
+    public void History_gaps_are_detected_before_between_and_after()
     {
         var t0 = new DateTime(2026, 10, 3, 10, 0, 0, DateTimeKind.Utc);
         var local = new List<Trade> { new(10, t0.AddMinutes(30), 1, 1, TradeSide.Buy), new(11, t0.AddMinutes(31), 1, 1, TradeSide.Buy), new(12, t0.AddMinutes(50), 1, 1, TradeSide.Buy) };
@@ -204,25 +204,25 @@ public class StrategyTests
         Assert.Equal(13, gaps[2].FromId);
     }
 
-    /// <summary>Ruptura de canal con ATR: el canal es parámetro y el período del ATR una constante del código.</summary>
-    private sealed class CanalConAtr : Strategy
+    /// <summary>Channel breakout with ATR: the channel is a parameter and the ATR period a constant in the code.</summary>
+    private sealed class ChannelWithAtr : Strategy
     {
         private const int PeriodoAtr = 14;
         private Highest _max = null!;
         private Atr _atr = null!;
 
-        [Parameter("Canal"), Optimize(10, 40, 10)]
-        public int Canal { get; set; } = 20;
+        [Parameter("Channel"), Optimize(10, 40, 10)]
+        public int Channel { get; set; } = 20;
 
-        /// <summary>Velas cerradas cuando estuvieron listos todos los indicadores (-1 = nunca).</summary>
+        /// <summary>Candles closed once every indicator was ready (-1 = never).</summary>
         public int ReadyAt { get; private set; } = -1;
 
         protected override void OnInit()
         {
-            _max = Highest(Canal);
-            Lowest(Canal);
+            _max = Highest(Channel);
+            Lowest(Channel);
             _atr = Atr(PeriodoAtr);
-            StopLossTicks = TickSize > 0 ? 50 : 0; // usa el instrumento en OnInit (el medidor tiene que tenerlo)
+            StopLossTicks = TickSize > 0 ? 50 : 0; // it uses the instrument in OnInit (the meter has to have it)
         }
 
         protected override void OnBar(Bar bar)
@@ -249,43 +249,43 @@ public class StrategyTests
         protected override void OnInit()
         {
             Sma(5);
-            throw new InvalidOperationException("roto");
+            throw new InvalidOperationException("broken");
         }
     }
 
     [Fact]
-    public void Calentamiento_informa_los_indicadores_con_su_periodo_y_las_velas_que_necesitan()
+    public void Warmup_reports_the_indicators_with_their_period_and_the_candles_they_need()
     {
-        var w = StrategyWarmup.Measure(typeof(CanalConAtr));
+        var w = StrategyWarmup.Measure(typeof(ChannelWithAtr));
         Assert.Null(w.Error);
         Assert.True(w.Complete);
-        Assert.Equal(new[] { "Máximo(20)", "Mínimo(20)", "ATR(14)" }, w.Indicators);
+        Assert.Equal(new[] { "Highest(20)", "Lowest(20)", "ATR(14)" }, w.Indicators);
         Assert.Equal(20, w.Bars);
-        // con el canal en el máximo de [Optimize] (los parámetros llegan como double, como desde el laboratorio)
-        var max = StrategyWarmup.Measure(typeof(CanalConAtr), new Dictionary<string, object?> { ["Canal"] = 40.0 });
+        // with the channel at the maximum of [Optimize] (the parameters arrive as double, as they do from the lab)
+        var max = StrategyWarmup.Measure(typeof(ChannelWithAtr), new Dictionary<string, object?> { ["Channel"] = 40.0 });
         Assert.Equal(40, max.Bars);
-        Assert.Contains("Máximo(40)", max.Indicators);
-        // con el canal más corto que el ATR, manda el ATR
-        Assert.Equal(14, StrategyWarmup.Measure(typeof(CanalConAtr), new Dictionary<string, object?> { ["Canal"] = 10.0 }).Bars);
+        Assert.Contains("Highest(40)", max.Indicators);
+        // with the channel shorter than the ATR, the ATR wins
+        Assert.Equal(14, StrategyWarmup.Measure(typeof(ChannelWithAtr), new Dictionary<string, object?> { ["Channel"] = 10.0 }).Bars);
 
-        Assert.Equal(26, StrategyWarmup.Measure(typeof(RsiYMacd)).Bars); // la EMA lenta del MACD (el RSI pide 15)
+        Assert.Equal(26, StrategyWarmup.Measure(typeof(RsiYMacd)).Bars); // the MACD's slow EMA (the RSI asks for 15)
         var none = StrategyWarmup.Measure(typeof(SinIndicadores));
         Assert.True(none.Complete);
         Assert.Equal(0, none.Bars);
         Assert.Empty(none.Indicators);
         var bad = StrategyWarmup.Measure(typeof(FallaAlEmpezar));
         Assert.False(bad.Complete);
-        Assert.Contains("roto", bad.Error);
+        Assert.Contains("broken", bad.Error);
     }
 
     [Fact]
-    public void Calentamiento_medido_coincide_con_el_del_backtest()
+    public void The_measured_warmup_matches_the_backtest_one()
     {
         var prices = Enumerable.Range(0, 300).Select(i => 1000m + (decimal)Math.Round(30 * Math.Sin(i / 9.0))).ToArray();
-        var s = new CanalConAtr { Canal = 30 };
+        var s = new ChannelWithAtr { Channel = 30 };
         var r = new BacktestEngine(s, Ticks(prices), Settings()).Run();
         Assert.Null(r.Error);
-        Assert.Equal(StrategyWarmup.Measure(typeof(CanalConAtr), s.GetParameters()).Bars, s.ReadyAt);
+        Assert.Equal(StrategyWarmup.Measure(typeof(ChannelWithAtr), s.GetParameters()).Bars, s.ReadyAt);
         Assert.Equal(30, s.ReadyAt);
     }
 }

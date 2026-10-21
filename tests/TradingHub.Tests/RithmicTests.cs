@@ -6,7 +6,7 @@ using TradingHub.Trading;
 
 namespace TradingHub.Tests;
 
-/// <summary>Rithmic contra un servidor de mentira: historia paginada, velas, contrato del mes y órdenes.</summary>
+/// <summary>Rithmic against a fake server: paginated history, candles, front-month contract and orders.</summary>
 public class RithmicTests
 {
     private static readonly Instrument Es = new() { Symbol = "ES", FeedId = RithmicFeed.FeedId, Exchange = "CME", TickSize = 0.25m, VolumeStep = 1, PointValue = 50 };
@@ -22,10 +22,10 @@ public class RithmicTests
     }
 
     [Fact]
-    public async Task La_historia_tick_a_tick_se_pagina_sin_perder_ni_repetir()
+    public async Task The_tick_by_tick_history_paginates_without_losing_or_repeating()
     {
         using var server = new FakeRithmicServer { PageSize = 7 };
-        // 31 operaciones; varias en el mismo segundo justo donde se corta una página
+        // 31 trades; several in the same second right where a page is cut
         int n = 0;
         for (int sec = 0; sec < 10; sec++)
             for (int k = 0; k < (sec == 2 ? 6 : 3); k++)
@@ -45,7 +45,7 @@ public class RithmicTests
     }
 
     [Fact]
-    public async Task Las_velas_de_un_minuto_llegan_con_volumen_comprador()
+    public async Task The_one_minute_candles_arrive_with_buy_volume()
     {
         using var server = new FakeRithmicServer { PageSize = 5 };
         for (int i = 1; i <= 17; i++) server.Bars.Add((T0 + i * 60, 5000, 5002, 4999, 5001, 100 + i, 60));
@@ -54,13 +54,13 @@ public class RithmicTests
         await feed.LoadKlinesAsync(Es, DateTimeOffset.FromUnixTimeSeconds(T0).UtcDateTime, DateTimeOffset.FromUnixTimeSeconds(T0 + 3600).UtcDateTime, 1, 0,
             b => { got.AddRange(b); return true; }, null, CancellationToken.None);
         Assert.Equal(17, got.Count);
-        Assert.Equal(T0 * 1000, got[0].OpenTimeMs); // la marca es el cierre: abre un minuto antes
+        Assert.Equal(T0 * 1000, got[0].OpenTimeMs); // the stamp is the close: it opens a minute earlier
         Assert.All(got, k => Assert.Equal(60m, k.BuyVolume));
         Assert.Equal(117m, got[^1].Volume);
     }
 
     [Fact]
-    public async Task Sabe_el_contrato_del_mes_y_la_ultima_operacion()
+    public async Task It_knows_the_front_month_contract_and_the_last_trade()
     {
         using var server = new FakeRithmicServer { LastTradeSsboe = T0 + 123 };
         var feed = new RithmicFeed(Settings(server));
@@ -72,7 +72,7 @@ public class RithmicTests
     }
 
     [Fact]
-    public async Task La_cuenta_opera_mercado_limite_modifica_y_cancela()
+    public async Task The_account_trades_market_limit_modifies_and_cancels()
     {
         using var server = new FakeRithmicServer { MarketPrice = 5000 };
         var feed = new RithmicFeed(Settings(server));
@@ -87,7 +87,7 @@ public class RithmicTests
         using var broker = new RithmicBroker(data, session, "ACC1", "ACC1", ct => feed.ContractAsync(Es, ct));
         Assert.False(broker.IsReal);
 
-        // mercado: se llena y la posición llega por la planta de PnL
+        // market: it fills and the position arrives via the PnL plant
         broker.Market(OrderDirections.Buy, 2);
         await Until(() => broker.Position.Volume == 2);
         Assert.Equal(2m, broker.Position.Volume);
@@ -95,26 +95,26 @@ public class RithmicTests
         await Until(() => !broker.ActiveOrders.Any());
         Assert.Empty(broker.ActiveOrders);
 
-        // límite: queda activa con su número de Rithmic
+        // limit: it stays active with its Rithmic number
         var limit = broker.Limit(OrderDirections.Sell, 1, 5010);
         await Until(() => limit.ExchangeOrderId.Length > 0);
         Assert.StartsWith("B", limit.ExchangeOrderId);
         Assert.Contains(limit, broker.ActiveOrders);
         Assert.Equal(5010.0, server.Open[limit.ExchangeOrderId].Price);
 
-        // modificar el precio
+        // modify the price
         broker.Modify(limit, 5012);
         await Until(() => server.Open[limit.ExchangeOrderId].Price == 5012);
         Assert.Equal(5012.0, server.Open[limit.ExchangeOrderId].Price);
         Assert.Equal(5012m, limit.Price);
 
-        // cancelar
+        // cancel
         broker.Cancel(limit);
         await Until(() => !broker.ActiveOrders.Contains(limit));
         Assert.DoesNotContain(limit, broker.ActiveOrders);
         Assert.Equal(OrderStatus.Canceled, limit.Status);
 
-        // cerrar la posición
+        // close the position
         broker.Flatten();
         await Until(() => broker.Position.Volume == 0);
         Assert.Equal(0m, broker.Position.Volume);
@@ -145,9 +145,9 @@ public class RithmicTests
     private static readonly Instrument Mes = new() { Symbol = "MES", FeedId = RithmicFeed.FeedId, Exchange = "CME", TickSize = 0.25m, VolumeStep = 1, PointValue = 5 };
 
     [Fact]
-    public async Task Varios_graficos_y_la_historia_comparten_una_sola_sesion_por_planta()
+    public async Task Several_charts_and_the_history_share_a_single_session_per_plant()
     {
-        // Rithmic deja una sola sesión por usuario en cada planta: antes cada gráfico abría la suya y se cortaban entre sí
+        // Rithmic allows a single session per user on each plant: before, each chart opened its own and they cut each other off
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         using var server = new FakeRithmicServer { PageSize = 50, LastTradeSsboe = now - 2 };
         for (int i = 0; i < 30; i++) server.Ticks.Add((now - 600 + i * 10, 0, 5000 + i * 0.25, 1, i % 2 == 0));
@@ -160,7 +160,7 @@ public class RithmicTests
         Assert.Equal(FeedStatus.Connected, es.Status);
         Assert.Equal(FeedStatus.Connected, mes.Status);
 
-        // historia de los dos a la vez + el contrato del mes, por las mismas sesiones
+        // history of both at once + the front-month contract, over the same sessions
         var got = new List<Trade>[] { new(), new() };
         var from = DateTimeOffset.FromUnixTimeSeconds(now - 700).UtcDateTime;
         var to = DateTime.UtcNow;
@@ -171,7 +171,7 @@ public class RithmicTests
         Assert.Equal(30, got[0].Count);
         Assert.Equal(30, got[1].Count);
 
-        // en vivo cada uno recibe lo suyo
+        // live, each one receives its own
         await server.PushTrade("ESZ6", 5010.25, 3, true);
         await server.PushTrade("MESZ6", 5010.5, 7, false);
         await Until(() => es.Trades.Count > 0 && mes.Trades.Count > 0);
@@ -181,13 +181,13 @@ public class RithmicTests
         Assert.Equal(TradeSide.Sell, m.Side);
 
         Assert.Equal(0, server.Kicks);
-        Assert.Equal(1, server.Logins[1]); // una sola sesión de cotizaciones
-        Assert.Equal(1, server.Logins[3]); // una sola sesión de historia (reusada)
+        Assert.Equal(1, server.Logins[1]); // a single quote session
+        Assert.Equal(1, server.Logins[3]); // a single history session (reused)
         Assert.Equal(1, feed.TickerLogins);
     }
 
     [Fact]
-    public async Task Probar_la_conexion_usa_la_sesion_de_los_graficos()
+    public async Task Testing_the_connection_uses_the_charts_session()
     {
         using var server = new FakeRithmicServer();
         using var feed = new RithmicFeed(Settings(server));
@@ -201,22 +201,22 @@ public class RithmicTests
     }
 
     [Theory]
-    [InlineData("2026-09-01", "ESU6")] // antes del roll de septiembre
-    [InlineData("2026-09-11", "ESU6")] // el viernes anterior todavía opera el de septiembre (ESZ6: 127 mil contratos)
-    [InlineData("2026-09-14", "ESZ6")] // roll: lunes de la semana del vencimiento (viernes 18) → 845 mil contratos
+    [InlineData("2026-09-01", "ESU6")] // before the September roll
+    [InlineData("2026-09-11", "ESU6")] // the previous Friday the September one still trades (ESZ6: 127 thousand contracts)
+    [InlineData("2026-09-14", "ESZ6")] // roll: Monday of expiry week (Friday the 18th) -> 845 thousand contracts
     [InlineData("2026-10-11", "ESZ6")]
     [InlineData("2026-12-11", "ESZ6")]
-    [InlineData("2026-12-14", "ESH7")] // roll de diciembre: pasa al de marzo del año siguiente
-    [InlineData("2026-03-13", "ESH6")] // vencimiento 20/03/2026 → roll lunes 16/03
+    [InlineData("2026-12-14", "ESH7")] // December roll: it moves to the following year's March one
+    [InlineData("2026-03-13", "ESH6")] // expiry 20/03/2026 -> roll Monday 16/03
     [InlineData("2026-03-16", "ESM6")]
-    public void El_contrato_de_cada_fecha_sigue_los_rolls(string date, string expected)
+    public void The_contract_of_each_date_follows_the_rolls(string date, string expected)
     {
         var t = DateTime.SpecifyKind(DateTime.Parse(date, System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc);
         Assert.Equal(expected, FuturesRolls.On("ES", t).Symbol);
     }
 
     [Fact]
-    public async Task La_historia_larga_pide_cada_contrato_en_su_tramo()
+    public async Task The_long_history_requests_each_contract_in_its_stretch()
     {
         using var server = new FakeRithmicServer { PageSize = 500, LastTradeSsboe = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
         long sep5 = new DateTimeOffset(2026, 9, 5, 15, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds();
@@ -233,7 +233,7 @@ public class RithmicTests
         Assert.Contains(server.TickRequests, r => r.Symbol == "ESZ6" && r.Start == roll);
         Assert.Equal(2, got.Count);
 
-        // un día suelto para el backtest: con el contrato de ese día
+        // a single day for the backtest: with that day's contract
         server.TickRequests.Clear();
         var day = await feed.DownloadDayAsync(Es, new DateOnly(2026, 9, 5), null, CancellationToken.None);
         Assert.Single(day!);
@@ -242,9 +242,9 @@ public class RithmicTests
     }
 
     [Fact]
-    public async Task Un_contrato_vencido_sin_historia_se_prueba_con_dos_cifras_y_se_avisa()
+    public async Task An_expired_contract_with_no_history_is_tried_with_two_digits_and_reported()
     {
-        // el servidor (como Rithmic) solo tiene el contrato actual: los vencidos vuelven vacíos
+        // the server (like Rithmic) only has the current contract: the expired ones come back empty
         using var server = new FakeRithmicServer { PageSize = 500, OnlySymbol = "ESZ6", LastTradeSsboe = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
         server.Ticks.Add((new DateTimeOffset(2026, 9, 3, 15, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds(), 0, 6500, 2, true));
         using var feed = new RithmicFeed(Settings(server));
@@ -258,9 +258,9 @@ public class RithmicTests
     }
 
     [Fact]
-    public async Task Un_dia_con_cien_mil_operaciones_baja_completo()
+    public async Task A_day_with_a_hundred_thousand_trades_downloads_in_full()
     {
-        // páginas grandes como las de Rithmic: no se pierde ni se repite nada y no tarda una eternidad
+        // big pages like Rithmic's: nothing is lost or repeated and it does not take forever
         using var server = new FakeRithmicServer { PageSize = 10_000 };
         long t0 = new DateTimeOffset(2026, 10, 6, 13, 30, 0, TimeSpan.Zero).ToUnixTimeSeconds();
         for (int i = 0; i < 100_000; i++) server.Ticks.Add((t0 + i / 20, (i % 20) * 50_000, 6700 + (i % 40) * 0.25, 1 + i % 3, i % 2 == 0));
@@ -270,30 +270,30 @@ public class RithmicTests
         sw.Stop();
         Assert.Equal(100_000, day!.Count);
         Assert.Equal(day.Count, day.Select(t => t.Id).Distinct().Count());
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(60), $"tardó {sw.Elapsed}");
-        Console.WriteLine($"100.000 operaciones en {sw.Elapsed.TotalSeconds:0.0} s");
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(60), $"it took {sw.Elapsed}");
+        Console.WriteLine($"100,000 trades in {sw.Elapsed.TotalSeconds:0.0} s");
     }
 
     [Fact]
-    public async Task Con_la_contrasena_mal_la_sesion_lo_dice()
+    public async Task With_the_wrong_password_the_session_says_so()
     {
         using var server = new FakeRithmicServer();
         using var session = new RithmicTradingSession(Settings(server, password: "mal"));
         session.Start();
-        await Until(() => session.StatusText.Contains("permission", StringComparison.OrdinalIgnoreCase) || session.StatusText.Contains("rechaz", StringComparison.OrdinalIgnoreCase));
+        await Until(() => session.StatusText.Contains("permission", StringComparison.OrdinalIgnoreCase) || session.StatusText.Contains("rejected", StringComparison.OrdinalIgnoreCase));
         Assert.False(session.IsConnected);
         Assert.Empty(session.Accounts);
         Assert.Contains("permission denied", session.StatusText);
     }
 
     [Theory]
-    [InlineData("2026-10-04T03:35:00Z", true, "2026-10-04T22:00:00Z")] // sábado a la noche en Chicago: abre el domingo 17:00
-    [InlineData("2026-10-02T20:59:00Z", false, "2026-10-02T20:59:00Z")] // viernes 15:59 en Chicago: abierto
-    [InlineData("2026-10-02T21:00:00Z", true, "2026-10-04T22:00:00Z")] // viernes 16:00: cierra el fin de semana
-    [InlineData("2026-09-30T21:30:00Z", true, "2026-09-30T22:00:00Z")] // miércoles en la pausa diaria
-    [InlineData("2026-09-30T22:00:00Z", false, "2026-09-30T22:00:00Z")] // miércoles 17:00: abierto otra vez
-    [InlineData("2026-12-06T22:30:00Z", true, "2026-12-06T23:00:00Z")] // domingo de invierno (CST, UTC-6): abre a las 23:00 UTC
-    public void El_horario_de_Globex_sabe_cuando_esta_cerrado(string utc, bool closed, string nextOpen)
+    [InlineData("2026-10-04T03:35:00Z", true, "2026-10-04T22:00:00Z")] // Saturday night in Chicago: it opens on Sunday at 17:00
+    [InlineData("2026-10-02T20:59:00Z", false, "2026-10-02T20:59:00Z")] // Friday 15:59 in Chicago: open
+    [InlineData("2026-10-02T21:00:00Z", true, "2026-10-04T22:00:00Z")] // Friday 16:00: it closes for the weekend
+    [InlineData("2026-09-30T21:30:00Z", true, "2026-09-30T22:00:00Z")] // Wednesday in the daily break
+    [InlineData("2026-09-30T22:00:00Z", false, "2026-09-30T22:00:00Z")] // Wednesday 17:00: open again
+    [InlineData("2026-12-06T22:30:00Z", true, "2026-12-06T23:00:00Z")] // winter Sunday (CST, UTC-6): it opens at 23:00 UTC
+    public void The_Globex_schedule_knows_when_it_is_closed(string utc, bool closed, string nextOpen)
     {
         var t = DateTime.Parse(utc, null, System.Globalization.DateTimeStyles.AdjustToUniversal);
         Assert.Equal(closed, FuturesSessions.IsGlobexClosed(t));
@@ -301,9 +301,9 @@ public class RithmicTests
     }
 
     [Fact]
-    public async Task Con_el_mercado_cerrado_la_historia_muestra_la_ultima_sesion()
+    public async Task With_the_market_closed_the_history_shows_the_last_session()
     {
-        // la última operación fue hace 2 días: la historia se arma hasta ahí
+        // the last trade was 2 days ago: the history is built up to there
         long last = DateTimeOffset.UtcNow.AddDays(-2).ToUnixTimeSeconds();
         using var server = new FakeRithmicServer { LastTradeSsboe = last, PageSize = 50 };
         for (int i = 0; i < 40; i++) server.Ticks.Add((last - 600 + i * 10, 0, 5000 + i * 0.25, 1, i % 2 == 0));

@@ -6,7 +6,7 @@ namespace TradingHub.Localization
     {
         private static readonly ConcurrentDictionary<string, string> Overrides = new();
 
-        /// <summary>Permite reemplazar textos en tiempo de ejecución (traducciones del usuario).</summary>
+        /// <summary>Allows replacing texts at run time (user translations).</summary>
         public static void Set(string key, string value) => Overrides[key] = value;
 
         public static string Get(string key, string fallback) => Overrides.TryGetValue(key, out var v) ? v : fallback;

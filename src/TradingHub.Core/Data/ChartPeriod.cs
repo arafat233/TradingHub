@@ -10,19 +10,19 @@ public enum PeriodType
     Days,
     Weeks,
     Months,
-    /// <summary>N operaciones por vela.</summary>
+    /// <summary>N trades per candle.</summary>
     Tick,
-    /// <summary>N de volumen por vela.</summary>
+    /// <summary>N of volume per candle.</summary>
     Volume,
-    /// <summary>Rango de N ticks por vela.</summary>
+    /// <summary>Range of N ticks per candle.</summary>
     Range,
-    /// <summary>Delta de N por vela (la vela cierra cuando |delta| llega a N).</summary>
+    /// <summary>Delta of N per candle (the candle closes when |delta| reaches N).</summary>
     Delta,
-    /// <summary>Renko de N ticks.</summary>
+    /// <summary>Renko of N ticks.</summary>
     Renko,
 }
 
-/// <summary>Período del gráfico (ej. 5 minutos, 1000 ticks, rango de 20 ticks).</summary>
+/// <summary>Chart period (e.g. 5 minutes, 1000 ticks, range of 20 ticks).</summary>
 public readonly record struct ChartPeriod(PeriodType Type, decimal Value)
 {
     public static ChartPeriod M1 => new(PeriodType.Minutes, 1);
@@ -35,7 +35,7 @@ public readonly record struct ChartPeriod(PeriodType Type, decimal Value)
 
     public bool IsTimeBased => Type is PeriodType.Seconds or PeriodType.Minutes or PeriodType.Hours or PeriodType.Days or PeriodType.Weeks or PeriodType.Months;
 
-    /// <summary>Duración fija para períodos de tiempo (meses ≈ 30 días, solo para estimaciones).</summary>
+    /// <summary>Fixed duration for time periods (months ~ 30 days, for estimates only).</summary>
     public TimeSpan ApproxDuration => Type switch
     {
         PeriodType.Seconds => TimeSpan.FromSeconds((double)Value),
@@ -47,7 +47,7 @@ public readonly record struct ChartPeriod(PeriodType Type, decimal Value)
         _ => TimeSpan.Zero,
     };
 
-    /// <summary>Nombre corto estilo ATAS: M1, M5, H1, Daily, Tick500, Range10...</summary>
+    /// <summary>Short ATAS-style name: M1, M5, H1, Daily, Tick500, Range10...</summary>
     public string Code
     {
         get
@@ -71,7 +71,7 @@ public readonly record struct ChartPeriod(PeriodType Type, decimal Value)
         }
     }
 
-    /// <summary>Nombre para mostrar en la UI.</summary>
+    /// <summary>Name to show in the UI.</summary>
     public string DisplayName
     {
         get
@@ -84,10 +84,10 @@ public readonly record struct ChartPeriod(PeriodType Type, decimal Value)
                 PeriodType.Hours => $"{v}h",
                 PeriodType.Days => Value == 1 ? "D" : $"{v}D",
                 PeriodType.Weeks => Value == 1 ? "S" : $"{v}S",
-                PeriodType.Months => Value == 1 ? "Mes" : $"{v} meses",
+                PeriodType.Months => Value == 1 ? "Month" : $"{v} months",
                 PeriodType.Tick => $"{v} ticks",
                 PeriodType.Volume => $"Vol {v}",
-                PeriodType.Range => $"Rango {v}",
+                PeriodType.Range => $"Range {v}",
                 PeriodType.Delta => $"Delta {v}",
                 PeriodType.Renko => $"Renko {v}",
                 _ => v,
@@ -100,12 +100,12 @@ public readonly record struct ChartPeriod(PeriodType Type, decimal Value)
     public static ChartPeriod Parse(string code)
     {
         if (TryParse(code, out var p)) return p;
-        throw new FormatException($"Período inválido: {code}");
+        throw new FormatException($"Invalid period: {code}");
     }
 
     /// <summary>
-    /// Lee un período escrito a mano: los códigos de siempre (M5, H1, D1, Daily, Tick500, Range20…) sin importar
-    /// mayúsculas, lo que muestra la barra del gráfico (5m, 1h, D, 2D) y nombres en castellano (diario, semanal, mensual).
+    /// Parses a hand-written period: the usual codes (M5, H1, D1, Daily, Tick500, Range20…) regardless of
+    /// case, what the chart's toolbar shows (5m, 1h, D, 2D) and Spanish names (diario, semanal, mensual).
     /// </summary>
     public static bool TryParse(string? code, out ChartPeriod period)
     {
@@ -142,7 +142,7 @@ public readonly record struct ChartPeriod(PeriodType Type, decimal Value)
             }
         }
 
-        // como lo muestra la barra del gráfico: el número primero (30s, 5m, 1h, 2D, 3W, 2mo)
+        // the way the chart's toolbar shows it: the number first (30s, 5m, 1h, 2D, 3W, 2mo)
         (string suffix, PeriodType type)[] suffixes =
         {
             ("mo", PeriodType.Months), ("s", PeriodType.Seconds), ("m", PeriodType.Minutes), ("h", PeriodType.Hours),

@@ -7,38 +7,38 @@ using System.Text.Json.Nodes;
 
 namespace TradingHub.Feeds.CTrader;
 
-/// <summary>Conexión a la Open API de cTrader (IC Markets, Pepperstone, FxPro, Fusion… con la misma API).</summary>
+/// <summary>Connection to the cTrader Open API (IC Markets, Pepperstone, FxPro, Fusion… all with the same API).</summary>
 public sealed class CTraderSettings
 {
-    /// <summary>Cuenta real (live.ctraderapi.com); si no, demo.</summary>
+    /// <summary>Real account (live.ctraderapi.com); otherwise, demo.</summary>
     public bool Live { get; set; }
 
-    /// <summary>Aplicación registrada en openapi.ctrader.com (gratis).</summary>
+    /// <summary>Application registered at openapi.ctrader.com (free).</summary>
     public string ClientId { get; set; } = "";
     public string ClientSecret { get; set; } = "";
 
-    /// <summary>Token de acceso del usuario (OAuth o el «Playground» de la aplicación).</summary>
+    /// <summary>The user's access token (OAuth or the application's "Playground" one).</summary>
     public string AccessToken { get; set; } = "";
     public string RefreshToken { get; set; } = "";
 
-    /// <summary>Número de cuenta de cTrader (el login que se ve en cTrader); 0 = la primera del entorno.</summary>
+    /// <summary>cTrader account number (the login you see in cTrader); 0 = the first one of the environment.</summary>
     public long TraderLogin { get; set; }
 
-    /// <summary>Servidor alternativo (pruebas): ws://127.0.0.1:puerto</summary>
+    /// <summary>Alternative server (tests): ws://127.0.0.1:port</summary>
     public string? Url { get; set; }
 }
 
-/// <summary>Un símbolo de la cuenta de cTrader.</summary>
+/// <summary>A symbol of the cTrader account.</summary>
 public sealed record CTraderSymbol(long Id, string Name, string Description, int Digits, decimal LotSize, decimal StepVolume, decimal MinVolume);
 
 /// <summary>
-/// Una sola conexión JSON (puerto 5036) con la Open API de cTrader para todos los gráficos y descargas: autentica la
-/// aplicación y la cuenta, mantiene el latido cada 10 s, correlaciona pedidos y respuestas por clientMsgId y reparte
-/// los precios en vivo (ProtoOASpotEvent) a cada suscripción. Se reconecta sola y vuelve a suscribir lo que estaba.
+/// A single JSON connection (port 5036) to the cTrader Open API for every chart and download: it authenticates the
+/// application and the account, keeps the heartbeat every 10 s, matches requests with responses by clientMsgId and distributes
+/// the live prices (ProtoOASpotEvent) to each subscription. It reconnects on its own and resubscribes what was there.
 /// </summary>
 public sealed class CTraderSession : IDisposable
 {
-    // tipos de mensaje (ProtoOAPayloadType / ProtoPayloadType)
+    // message types (ProtoOAPayloadType / ProtoPayloadType)
     public const int ErrorRes = 50, Heartbeat = 51;
     public const int AppAuthReq = 2100, AppAuthRes = 2101, AccountAuthReq = 2102, AccountAuthRes = 2103;
     public const int SymbolsListReq = 2114, SymbolsListRes = 2115, SymbolByIdReq = 2116, SymbolByIdRes = 2117;
@@ -66,13 +66,13 @@ public sealed class CTraderSession : IDisposable
     public bool IsConnected => _ws?.State == WebSocketState.Open && AccountId != 0;
     public IReadOnlyList<CTraderSymbol> Symbols { get; private set; } = Array.Empty<CTraderSymbol>();
 
-    /// <summary>Token renovado por la Open API (para guardarlo en el Llavero).</summary>
+    /// <summary>Token renewed by the Open API (to store it in the Keychain).</summary>
     public event Action<string, string>? TokensRefreshed;
 
-    /// <summary>Precio en vivo: símbolo, bid y ask (en 1/100000), hora (ms Unix).</summary>
+    /// <summary>Live price: symbol, bid and ask (in 1/100000), time (Unix ms).</summary>
     public event Action<long, long?, long?, long?>? Spot;
 
-    /// <summary>Se cortó o se volvió a conectar (para el estado de los gráficos).</summary>
+    /// <summary>It dropped or reconnected (for the charts' status).</summary>
     public event Action<bool, string?>? ConnectionChanged;
 
     private string Url
@@ -84,7 +84,7 @@ public sealed class CTraderSession : IDisposable
         }
     }
 
-    // ===================================================================== conexión
+    // ===================================================================== connection
 
     public async Task EnsureConnectedAsync(CancellationToken ct)
     {
@@ -105,10 +105,10 @@ public sealed class CTraderSession : IDisposable
     {
         var s = _settings();
         if (string.IsNullOrWhiteSpace(s.ClientId) || string.IsNullOrWhiteSpace(s.ClientSecret))
-            throw new InvalidOperationException("Faltan el Client ID y el Secret de tu aplicación de cTrader (se crean gratis en openapi.ctrader.com).");
+            throw new InvalidOperationException("Your cTrader application's Client ID and Secret are missing (they are created for free at openapi.ctrader.com).");
         if (string.IsNullOrWhiteSpace(s.AccessToken))
-            throw new InvalidOperationException("Falta el token de acceso de cTrader: tocá «Conectar con cTrader» o pegá el del Playground de tu aplicación.");
-        Drop("reconectando");
+            throw new InvalidOperationException("The cTrader access token is missing: click “Connect with cTrader” or paste the one from your application's Playground.");
+        Drop("reconnecting");
         var ws = new ClientWebSocket();
         ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
         using (var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
@@ -129,17 +129,17 @@ public sealed class CTraderSession : IDisposable
         var match = list.Where(a => (a.TryGetProperty("isLive", out var il) && il.ValueKind == JsonValueKind.True) == s.Live).ToList();
         if (match.Count == 0)
             throw new InvalidOperationException(list.Count == 0
-                ? "El token no tiene cuentas de cTrader autorizadas."
-                : $"El token tiene {list.Count} cuenta(s) pero ninguna {(s.Live ? "real" : "demo")}: cambiá el entorno en la conexión.");
+                ? "The token has no authorized cTrader accounts."
+                : $"The token has {list.Count} account(s) but none {(s.Live ? "real" : "demo")}: change the environment on the connection.");
         var chosen = s.TraderLogin > 0 ? match.FirstOrDefault(a => Long(a, "traderLogin") == s.TraderLogin) : match[0];
         if (chosen.ValueKind != JsonValueKind.Object)
-            throw new InvalidOperationException($"No encontré la cuenta {s.TraderLogin} en el token. Cuentas {(s.Live ? "reales" : "demo")}: {string.Join(", ", match.Select(a => Long(a, "traderLogin")))}.");
+            throw new InvalidOperationException($"Account {s.TraderLogin} was not found on the token. Accounts {(s.Live ? "real" : "demo")}: {string.Join(", ", match.Select(a => Long(a, "traderLogin")))}.");
         AccountId = Long(chosen, "ctidTraderAccountId");
         AccountTitle = $"{(chosen.TryGetProperty("brokerTitleShort", out var bt) ? bt.GetString() : "cTrader")} {Long(chosen, "traderLogin")}";
         await RawRequestAsync(AccountAuthReq, new JsonObject { ["ctidTraderAccountId"] = AccountId, ["accessToken"] = s.AccessToken.Trim() }, ct).ConfigureAwait(false);
         await LoadSymbolsAsync(ct).ConfigureAwait(false);
 
-        // lo que estaba suscripto antes del corte
+        // whatever was subscribed before the drop
         var ids = _spots.Keys.ToList();
         if (ids.Count > 0) await SendSpotsAsync(SubscribeSpotsReq, ids, ct).ConfigureAwait(false);
         ConnectionChanged?.Invoke(true, null);
@@ -151,7 +151,7 @@ public sealed class CTraderSession : IDisposable
         var light = res.TryGetProperty("symbol", out var arr) ? arr.EnumerateArray().Where(x => !x.TryGetProperty("enabled", out var en) || en.ValueKind != JsonValueKind.False).ToList() : new();
         var names = light.ToDictionary(x => Long(x, "symbolId"), x => (Name: Str(x, "symbolName"), Desc: Str(x, "description")));
         var symbols = new List<CTraderSymbol>();
-        // detalles (dígitos, tamaño de lote, paso de volumen) de a 200
+        // details (digits, lot size, volume step) in batches of 200
         foreach (var chunk in names.Keys.Chunk(200))
         {
             var ids = new JsonArray(chunk.Select(id => (JsonNode)id).ToArray());
@@ -187,14 +187,14 @@ public sealed class CTraderSession : IDisposable
         }
         catch
         {
-            // ya cerrado
+            // already closed
         }
 
         _ws = null;
         AccountId = 0;
         foreach (var p in _pending)
             if (_pending.TryRemove(p.Key, out var tcs))
-                tcs.TrySetException(new IOException("Se cortó la conexión con cTrader (" + why + ")"));
+                tcs.TrySetException(new IOException("The connection to cTrader dropped (" + why + ")"));
         if (was) ConnectionChanged?.Invoke(false, why);
     }
 
@@ -210,7 +210,7 @@ public sealed class CTraderSession : IDisposable
         }
         catch
         {
-            // el corte lo detecta la lectura
+            // the drop is detected by the read
         }
     }
 
@@ -218,7 +218,7 @@ public sealed class CTraderSession : IDisposable
     {
         var buf = new byte[1 << 16];
         var ms = new MemoryStream();
-        string why = "se cortó la conexión";
+        string why = "the connection dropped";
         try
         {
             while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
@@ -234,7 +234,7 @@ public sealed class CTraderSession : IDisposable
 
                 if (r.MessageType == WebSocketMessageType.Close)
                 {
-                    why = "cTrader cerró la conexión";
+                    why = "cTrader closed the connection";
                     break;
                 }
 
@@ -281,10 +281,10 @@ public sealed class CTraderSession : IDisposable
                 Spot?.Invoke(symbol, bid, ask, ts);
                 return;
             case TokenInvalidatedEvent:
-                Drop("cTrader invalidó el token: volvé a conectar la cuenta");
+                Drop("cTrader invalidated the token: connect the account again");
                 return;
             case ClientDisconnectEvent:
-                Drop("cTrader cortó la sesión: " + Str(payload, "reason"));
+                Drop("cTrader dropped the session: " + Str(payload, "reason"));
                 return;
         }
 
@@ -310,10 +310,10 @@ public sealed class CTraderSession : IDisposable
         }
     }
 
-    /// <summary>Pedido sin exigir la cuenta autenticada (para la autenticación misma).</summary>
+    /// <summary>Request that does not require the account to be authenticated (for the authentication itself).</summary>
     private async Task<JsonElement> RawRequestAsync(int type, JsonObject payload, CancellationToken ct)
     {
-        var ws = _ws ?? throw new IOException("Sin conexión con cTrader");
+        var ws = _ws ?? throw new IOException("No connection to cTrader");
         string id = "v" + Interlocked.Increment(ref _msgId).ToString(CultureInfo.InvariantCulture);
         var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = tcs;
@@ -327,7 +327,7 @@ public sealed class CTraderSession : IDisposable
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new TimeoutException("cTrader no respondió a tiempo");
+            throw new TimeoutException("cTrader did not respond in time");
         }
         finally
         {
@@ -335,14 +335,14 @@ public sealed class CTraderSession : IDisposable
         }
     }
 
-    /// <summary>Pedido con la cuenta ya autenticada (conecta si hace falta).</summary>
+    /// <summary>Request with the account already authenticated (it connects if needed).</summary>
     public async Task<JsonElement> RequestAsync(int type, JsonObject payload, CancellationToken ct)
     {
         await EnsureConnectedAsync(ct).ConfigureAwait(false);
         return await RawRequestAsync(type, payload, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Pedido de historia: de a uno y con una pausa entre pedidos (la Open API limita los de historia).</summary>
+    /// <summary>History request: one at a time and with a pause between requests (the Open API rate-limits the history ones).</summary>
     public async Task<JsonElement> HistoryRequestAsync(int type, JsonObject payload, CancellationToken ct)
     {
         await _historyGate.WaitAsync(ct).ConfigureAwait(false);
@@ -372,7 +372,7 @@ public sealed class CTraderSession : IDisposable
         }
     }
 
-    // ===================================================================== precios en vivo
+    // ===================================================================== live prices
 
     public async Task SubscribeAsync(long symbolId, CancellationToken ct)
     {
@@ -393,7 +393,7 @@ public sealed class CTraderSession : IDisposable
         }
         catch
         {
-            // ya no importa
+            // it no longer matters
         }
     }
 
@@ -409,7 +409,7 @@ public sealed class CTraderSession : IDisposable
         }
     }
 
-    /// <summary>Renueva el token con el refresh token (vale 30 días); avisa para guardarlo.</summary>
+    /// <summary>Renews the token with the refresh token (valid for 30 days); reports it so it can be stored.</summary>
     public async Task<bool> RefreshTokenAsync(CancellationToken ct)
     {
         var s = _settings();
@@ -421,7 +421,7 @@ public sealed class CTraderSession : IDisposable
         return true;
     }
 
-    // ===================================================================== ayudas JSON
+    // ===================================================================== JSON helpers
 
     internal static bool Has(JsonElement e, string key) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v) && v.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
 
@@ -443,11 +443,11 @@ public sealed class CTraderSession : IDisposable
     public void Dispose()
     {
         _life.Cancel();
-        Drop("cerrada");
+        Drop("closed");
     }
 }
 
-/// <summary>Error de la Open API de cTrader (código y descripción).</summary>
+/// <summary>cTrader Open API error (code and description).</summary>
 public sealed class CTraderException(string code, string description) : Exception(string.IsNullOrEmpty(description) ? $"cTrader: {code}" : $"cTrader: {description} ({code})")
 {
     public string Code { get; } = code;

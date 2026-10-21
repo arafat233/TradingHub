@@ -1,43 +1,44 @@
-# Documentación de Trading Hub
+# Trading Hub documentation
 
-[← Volver al README principal](../README.md)
+[← Back to the main README](../README.md)
 
-Guía completa de la plataforma, sección por sección. Si recién llegás, empezá por la instalación y los primeros pasos.
+A complete guide to the platform, section by section. If you have just arrived, start with the installation and the
+getting-started tour.
 
-## Empezar
+## Getting started
 
-- [Instalación](instalacion.md): requisitos, compilar e instalar, actualizar y desinstalar.
-- [Primeros pasos](primeros-pasos.md): un recorrido por la ventana principal y la cuenta simulada.
-- [Conexiones](conexiones.md): brokers, exchanges y proveedores de datos; cuentas reales y simuladas.
+- [Installation](installation.md): requirements, building and installing, updating and uninstalling.
+- [Getting started](getting-started.md): a tour of the main window and the simulated account.
+- [Connections](connections.md): brokers, exchanges and data providers; real and simulated accounts.
 
-## Mirar y operar
+## Watching and trading
 
-- [Gráficos](graficos.md): períodos, estilos, footprint, DOM, dibujos, plantillas, indicadores y replay.
-- [Operar](operar.md): Chart Trader, DOM, tipos de órdenes, brackets, cuentas e historial.
-- [Indicadores](indicadores.md): los incluidos, los tuyos en C# y la compatibilidad con la API de ATAS.
+- [Charts](charts.md): periods, styles, footprint, DOM, drawings, templates, indicators and replay.
+- [Trading](trading.md): Chart Trader, DOM, order types, brackets, accounts and history.
+- [Indicators](indicators.md): the included ones, your own in C# and ATAS API compatibility.
 
-## Datos
+## Data
 
-- [Datos](datos.md): lo que se graba solo, descargas, Databento (solo Rithmic, solo Databento o combinadas) e
-  importación de CSV.
+- [Data](data.md): what gets recorded automatically, downloads, Databento (Rithmic only, Databento only or combined)
+  and CSV import.
 
-## Estrategias
+## Strategies
 
-- [Estrategias](estrategias.md): la API en C# con ejemplos completos.
-- [Backtesting](backtesting.md): backtest, optimización bayesiana, walk-forward inteligente, PBO, CPCV, Monte Carlo y
-  resultados según el mercado.
-- [En vivo](en-vivo.md): estrategias en tus cuentas, límites de riesgo, portafolios y el agente de riesgo.
-- [Claude](asistente-claude.md): el asistente que escribe estrategias y el laboratorio MCP.
+- [Strategies](strategies.md): the C# API with complete examples.
+- [Backtesting](backtesting.md): backtest, Bayesian optimization, smart walk-forward, PBO, CPCV, Monte Carlo and
+  results by market regime.
+- [Live](live.md): strategies on your accounts, risk limits, portfolios and the risk agent.
+- [Claude](claude-assistant.md): the assistant that writes strategies and the MCP lab.
 
-## Más
+## More
 
-- [Ajustes](ajustes.md): todas las opciones.
-- [Privacidad](privacidad.md): qué queda en tu computadora y qué se conecta a internet.
-- [Desarrollo](desarrollo.md): estructura del código, compilar, pruebas y escenas sin pantalla.
-- [Portar a Windows](../PORTAR_A_WINDOWS.md): el plan y el prompt para llevarla a Windows con Claude.
+- [Settings](settings.md): every option.
+- [Privacy](privacy.md): what stays on your computer and what connects to the internet.
+- [Development](development.md): code structure, building, tests and headless scenes.
+- [Porting to Windows](../PORTING_TO_WINDOWS.md): the plan and the prompt to take it to Windows with Claude.
 
 ---
 
-Trading Hub es gratis y su código es público (licencia MIT con Commons Clause: se puede usar y modificar, no vender) y
-lo creó [@ralphtradesz](https://x.com/ralphtradesz). Si te sirve, podés
-[apoyar el proyecto](../README.md#apoyá-el-proyecto).
+Trading Hub is free and its code is public (MIT license with Commons Clause: it can be used and modified, not sold) and
+it was created by [@ralphtradesz](https://x.com/ralphtradesz). If it is useful to you, you can
+[support the project](../README.md#support-the-project).

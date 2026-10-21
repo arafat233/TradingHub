@@ -3,21 +3,21 @@ using TradingHub.Market;
 namespace TradingHub.Trading;
 
 /// <summary>
-/// Una cuenta donde se puede operar un instrumento: la simulada (paper) o una real (Binance...).
-/// El DOM, el gráfico y el ticket operan contra esta interfaz sin saber cuál es.
+/// An account an instrument can be traded on: the simulated (paper) one or a real one (Binance...).
+/// The DOM, the chart and the ticket trade against this interface without knowing which it is.
 /// </summary>
 public interface ITradingAccount
 {
     string Name { get; }
 
-    /// <summary>True si las órdenes van al mercado con dinero real.</summary>
+    /// <summary>True if the orders go to the market with real money.</summary>
     bool IsReal { get; }
 
     Instrument Instrument { get; }
     Position Position { get; }
     IEnumerable<Order> ActiveOrders { get; }
 
-    /// <summary>Último error del broker (orden rechazada, etc.).</summary>
+    /// <summary>Last broker error (order rejected, etc.).</summary>
     string? LastError { get; }
 
     event Action? Changed;
@@ -32,10 +32,10 @@ public interface ITradingAccount
     void Flatten();
     void Reverse();
 
-    /// <summary>Último precio operado del instrumento (0 si todavía no hay datos).</summary>
+    /// <summary>Last traded price of the instrument (0 if there is no data yet).</summary>
     decimal LastPrice => 0;
 
-    /// <summary>Orden de salida (stop loss / objetivo): solo puede reducir la posición, nunca darla vuelta.</summary>
+    /// <summary>Exit order (stop loss / target): it can only reduce the position, never reverse it.</summary>
     Order Exit(OrderTypes type, OrderDirections dir, decimal qty, decimal price, string comment = "")
     {
         var o = type == OrderTypes.Stop ? Stop(dir, qty, price, comment) : Limit(dir, qty, price, comment);
@@ -44,8 +44,8 @@ public interface ITradingAccount
     }
 
     /// <summary>
-    /// Cambia precio y cantidad de una orden. Devuelve la orden vigente: la misma, o una nueva si el
-    /// broker no permite modificar (cancela y vuelve a enviar).
+    /// Changes an order's price and quantity. It returns the current order: the same one, or a new one if the
+    /// broker does not allow modifying (it cancels and sends again).
     /// </summary>
     Order Replace(Order order, decimal newPrice, decimal newQuantity)
     {

@@ -7,31 +7,31 @@ using TradingHub.Rendering.Context;
 
 namespace TradingHub.Charting.Dom;
 
-/// <summary>Cinta de operaciones (Time &amp; Sales) con agregación por orden y filtro de tamaño.</summary>
+/// <summary>Trade tape (Time &amp; Sales) with per-order aggregation and a size filter.</summary>
 public sealed class TapeModel
 {
     public TapeModel(InstrumentData data) => Data = data;
 
     public InstrumentData Data { get; }
 
-    /// <summary>Sumar las ejecuciones de una misma orden agresiva (mismo milisegundo y lado).</summary>
+    /// <summary>Add up the fills of the same aggressive order (same millisecond and side).</summary>
     public bool Aggregate { get; set; } = true;
 
-    /// <summary>Volumen mínimo para mostrar.</summary>
+    /// <summary>Minimum volume to show.</summary>
     public decimal MinVolume { get; set; }
 
-    /// <summary>A partir de este volumen la fila se resalta.</summary>
+    /// <summary>From this volume up the row is highlighted.</summary>
     public decimal HighlightVolume { get; set; }
 
     public TimeZoneInfo TimeZone { get; set; } = TimeZoneInfo.Local;
 
     /// <summary>
-    /// Desplazada hacia atrás: índice de la operación más nueva que se muestra (null = en vivo, arriba la última).
-    /// Mientras está desplazada no se mueve aunque lleguen operaciones nuevas.
+    /// Scrolled back: index of the newest trade shown (null = live, the latest at the top).
+    /// While it is scrolled it does not move even if new trades arrive.
     /// </summary>
     public int? Anchor { get; set; }
 
-    /// <summary>Operaciones nuevas desde que se desplazó (para el aviso de arriba).</summary>
+    /// <summary>New trades since it was scrolled (for the notice at the top).</summary>
     public int NewSinceAnchor => Anchor is { } a ? Math.Max(0, Data.Trades.Count - 1 - a) : 0;
 }
 
@@ -43,7 +43,7 @@ public sealed class TapeRenderer
 
     private ChartTheme? _theme;
 
-    /// <summary>Colores (por defecto, la base del modo oscuro/claro de la app).</summary>
+    /// <summary>Colors (by default, the base of the app's dark/light mode).</summary>
     public ChartTheme Theme
     {
         get => _theme ?? ChartTheme.Base;
@@ -65,9 +65,9 @@ public sealed class TapeRenderer
         var head = RenderContext.GetFont(t.FontFamily, 10, false, false);
         float c1 = 6, c2 = width * 0.36f, c3 = width - 6;
         _text.Color = t.TextDim;
-        canvas.DrawText("Hora", c1, 14, head, _text);
-        canvas.DrawText("Precio", c2, 14, head, _text);
-        canvas.DrawText("Volumen", c3 - RenderContext.MeasureWidth(head, "Volumen"), 14, head, _text);
+        canvas.DrawText("Time", c1, 14, head, _text);
+        canvas.DrawText("Price", c2, 14, head, _text);
+        canvas.DrawText("Volume", c3 - RenderContext.MeasureWidth(head, "Volume"), 14, head, _text);
 
         int maxRows = (int)((height - HeaderH) / RowH) + 1;
         if (tape.Anchor is { } anchor && anchor >= tape.Data.Trades.Count - 1) tape.Anchor = null;
@@ -94,21 +94,21 @@ public sealed class TapeRenderer
             canvas.DrawText(v, c3 - RenderContext.MeasureWidth(f, v), y + baseOff, f, _text);
         }
 
-        // desplazada: el encabezado avisa y un clic ahí vuelve a lo último
+        // scrolled: the header says so and a click there goes back to the latest
         if (tape.Anchor != null)
         {
             _fill.Color = t.AxisBackground;
             canvas.DrawRect(0, 0, width, HeaderH, _fill);
-            string msg = tape.NewSinceAnchor > 0 ? $"▲ {tape.NewSinceAnchor:N0} nuevas · clic para volver" : "▲ clic para volver a lo último";
+            string msg = tape.NewSinceAnchor > 0 ? $"▲ {tape.NewSinceAnchor:N0} new · click to go back" : "▲ click to go back to the latest";
             _text.Color = t.LastPriceUp;
             canvas.DrawText(msg, width / 2 - RenderContext.MeasureWidth(head, msg) / 2, 14, head, _text);
         }
     }
 
-    /// <summary>Alto del encabezado (un clic ahí vuelve a lo último).</summary>
+    /// <summary>Header height (a click there goes back to the latest).</summary>
     public static float HeaderHeight => HeaderH;
 
-    /// <summary>Desplaza la cinta: filas positivas = hacia atrás (más viejas), negativas = hacia lo último.</summary>
+    /// <summary>Scrolls the tape: positive rows = backwards (older), negative = towards the latest.</summary>
     public static void Scroll(TapeModel tape, int rows)
     {
         var s = tape.Data.Trades;
@@ -118,7 +118,7 @@ public sealed class TapeRenderer
         {
             for (int k = 0; k < rows && i > 0; k++)
             {
-                int j = RowStart(tape, i) - 1; // la operación más nueva de la fila siguiente (más vieja)
+                int j = RowStart(tape, i) - 1; // the newest trade of the next row (older)
                 if (j < 0) break;
                 i = j;
             }
@@ -132,7 +132,7 @@ public sealed class TapeRenderer
         }
     }
 
-    /// <summary>Primera operación (la más vieja) de la fila cuya operación más nueva es <paramref name="i"/>.</summary>
+    /// <summary>First trade (the oldest) of the row whose newest trade is <paramref name="i"/>.</summary>
     private static int RowStart(TapeModel tape, int i)
     {
         if (!tape.Aggregate) return i;
@@ -144,7 +144,7 @@ public sealed class TapeRenderer
         return j;
     }
 
-    /// <summary>Operación más nueva de la fila que empieza en <paramref name="i"/> (yendo hacia lo último).</summary>
+    /// <summary>Newest trade of the row starting at <paramref name="i"/> (going towards the latest).</summary>
     private static int RowEndForward(TapeModel tape, int i)
     {
         var s = tape.Data.Trades;

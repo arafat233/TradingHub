@@ -3,15 +3,15 @@ using TradingHub.Common.Logging;
 
 namespace TradingHub.App.Services;
 
-/// <summary>Un mensaje guardado de una conversación con Claude.</summary>
+/// <summary>A stored message of a conversation with Claude.</summary>
 public sealed class ChatMessage
 {
-    /// <summary>"user", "assistant" o "note" (avisos de la app: errores, archivos tocados).</summary>
+    /// <summary>"user", "assistant" or "note" (app notices: errors, files touched).</summary>
     public string Role { get; set; } = "user";
     public string Text { get; set; } = "";
 }
 
-/// <summary>Conversación con Claude: los mensajes y el id de sesión para seguirla donde quedó (--resume).</summary>
+/// <summary>Conversation with Claude: the messages and the session id to continue where it left off (--resume).</summary>
 public sealed class ChatConversation
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -21,13 +21,13 @@ public sealed class ChatConversation
     public string? SessionId { get; set; }
     public bool Lab { get; set; }
 
-    /// <summary>Archivo de estrategia abierto cuando empezó la charla.</summary>
+    /// <summary>Strategy file open when the chat started.</summary>
     public string? Strategy { get; set; }
 
     public List<ChatMessage> Messages { get; set; } = new();
 }
 
-/// <summary>Historial de conversaciones con Claude (un JSON por conversación en la carpeta de datos).</summary>
+/// <summary>History of conversations with Claude (one JSON per conversation in the data folder).</summary>
 public static class ChatHistory
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };

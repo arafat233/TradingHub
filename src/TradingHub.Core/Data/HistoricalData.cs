@@ -4,13 +4,13 @@ using TradingHub.Market;
 
 namespace TradingHub.Data;
 
-/// <summary>Un día de operaciones guardado en disco.</summary>
+/// <summary>One day of trades stored on disk.</summary>
 public sealed record DayData(DateOnly Day, string Path, long Bytes);
 
-/// <summary>Todo lo guardado de un instrumento.</summary>
+/// <summary>Everything stored for an instrument.</summary>
 public sealed record SymbolData(string FeedId, string Symbol, IReadOnlyList<DayData> Days)
 {
-    /// <summary>Historia combinada de una conexión de futuros con la de Databento (ver <see cref="HistorySources"/>).</summary>
+    /// <summary>History of a futures connection combined with Databento's (see <see cref="HistorySources"/>).</summary>
     public bool Combined { get; init; }
 
     public long Bytes => Days.Sum(d => d.Bytes);
@@ -19,8 +19,8 @@ public sealed record SymbolData(string FeedId, string Symbol, IReadOnlyList<DayD
 }
 
 /// <summary>
-/// Datos históricos en disco ({raíz}/{feed}/{símbolo}/{día}.vtk): índice, lectura por rango,
-/// escritura de días completos y borrado. Lo usan el gráfico, la sección Datos, el replay y el backtester.
+/// Historical data on disk ({root}/{feed}/{symbol}/{day}.vtk): index, reading by range,
+/// writing whole days and deleting. The chart, the Data section, the replay and the backtester use it.
 /// </summary>
 public static class HistoricalData
 {
@@ -49,7 +49,7 @@ public static class HistoricalData
         return result;
     }
 
-    /// <summary>¿Hay operaciones guardadas ese día? Para «rithmic» cuenta también lo de Databento (ver <see cref="HistorySources"/>).</summary>
+    /// <summary>Are there trades stored that day? For "rithmic" it counts Databento's too (see <see cref="HistorySources"/>).</summary>
     public static bool HasDay(string root, string feedId, string symbol, DateOnly day) => HistorySources.HasDay(root, feedId, symbol, day);
 
     public static void DeleteDays(string root, string feedId, string symbol, IEnumerable<DateOnly> days)
@@ -64,7 +64,7 @@ public static class HistoricalData
         if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir);
     }
 
-    /// <summary>Operaciones entre dos instantes (UTC), ordenadas, leyendo día por día (de las fuentes de <see cref="HistorySources"/>).</summary>
+    /// <summary>Trades between two instants (UTC), sorted, read day by day (from the <see cref="HistorySources"/> sources).</summary>
     public static IEnumerable<Trade> Read(string root, string feedId, string symbol, DateTime fromUtc, DateTime toUtc)
     {
         for (var d = DateOnly.FromDateTime(fromUtc); d <= DateOnly.FromDateTime(toUtc); d = d.AddDays(1))
@@ -79,8 +79,8 @@ public static class HistoricalData
         }
     }
 
-    /// <summary>Guarda un día completo (se mezcla con lo que ya hubiera, sin duplicar).</summary>
-    /// <param name="replace">El día bajado está completo: reemplaza lo grabado en vivo en vez de mezclarlo (no duplica).</param>
+    /// <summary>Stores a whole day (it is merged with whatever was there, without duplicating).</summary>
+    /// <param name="replace">The downloaded day is complete: it replaces what was recorded live instead of merging it (it does not duplicate).</param>
     public static void WriteDay(string root, Instrument instrument, DateOnly day, IReadOnlyList<Trade> trades, bool replace = false)
     {
         var path = TickFile.DayPath(root, instrument.FeedId, instrument.Symbol, day);
@@ -101,8 +101,8 @@ public static class HistoricalData
 }
 
 /// <summary>
-/// Descarga días completos de los archivos públicos de los exchanges (mucho más rápido que la API):
-/// Binance (data.binance.vision, aggTrades diarios en zip) y Bybit (public.bybit.com, csv.gz).
+/// Downloads whole days from the exchanges' public archives (much faster than the API):
+/// Binance (data.binance.vision, daily aggTrades in zip) and Bybit (public.bybit.com, csv.gz).
 /// </summary>
 public static class PublicArchives
 {
@@ -124,16 +124,16 @@ public static class PublicArchives
         };
     }
 
-    /// <summary>Descarga un día. Devuelve null si el archivo todavía no está publicado (404).</summary>
+    /// <summary>Downloads a day. Returns null if the file is not published yet (404).</summary>
     public static async Task<List<Trade>?> DownloadDayAsync(Instrument instrument, DateOnly day, IProgress<double>? progress, CancellationToken ct)
     {
-        var url = DailyUrl(instrument.FeedId, instrument.Symbol, day) ?? throw new NotSupportedException("Esta conexión no tiene archivos públicos.");
+        var url = DailyUrl(instrument.FeedId, instrument.Symbol, day) ?? throw new NotSupportedException("This connection has no public files.");
         using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (resp.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         resp.EnsureSuccessStatusCode();
         long total = resp.Content.Headers.ContentLength ?? 0;
 
-        // se baja a memoria con progreso
+        // downloaded into memory with progress
         var ms = new MemoryStream(total > 0 ? (int)Math.Min(total, int.MaxValue) : 1 << 20);
         await using (var net = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
         {
@@ -161,8 +161,8 @@ public static class PublicArchives
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            if (line.Length == 0 || !char.IsDigit(line[0])) continue; // encabezado
-            // agg_id, precio, cantidad, primer_id, último_id, tiempo, comprador_es_maker[, mejor_precio]
+            if (line.Length == 0 || !char.IsDigit(line[0])) continue; // header
+            // agg_id, price, quantity, first_id, last_id, time, buyer_is_maker[, best_price]
             var span = line.AsSpan();
             long id = long.Parse(Next(ref span), CultureInfo.InvariantCulture);
             decimal price = decimal.Parse(Next(ref span), NumberStyles.Float, CultureInfo.InvariantCulture);
@@ -172,7 +172,7 @@ public static class PublicArchives
             long ts = long.Parse(Next(ref span), CultureInfo.InvariantCulture);
             var makerSpan = Next(ref span);
             bool buyerIsMaker = makerSpan.Equals("true", StringComparison.OrdinalIgnoreCase) || makerSpan.Equals("True", StringComparison.Ordinal);
-            // spot publica microsegundos desde 2025
+            // spot publishes microseconds from 2025
             var time = ts > 100_000_000_000_000 ? DateTime.UnixEpoch.AddTicks(ts * 10) : DateTime.UnixEpoch.AddMilliseconds(ts);
             list.Add(new Trade(id, time, price, qty, buyerIsMaker ? TradeSide.Sell : TradeSide.Buy));
         }
@@ -191,7 +191,7 @@ public static class PublicArchives
         while ((line = reader.ReadLine()) != null)
         {
             if (line.Length == 0 || !char.IsDigit(line[0])) continue;
-            // timestamp(s), símbolo, lado, tamaño, precio, ...
+            // timestamp(s), symbol, side, size, price, ...
             var span = line.AsSpan();
             double secs = double.Parse(Next(ref span), CultureInfo.InvariantCulture);
             Next(ref span);
@@ -204,7 +204,7 @@ public static class PublicArchives
             list.Add(new Trade(ms * 1000 + seq, DateTime.UnixEpoch.AddMilliseconds(ms), price, size, side.SequenceEqual("Buy") ? TradeSide.Buy : TradeSide.Sell));
         }
 
-        // el archivo de Bybit viene del más nuevo al más viejo en algunos días
+        // the Bybit file comes from the newest to the oldest on some days
         list.Sort((a, b) => a.Id.CompareTo(b.Id));
         return list;
     }

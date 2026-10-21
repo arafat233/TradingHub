@@ -14,8 +14,8 @@ using TradingHub.Trading;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Guarda secretos (contraseñas, API secrets) en el llavero de macOS. Las herramientas de prueba ponen
-/// TRADINGHUB_KEYCHAIN_FILE y usan un archivo propio con datos de mentira: nunca leen el llavero real.
+/// Stores secrets (passwords, API secrets) in the macOS keychain. The test tools set
+/// TRADINGHUB_KEYCHAIN_FILE and use their own file with fake data: they never read the real keychain.
 /// </summary>
 public static class Keychain
 {
@@ -72,7 +72,7 @@ public static class Keychain
 
 public enum ConnectionKind
 {
-    [Display(Name = "Simulador")] Simulator,
+    [Display(Name = "Simulator")] Simulator,
     [Display(Name = "Binance Futures")] BinanceFutures,
     [Display(Name = "Binance Spot")] BinanceSpot,
     [Display(Name = "Bybit")] Bybit,
@@ -86,7 +86,7 @@ public enum ConnectionKind
     [Display(Name = "Databento")] Databento,
 }
 
-/// <summary>Una conexión configurada (los secretos van al llavero, no a este archivo).</summary>
+/// <summary>A configured connection (the secrets go to the keychain, not to this file).</summary>
 public sealed class ConnectionProfile
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
@@ -94,7 +94,7 @@ public sealed class ConnectionProfile
     public string Name { get; set; } = "";
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Horas de historia a cargar al abrir un instrumento.</summary>
+    /// <summary>Hours of history to load when opening an instrument.</summary>
     public double HistoryHours { get; set; } = 1.5;
 
     // Binance / Bybit
@@ -119,19 +119,19 @@ public sealed class ConnectionProfile
     public string TradovateAppId { get; set; } = "TradingHub";
     public List<string> TradovateProducts { get; set; } = new TradingHub.Feeds.Tradovate.TradovateSettings().Products;
 
-    /// <summary>Id fijo de este equipo para la conexión (Tradovate limita los dispositivos).</summary>
+    /// <summary>Fixed id of this machine for the connection (Tradovate limits devices).</summary>
     public string DeviceId { get; set; } = Guid.NewGuid().ToString();
 
     // cTrader
     public string CTraderClientId { get; set; } = "";
 
-    /// <summary>Número de cuenta de cTrader (0 = la primera del entorno).</summary>
+    /// <summary>cTrader account number (0 = the first one of the environment).</summary>
     public long CTraderLogin { get; set; }
 
-    // OANDA (cuenta 101-001-…; vacía = la primera del token)
+    // OANDA (account 101-001-…; empty = the first one of the token)
     public string OandaAccount { get; set; } = "";
 
-    // Alpaca: datos en vivo iex (gratis) o sip (pago)
+    // Alpaca: live data iex (free) or sip (paid)
     public string AlpacaLiveFeed { get; set; } = "iex";
 
     // Interactive Brokers
@@ -141,10 +141,10 @@ public sealed class ConnectionProfile
 
     [JsonIgnore] public string SecretAccount => $"{Id}:secret";
 
-    /// <summary>Otros secretos de la conexión (API secret de Tradovate, tokens de cTrader).</summary>
+    /// <summary>Other secrets of the connection (Tradovate API secret, cTrader tokens).</summary>
     public string SecretAccountFor(string name) => $"{Id}:{name}";
 
-    /// <summary>Id de los datos de mercado (comparten archivos de ticks perfiles del mismo mercado).</summary>
+    /// <summary>Id of the market data (they share tick files and profiles of the same market).</summary>
     [JsonIgnore]
     public string MarketDataId => Kind switch
     {
@@ -154,7 +154,7 @@ public sealed class ConnectionProfile
         ConnectionKind.Bybit => BybitFeed.LinearId,
         ConnectionKind.Rithmic or ConnectionKind.AmpFutures => RithmicFeed.FeedId,
         ConnectionKind.Tradovate => TradingHub.Feeds.Tradovate.TradovateFeed.FeedId,
-        // cada broker de cTrader tiene sus propios precios: el primero usa «ctrader» y los demás su propio id
+        // each cTrader broker has its own prices: the first one uses "ctrader" and the rest their own id
         ConnectionKind.CTrader => Id == TradingHub.Feeds.CTrader.CTraderFeed.FeedId ? Id : $"{TradingHub.Feeds.CTrader.CTraderFeed.FeedId}-{Id}",
         ConnectionKind.Oanda => TradingHub.Feeds.Oanda.OandaFeed.FeedId,
         ConnectionKind.Alpaca => TradingHub.Feeds.Alpaca.AlpacaFeed.FeedId,
@@ -162,10 +162,10 @@ public sealed class ConnectionProfile
         _ => "ib",
     };
 
-    /// <summary>Da datos de mercado para gráficos (Databento e IB, no).</summary>
+    /// <summary>Provides market data for charts (Databento and IB do not).</summary>
     [JsonIgnore] public bool HasMarketData => Kind is not (ConnectionKind.InteractiveBrokers or ConnectionKind.Databento);
 
-    /// <summary>Id por defecto del primer perfil de cada tipo (el mismo de sus datos).</summary>
+    /// <summary>Default id of the first profile of each type (the same as its data's).</summary>
     public static string DefaultId(ConnectionKind kind) => kind switch
     {
         ConnectionKind.Tradovate => TradingHub.Feeds.Tradovate.TradovateFeed.FeedId,
@@ -176,7 +176,7 @@ public sealed class ConnectionProfile
         _ => Guid.NewGuid().ToString("N")[..8],
     };
 
-    /// <summary>Usa la conexión de Rithmic (Rithmic directo o AMP Futures, que da cuentas de Rithmic).</summary>
+    /// <summary>Uses the Rithmic connection (Rithmic directly or AMP Futures, which provides Rithmic accounts).</summary>
     [JsonIgnore] public bool IsRithmic => Kind is ConnectionKind.Rithmic or ConnectionKind.AmpFutures;
 
     [JsonIgnore] public bool SupportsTrading => Kind is ConnectionKind.BinanceFutures or ConnectionKind.BinanceSpot;
@@ -184,7 +184,7 @@ public sealed class ConnectionProfile
     public override string ToString() => Name;
 }
 
-/// <summary>Administra las conexiones: las guarda, crea sus feeds y las prueba.</summary>
+/// <summary>Manages the connections: stores them, creates their feeds and tests them.</summary>
 public sealed class ConnectionManager
 {
     private static readonly string FilePath = Path.Combine(AppPaths.Root, "connections.json");
@@ -199,8 +199,8 @@ public sealed class ConnectionManager
         Load();
         if (Profiles.Count == 0)
         {
-            // ids iguales a los datos de mercado para que los espacios de trabajo viejos sigan andando
-            Profiles.Add(new ConnectionProfile { Id = SimulatedFeed.FeedId, Kind = ConnectionKind.Simulator, Name = "Simulador", HistoryHours = 6 });
+            // ids equal to the market data's so the old workspaces keep working
+            Profiles.Add(new ConnectionProfile { Id = SimulatedFeed.FeedId, Kind = ConnectionKind.Simulator, Name = "Simulator", HistoryHours = 6 });
             Profiles.Add(new ConnectionProfile { Id = BinanceFeed.FuturesId, Kind = ConnectionKind.BinanceFutures, Name = "Binance Futures" });
             Profiles.Add(new ConnectionProfile { Id = BinanceFeed.SpotId, Kind = ConnectionKind.BinanceSpot, Name = "Binance Spot" });
             Profiles.Add(new ConnectionProfile { Id = BybitFeed.LinearId, Kind = ConnectionKind.Bybit, Name = "Bybit" });
@@ -211,7 +211,7 @@ public sealed class ConnectionManager
 
     public IEnumerable<ConnectionProfile> Enabled => Profiles.Where(p => p.Enabled);
 
-    /// <summary>Conexión de una cuenta de operar ("sim", la de Binance o rithmic|conexión|cuenta).</summary>
+    /// <summary>Connection of a trading account ("sim", Binance's or rithmic|connection|account).</summary>
     public ConnectionProfile? FindForAccount(string accountId) =>
         (accountId.StartsWith("rithmic|", StringComparison.Ordinal) || accountId.StartsWith("tradovate|", StringComparison.Ordinal)) && accountId.Split('|') is { Length: >= 2 } parts
             ? Find(parts[1])
@@ -228,7 +228,7 @@ public sealed class ConnectionManager
         }
         catch (Exception ex)
         {
-            this.LogWarn("No se pudieron leer las conexiones: " + ex.Message);
+            this.LogWarn("Could not read the connections: " + ex.Message);
         }
     }
 
@@ -247,21 +247,21 @@ public sealed class ConnectionManager
 
     public void SetSecret(ConnectionProfile p, string name, string? secret) => Keychain.Set(p.SecretAccountFor(name), secret);
 
-    /// <summary>Borra todos los secretos de una conexión (al eliminarla).</summary>
+    /// <summary>Deletes every secret of a connection (when removing it).</summary>
     public void ClearSecrets(ConnectionProfile p)
     {
         SetSecret(p, null);
         foreach (var name in new[] { "apisecret", "token", "refresh" }) SetSecret(p, name, null);
     }
 
-    /// <summary>Cambió la configuración de una conexión (las de Rithmic avisan para que su sesión de órdenes también se actualice).</summary>
+    /// <summary>A connection's configuration changed (the Rithmic ones report it so their order session updates too).</summary>
     public event Action<ConnectionProfile>? Reconfigured;
 
-    /// <summary>Descarta el feed creado (por ejemplo, tras cambiar la configuración).</summary>
+    /// <summary>Discards the created feed (for example, after changing the configuration).</summary>
     public void Invalidate(ConnectionProfile p)
     {
-        // Rithmic: el mismo feed vuelve a entrar con los datos nuevos. Descartarlo dejaba la sesión vieja andando
-        // en los gráficos abiertos y la nueva le cortaba la conexión (Rithmic deja una sola sesión por usuario).
+        // Rithmic: the same feed logs in again with the new data. Discarding it left the old session running
+        // on the open charts and the new one cut its connection (Rithmic allows a single session per user).
         if (p.IsRithmic && _feeds.TryGetValue(p.Id, out var existing) && existing is RithmicFeed rf)
         {
             rf.Reconfigure(RithmicSettingsOf(p));
@@ -280,7 +280,7 @@ public sealed class ConnectionManager
 
     public IMarketDataFeed GetFeed(string profileId)
     {
-        var p = Find(profileId) ?? throw new KeyNotFoundException($"No existe la conexión {profileId}");
+        var p = Find(profileId) ?? throw new KeyNotFoundException($"Connection {profileId} does not exist");
         if (_feeds.TryGetValue(p.Id, out var f)) return f;
         f = p.Kind switch
         {
@@ -293,8 +293,8 @@ public sealed class ConnectionManager
             ConnectionKind.CTrader => CTraderFeedOf(p),
             ConnectionKind.Oanda => new TradingHub.Feeds.Oanda.OandaFeed(OandaSettingsOf(p)),
             ConnectionKind.Alpaca => new TradingHub.Feeds.Alpaca.AlpacaFeed(AlpacaSettingsOf(p)),
-            ConnectionKind.Databento => throw new NotSupportedException("Databento no da datos en vivo: se usa desde Datos para bajar historia de futuros."),
-            _ => throw new NotSupportedException("Interactive Brokers todavía no da datos en Trading Hub (solo prueba de conexión)."),
+            ConnectionKind.Databento => throw new NotSupportedException("Databento provides no live data: it is used from Data to download futures history."),
+            _ => throw new NotSupportedException("Interactive Brokers does not provide data in Trading Hub yet (connection test only)."),
         };
         _feeds[p.Id] = f;
         return f;
@@ -330,7 +330,7 @@ public sealed class ConnectionManager
 
     private TradingHub.Feeds.Tradovate.TradovateFeed TradovateFeedOf(ConnectionProfile p)
     {
-        // los secretos se leen una vez (cada lectura del Llavero es un proceso)
+        // the secrets are read once (every Keychain read is a process)
         var settings = TradovateSettingsOf(p);
         return new TradingHub.Feeds.Tradovate.TradovateFeed(() => settings);
     }
@@ -350,7 +350,7 @@ public sealed class ConnectionManager
     {
         var settings = CTraderSettingsOf(p);
         var feed = new TradingHub.Feeds.CTrader.CTraderFeed(() => settings, p.MarketDataId);
-        // la Open API renueva el token: se guarda el nuevo en el Llavero
+        // the Open API renews the token: the new one is stored in the Keychain
         feed.Session.TokensRefreshed += (access, refresh) =>
         {
             settings.AccessToken = access;
@@ -380,7 +380,7 @@ public sealed class ConnectionManager
         StreamUrl = Environment.GetEnvironmentVariable("TRADINGHUB_ALPACA_STREAM") is { Length: > 0 } st ? st : null,
     };
 
-    /// <summary>Cliente de Databento con la API key de la conexión (TRADINGHUB_DATABENTO_URL lo apunta a otro servidor).</summary>
+    /// <summary>Databento client with the connection's API key (TRADINGHUB_DATABENTO_URL points it at another server).</summary>
     public TradingHub.Feeds.Databento.DatabentoClient DatabentoOf(ConnectionProfile p) =>
         new(GetSecret(p), Environment.GetEnvironmentVariable("TRADINGHUB_DATABENTO_URL") is { Length: > 0 } u ? u : null);
 
@@ -392,7 +392,7 @@ public sealed class ConnectionManager
         ApiSecret = GetSecret(p),
     };
 
-    /// <summary>Prueba una conexión y devuelve un mensaje para mostrar.</summary>
+    /// <summary>Tests a connection and returns a message to display.</summary>
     public async Task<(bool Ok, string Message)> TestAsync(ConnectionProfile p, CancellationToken ct)
     {
         try
@@ -400,7 +400,7 @@ public sealed class ConnectionManager
             switch (p.Kind)
             {
                 case ConnectionKind.Simulator:
-                    return (true, "El simulador no necesita conexión.");
+                    return (true, "The simulator needs no connection.");
                 case ConnectionKind.BinanceFutures:
                 case ConnectionKind.BinanceSpot:
                 {
@@ -408,22 +408,22 @@ public sealed class ConnectionManager
                     var inst = await feed.GetInstrumentsAsync(ct);
                     using var acc = new BinanceAccountClient(BinanceSettingsOf(p));
                     var (ok, msg) = await acc.TestAsync(ct);
-                    return (ok, $"{inst.Count} instrumentos disponibles. {msg}");
+                    return (ok, $"{inst.Count} instruments available. {msg}");
                 }
                 case ConnectionKind.Bybit:
                 {
                     var inst = await new BybitFeed().GetInstrumentsAsync(ct);
-                    return (true, $"{inst.Count} perpetuos disponibles (datos públicos).");
+                    return (true, $"{inst.Count} perpetuals available (public data).");
                 }
                 case ConnectionKind.Rithmic:
                 case ConnectionKind.AmpFutures:
                 {
                     var systems = await RithmicClient.ListSystemsAsync(p.RithmicUri, ct);
                     if (string.IsNullOrWhiteSpace(p.RithmicUser))
-                        return (true, $"Servidor OK: {systems.Count} sistemas disponibles. Completá usuario y contraseña para iniciar sesión.");
-                    // con la misma sesión de los gráficos: un login aparte cortaría la que está andando
+                        return (true, $"Server OK: {systems.Count} systems available. Fill in user and password to sign in.");
+                    // using the charts' own session: a separate login would cut the one that is running
                     var (ok, message) = await ((RithmicFeed)GetFeed(p.Id)).TestAsync(ct);
-                    return (ok, ok ? $"Conectado a {p.RithmicSystem}. {message}" : message);
+                    return (ok, ok ? $"Connected to {p.RithmicSystem}. {message}" : message);
                 }
                 case ConnectionKind.InteractiveBrokers:
                     return await IbProbe.TestAsync(p.IbHost, p.IbPort, ct);
@@ -437,14 +437,14 @@ public sealed class ConnectionManager
                     return await ((TradingHub.Feeds.Alpaca.AlpacaFeed)GetFeed(p.Id)).TestAsync(ct);
                 case ConnectionKind.Databento:
                 {
-                    if (string.IsNullOrWhiteSpace(GetSecret(p))) return (false, "Falta la API key de Databento.");
+                    if (string.IsNullOrWhiteSpace(GetSecret(p))) return (false, "The Databento API key is missing.");
                     using var db = DatabentoOf(p);
                     var (start, end) = await db.RangeAsync(ct);
-                    // costo de un día de NQ, para que se vea cuánto rinden los créditos (no baja nada)
+                    // cost of one day of NQ, so you can see how far the credits go (it uses none up)
                     var day = DateOnly.FromDateTime(end.AddDays(-3));
                     while (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) day = day.AddDays(-1);
                     decimal cost = await db.CostAsync("NQ", day, day, ct);
-                    return (true, $"API key OK. Globex desde {start:dd/MM/yyyy} hasta {end:dd/MM/yyyy}. Un día de NQ tick a tick cuesta ≈ US$ {cost:0.00} de tus créditos.");
+                    return (true, $"API key OK. Globex from {start:dd/MM/yyyy} to {end:dd/MM/yyyy}. One day of NQ tick by tick costs ≈ US$ {cost:0.00} of your credits.");
                 }
             }
         }
@@ -453,7 +453,7 @@ public sealed class ConnectionManager
             return (false, ex.Message);
         }
 
-        return (false, "Tipo de conexión desconocido");
+        return (false, "Unknown connection type");
     }
 
     public void DisposeAll()

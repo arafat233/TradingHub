@@ -15,20 +15,20 @@ using TradingHub.Market;
 namespace TradingHub.App.Controls;
 
 /// <summary>
-/// Selector de instrumentos: muestra el ticker actual y abre un menú con todos los instrumentos
-/// de cada conexión, con buscador, favoritos, filtro por moneda y orden por volumen de 24 h.
+/// Instrument picker: it shows the current ticker and opens a menu with every instrument
+/// of each connection, with a search box, favourites, a currency filter and sorting by 24 h volume.
 /// </summary>
 public sealed class InstrumentPicker : Button
 {
     private readonly AppServices _svc;
     private readonly TextBlock _symbol = new() { FontWeight = FontWeight.SemiBold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _exchange = new() { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
-    // anchos mínimos: si el texto cambiara de ancho con cada tick, la barra se reacomodaría y movería todo
+    // minimum widths: if the text changed width on every tick, the bar would reflow and move everything
     private readonly TextBlock _price = new() { FontSize = 13, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Menlo, SF Mono"), MinWidth = 88, TextAlignment = TextAlignment.Right };
     private readonly TextBlock _change = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, MinWidth = 54 };
 
-    // menú
-    private readonly TextBox _search = new() { Watermark = "Buscar (BTC, ETH, NQ…)", MinWidth = 360 };
+    // menu
+    private readonly TextBox _search = new() { Watermark = "Search (BTC, ETH, NQ…)", MinWidth = 360 };
     private readonly StackPanel _connTabs = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     private readonly StackPanel _chips = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     private readonly ListBox _list = new() { Height = 430 };
@@ -53,9 +53,9 @@ public sealed class InstrumentPicker : Button
         var chevron = Ui.Icon(MaterialIconKind.ChevronDown, 16, Ui.Text2);
         Content = Ui.H(10, Ui.Icon(MaterialIconKind.ChartBoxOutline, 18, Ui.Accent), Ui.V(0, _symbol, _exchange), _price, _change, chevron);
         _exchange.Foreground = Ui.Text2;
-        ToolTip.SetTip(this, "Elegir instrumento (⌘K)");
+        ToolTip.SetTip(this, "Choose instrument (⌘K)");
 
-        // al reciclar filas el contenido puede llegar vacío: se dibuja una fila vacía
+        // when rows are recycled the content can arrive empty: an empty row is drawn
         _list.ItemTemplate = new FuncDataTemplate<Row>((row, _) => row == null ? new Panel() : BuildRow(row), supportsRecycling: false);
         _list.DoubleTapped += (_, _) => PickSelected(newTab: false);
         _list.KeyDown += (_, e) =>
@@ -92,11 +92,11 @@ public sealed class InstrumentPicker : Button
             header.Children.Add(t);
         }
 
-        H("SÍMBOLO", 1);
-        H("DESCRIPCIÓN", 2);
-        H("PRECIO", 3, HorizontalAlignment.Right);
+        H("SYMBOL", 1);
+        H("DESCRIPTION", 2);
+        H("PRICE", 3, HorizontalAlignment.Right);
         H("24 H", 4, HorizontalAlignment.Right);
-        H("VOLUMEN", 5, HorizontalAlignment.Right);
+        H("VOLUME", 5, HorizontalAlignment.Right);
 
         var panel = new StackPanel
         {
@@ -115,7 +115,7 @@ public sealed class InstrumentPicker : Button
             },
         };
         _flyout = new Flyout { Content = panel, Placement = PlacementMode.BottomEdgeAlignedLeft, ShowMode = FlyoutShowMode.Standard };
-        _symbol.Text = "Elegir instrumento…";
+        _symbol.Text = "Choose instrument…";
         _flyout.Opened += (_, _) =>
         {
             _search.Text = "";
@@ -126,14 +126,14 @@ public sealed class InstrumentPicker : Button
 
     protected override Type StyleKeyOverride => typeof(Button);
 
-    /// <summary>Se eligió un instrumento (conexión, instrumento, abrir en pestaña nueva).</summary>
+    /// <summary>An instrument was chosen (connection, instrument, open in a new tab).</summary>
     public event Action<string, Instrument, bool>? Picked;
 
     public void SetCurrent(string profileId, Instrument? instrument)
     {
         _profileId = profileId;
-        _symbol.Text = instrument?.Symbol ?? "Elegir…";
-        // el ancho mínimo se fija al cambiar de instrumento (no en cada tick)
+        _symbol.Text = instrument?.Symbol ?? "Choose…";
+        // the minimum width is fixed when the instrument changes (not on every tick)
         _price.MinWidth = Math.Max(60, 9 * Math.Max(6, (instrument?.FormatPrice(instrument.TickSize * 10_000_000) ?? "").Length));
         _exchange.Text = _svc.Connections.Find(profileId)?.Name ?? instrument?.Exchange ?? "";
     }
@@ -164,14 +164,14 @@ public sealed class InstrumentPicker : Button
         catch (Exception ex)
         {
             CrashLog.Write(ex);
-            _hint.Text = "No se pudo cargar la lista: " + ex.Message;
+            _hint.Text = "Could not load the list: " + ex.Message;
         }
     }
 
     private void BuildConnectionTabs()
     {
         _connTabs.Children.Clear();
-        var fav = new ToggleButton { Content = Ui.H(5, Ui.Icon(MaterialIconKind.Star, 14), new TextBlock { Text = "Favoritos" }), IsChecked = _favoritesOnly }.Classes("seg");
+        var fav = new ToggleButton { Content = Ui.H(5, Ui.Icon(MaterialIconKind.Star, 14), new TextBlock { Text = "Favorites" }), IsChecked = _favoritesOnly }.Classes("seg");
         fav.Click += async (_, _) =>
         {
             _favoritesOnly = fav.IsChecked == true;
@@ -196,7 +196,7 @@ public sealed class InstrumentPicker : Button
         if (!_favoritesOnly) _profileId = profileId;
         foreach (var b in _connTabs.Children.OfType<ToggleButton>())
             b.IsChecked = b.Tag == null ? _favoritesOnly : (!_favoritesOnly && Equals(b.Tag, _profileId));
-        _hint.Text = "Cargando instrumentos…";
+        _hint.Text = "Loading instruments…";
         var rows = new List<Row>();
         var profiles = _favoritesOnly
             ? _svc.Connections.Enabled.Where(p => p.HasMarketData && _svc.Settings.Favorites.Any(f => f.StartsWith(p.Id + ":", StringComparison.Ordinal)))
@@ -225,7 +225,7 @@ public sealed class InstrumentPicker : Button
                         }
                         catch
                         {
-                            // sin estadísticas: se ordena por nombre
+                            // no statistics: sorted by name
                         }
                     }
 
@@ -242,7 +242,7 @@ public sealed class InstrumentPicker : Button
             }
             catch (Exception ex)
             {
-                _hint.Text = $"No se pudieron cargar los instrumentos de {p.Name}: {ex.Message}";
+                _hint.Text = $"Could not load the instruments from {p.Name}: {ex.Message}";
             }
         }
 
@@ -259,7 +259,7 @@ public sealed class InstrumentPicker : Button
         if (quotes.Count < 2) return;
         foreach (var q in new[] { "" }.Concat(quotes))
         {
-            var b = new ToggleButton { Content = q == "" ? "Todas" : q, IsChecked = q == _filterQuote }.Classes("seg");
+            var b = new ToggleButton { Content = q == "" ? "All" : q, IsChecked = q == _filterQuote }.Classes("seg");
             b.Click += (_, _) =>
             {
                 _filterQuote = q;
@@ -277,12 +277,12 @@ public sealed class InstrumentPicker : Button
             (_filterQuote == "" || r.Instrument.QuoteAsset == _filterQuote) &&
             (q.Length == 0 || r.Instrument.Symbol.Contains(q, StringComparison.OrdinalIgnoreCase) || r.Instrument.Description.Contains(q, StringComparison.OrdinalIgnoreCase)))
             .ToList();
-        // coincidencias que empiezan con lo buscado, primero
+        // matches that start with the search text come first
         if (q.Length > 0)
             filtered = filtered.OrderByDescending(r => r.Instrument.Symbol.StartsWith(q, StringComparison.OrdinalIgnoreCase)).ThenByDescending(r => r.Stats?.QuoteVolume ?? 0).ToList();
         _list.ItemsSource = filtered;
         _list.SelectedIndex = filtered.Count > 0 ? 0 : -1;
-        _hint.Text = $"{filtered.Count} instrumentos · Enter abre aquí · ⌘Enter en una pestaña nueva · ★ marca favoritos";
+        _hint.Text = $"{filtered.Count} instruments · Enter opens here · ⌘Enter in a new tab · ★ marks favourites";
     }
 
     private Control BuildRow(Row r)
@@ -336,7 +336,7 @@ public sealed class InstrumentPicker : Button
         Picked?.Invoke(r.ProfileId, r.Instrument, newTab);
     }
 
-    /// <summary>Olvida el caché (por ejemplo, tras cambiar una conexión).</summary>
+    /// <summary>Forgets the cache (for example, after changing a connection).</summary>
     public static void ClearCache(string? profileId = null)
     {
         if (profileId == null)
@@ -351,7 +351,7 @@ public sealed class InstrumentPicker : Button
         }
     }
 
-    /// <summary>Instrumentos de una conexión (con caché).</summary>
+    /// <summary>A connection's instruments (cached).</summary>
     public static async Task<IReadOnlyList<Instrument>> InstrumentsAsync(AppServices svc, string profileId)
     {
         if (InstrumentCache.TryGetValue(profileId, out var list)) return list;

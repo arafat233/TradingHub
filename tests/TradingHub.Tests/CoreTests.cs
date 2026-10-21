@@ -20,7 +20,7 @@ public class CoreTests
     }
 
     [Fact]
-    public void Velas_de_un_minuto_acumulan_bid_ask_y_delta_por_nivel()
+    public void One_minute_candles_accumulate_bid_ask_and_delta_per_level()
     {
         var store = Store((0, 100.0m, 1, TradeSide.Buy), (10, 100.1m, 2, TradeSide.Sell), (59, 100.0m, 0.5m, TradeSide.Buy), (61, 101.0m, 1, TradeSide.Buy));
         var series = new CandleSeries(Btc, ChartPeriod.M1);
@@ -35,11 +35,11 @@ public class CoreTests
         Assert.Equal(1001, c.HighTicks);
         var lvl = c.Levels.Get(series.RowOf(1000));
         Assert.Equal(1.5m, lvl.Ask);
-        Assert.Equal(series.RowOf(1001), c.PocRow); // 2 de volumen en 100.1
+        Assert.Equal(series.RowOf(1001), c.PocRow); // 2 of volume at 100.1
     }
 
     [Fact]
-    public void Velas_de_volumen_parten_las_operaciones_grandes()
+    public void Volume_candles_split_the_large_trades()
     {
         var store = Store((0, 100m, 3, TradeSide.Buy), (1, 100m, 4, TradeSide.Sell));
         var series = new CandleSeries(Btc, new ChartPeriod(PeriodType.Volume, 5));
@@ -50,7 +50,7 @@ public class CoreTests
     }
 
     [Fact]
-    public void Archivo_de_ticks_guarda_y_lee_igual()
+    public void A_tick_file_stores_and_reads_back_the_same()
     {
         var path = Path.Combine(Path.GetTempPath(), "tradinghub_test_" + Guid.NewGuid().ToString("N") + ".vtk");
         try
@@ -76,7 +76,7 @@ public class CoreTests
     }
 
     [Fact]
-    public void Broker_simulado_llena_limite_cuando_el_precio_la_atraviesa_y_calcula_pnl()
+    public void The_simulated_broker_fills_a_limit_when_the_price_goes_through_it_and_computes_pnl()
     {
         var data = new InstrumentData(Btc, new SimulatedFeed());
         data.Trades.Add(new Trade(1, T0, 100m, 1, TradeSide.Buy));
@@ -84,7 +84,7 @@ public class CoreTests
         var order = broker.Limit(OrderDirections.Buy, 2, 99.5m);
         Assert.Equal(OrderStates.Active, order.State);
 
-        // operación a 99.4 (atraviesa el límite)
+        // trade at 99.4 (it goes through the limit)
         data.Trades.Add(new Trade(2, T0.AddSeconds(1), 99.4m, 1, TradeSide.Sell));
         typeof(InstrumentData).GetEvent("TradesAppended")!.GetRaiseMethod(true)?.Invoke(data, new object[] { 1, 1 });
         InvokeAppended(data, 1, 1);
@@ -92,7 +92,7 @@ public class CoreTests
         Assert.Equal(2m, broker.Position!.Volume);
         Assert.Equal(99.5m, broker.Position.AveragePrice);
 
-        broker.Market(OrderDirections.Sell, 2); // sin libro: al último precio menos un tick
+        broker.Market(OrderDirections.Sell, 2); // with no book: at the last price minus one tick
         Assert.Equal(0m, broker.Position.Volume);
         Assert.Equal((99.3m - 99.5m) * 2, broker.Position.RealizedPnL);
     }

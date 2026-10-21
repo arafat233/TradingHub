@@ -6,8 +6,8 @@ using TradingHub.Rendering.Context;
 namespace TradingHub.Charting.Rendering;
 
 /// <summary>
-/// Dibuja el footprint componiendo, dentro de cada vela, las columnas que eligió el usuario
-/// (escaleras, perfiles, celdas, vela finita, espacios). Ver <see cref="FootprintLayout"/>.
+/// Draws the footprint by composing, inside each candle, the columns the user chose
+/// (ladders, profiles, cells, thin candle, spacers). See <see cref="FootprintLayout"/>.
 /// </summary>
 internal sealed class FootprintRenderer
 {
@@ -17,7 +17,7 @@ internal sealed class FootprintRenderer
 
     private const float ColumnGap = 2;
 
-    /// <summary>Máximos usados para escalar colores y barras.</summary>
+    /// <summary>Maximums used to scale colors and bars.</summary>
     private struct Stats
     {
         public decimal MaxVol, MaxAbsDelta, MaxSide, MaxTrades;
@@ -33,7 +33,7 @@ internal sealed class FootprintRenderer
         }
     }
 
-    /// <summary>Contexto de dibujo de una vela.</summary>
+    /// <summary>Drawing context of a candle.</summary>
     private sealed class Ctx
     {
         public ChartModel Model = null!;
@@ -46,7 +46,7 @@ internal sealed class FootprintRenderer
         public double RowH;
         public long MinRow, MaxRow;
 
-        // filas agregadas (factor K de filas base por fila visible)
+        // aggregated rows (factor K of base rows per visible row)
         public int K = 1;
         public LevelData[] Agg = new LevelData[64];
         public long AggMin, AggMax;
@@ -55,17 +55,17 @@ internal sealed class FootprintRenderer
 
         public LevelData Get(long r) => r < AggMin || r > AggMax ? default : Agg[r - AggMin];
 
-        /// <summary>Fila agregada de un precio en ticks.</summary>
+        /// <summary>Aggregated row of a price in ticks.</summary>
         public long RowOfTicks(long ticks) => CandleSeries.FloorDiv(ticks, (long)Series.PriceStep * K);
 
-        /// <summary>Centro visual de una fila agregada.</summary>
+        /// <summary>Visual center of an aggregated row.</summary>
         public decimal Center(long r)
         {
             long step = (long)Series.PriceStep * K;
             return (r * step + (step - 1) / 2m) * Series.Instrument.TickSize;
         }
 
-        /// <summary>Agrupa los niveles de la vela en filas de K filas base.</summary>
+        /// <summary>Groups the candle's levels into rows of K base rows.</summary>
         public void Aggregate(TradingHub.Data.Candle c)
         {
             var lv = c.Levels;
@@ -123,7 +123,7 @@ internal sealed class FootprintRenderer
         double baseRowH = main.RowHeight;
         float slotW = (float)(layout.BarWidth - layout.BarSpacing);
 
-        // cuántas filas base se agrupan en cada fila visible
+        // how many base rows are grouped into each visible row
         int k;
         int userStep = model.Settings.PriceStep;
         if (userStep > 0) k = Math.Max(1, userStep / Math.Max(1, series.PriceStep));
@@ -153,7 +153,7 @@ internal sealed class FootprintRenderer
             K = k,
         };
 
-        // máximos sobre lo visible (si los colores no son por vela) — sobre las filas agregadas
+        // maximums over what is visible (if the colors are not per candle) - over the aggregated rows
         var visible = new Stats();
         decimal visMaxVol = 0;
         for (int i = Math.Max(0, layout.FirstVisible); i <= Math.Min(layout.LastVisible, series.Count - 1); i++)
@@ -182,7 +182,7 @@ internal sealed class FootprintRenderer
             ctx.C = c;
             if (c.IsSynthetic)
             {
-                // historia en velas (sin ticks): la misma vela finita del footprint, sin clusters inventados
+                // candle history (with no ticks): the same finite footprint candle, with no made-up clusters
                 bool drawn = false;
                 for (int ci = 0; ci < L.Columns.Count; ci++)
                 {
@@ -240,7 +240,7 @@ internal sealed class FootprintRenderer
         }
     }
 
-    /// <summary>Delta arriba y volumen abajo de la vela.</summary>
+    /// <summary>Delta above and volume below the candle.</summary>
     private void DrawTotals(SKCanvas canvas, Ctx ctx, TradingHub.Data.Candle c, float slotLeft, float slotW, SKFont totalsFont, int totDecimals, double rowH)
     {
         if (!ctx.L.ShowTotals || slotW < 36) return;
@@ -258,7 +258,7 @@ internal sealed class FootprintRenderer
         canvas.DrawText(vTxt, slotLeft + slotW / 2 - w / 2, yLow + 6 - totalsFont.Metrics.Ascent, totalsFont, _text);
     }
 
-    /// <summary>Reparte el ancho de la vela entre las columnas.</summary>
+    /// <summary>Splits the candle's width among the columns.</summary>
     private static void ComputeColumns(FootprintLayout L, float slotLeft, float slotW, (float, float)[] rects)
     {
         int n = L.Columns.Count;
@@ -284,7 +284,7 @@ internal sealed class FootprintRenderer
         }
     }
 
-    // ===================================================================== columnas
+    // ===================================================================== columns
 
     private void DrawCandleColumn(SKCanvas canvas, Ctx x, float left, float w)
     {
@@ -493,13 +493,13 @@ internal sealed class FootprintRenderer
         }
     }
 
-    // ===================================================================== texto y colores
+    // ===================================================================== text and colors
 
     private void DrawValueText(SKCanvas canvas, Ctx x, FootprintColumn col, in LevelData d, SKRect cell, float baseline,
         bool askImb, bool bidImb, bool isPoc, ColumnTextAlign align, bool highlighted)
     {
         var t = x.T;
-        // color del texto: el propio de la columna (si lo elegiste) o el del tema; en niveles resaltados, blanco o el elegido
+        // text color: the column's own (if you picked one) or the theme's; on highlighted levels, white or the chosen one
         var themeText = isPoc && col.Kind == FootprintColumnKind.Cells ? t.ClusterTextStrong : (col.Kind == FootprintColumnKind.Ladder ? t.LadderText : t.ClusterText);
         var normal = highlighted ? ColorOr(col.HighlightTextColor, SKColors.White) : ColorOr(col.TextColor, themeText);
         var dim = normal.WithAlpha(110);
@@ -542,7 +542,7 @@ internal sealed class FootprintRenderer
                 FootprintValue.Ask => ColorOr(col.AskTextColor, ladder && !own ? Mix(normal, t.Ask, 0.45f) : normal),
                 _ => normal,
             };
-            // celdas coloreadas por delta: el fondo ya dice el lado (salvo que hayas elegido colores para el texto)
+            // cells colored by delta: the background already says the side (unless you picked colors for the text)
             if (col.Kind == FootprintColumnKind.Cells && col.Value == FootprintValue.Delta && col.ColorScheme == ClusterColorScheme.Delta &&
                 col.PositiveTextColor == null && col.NegativeTextColor == null)
                 _text.Color = normal;
@@ -614,7 +614,7 @@ internal sealed class FootprintRenderer
         }
     }
 
-    /// <summary>+1 = compra, -1 = venta, 2 = resaltado neutro, 0 = nada.</summary>
+    /// <summary>+1 = buy, -1 = sell, 2 = neutral highlight, 0 = nothing.</summary>
     private static int Highlight(Ctx x, HighlightRule rule, long r, in LevelData d, FootprintValue value)
     {
         var L = x.L;
@@ -627,7 +627,7 @@ internal sealed class FootprintRenderer
             case HighlightRule.Imbalance:
             {
                 var (askImb, bidImb) = Imbalance(x, r, d);
-                // en una escalera de bid solo interesan los desequilibrios vendedores, y viceversa
+                // on a bid ladder only the selling imbalances matter, and vice versa
                 if (value == FootprintValue.Bid) return bidImb ? -1 : 0;
                 if (value == FootprintValue.Ask) return askImb ? 1 : 0;
                 return askImb && !bidImb ? 1 : bidImb && !askImb ? -1 : 0;
@@ -641,7 +641,7 @@ internal sealed class FootprintRenderer
         }
     }
 
-    /// <summary>Desequilibrio diagonal: ask del nivel contra bid del nivel de abajo, y bid contra ask del de arriba.</summary>
+    /// <summary>Diagonal imbalance: the level's ask against the bid of the level below, and the bid against the ask of the one above.</summary>
     private static (bool AskImb, bool BidImb) Imbalance(Ctx x, long r, in LevelData d)
     {
         var L = x.L;

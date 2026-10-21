@@ -9,10 +9,10 @@ using TradingHub.Market;
 
 namespace TradingHub.Tests;
 
-/// <summary>Servidores de mentira de OANDA, Alpaca, Databento, cTrader y Tradovate (los usan las pruebas y la herramienta de capturas).</summary>
+/// <summary>Fake servers for OANDA, Alpaca, Databento, cTrader and Tradovate (used by the tests and the snapshot tool).</summary>
 internal static class FakeBrokers
 {
-    public static readonly DateOnly Day = new(2026, 10, 12); // lunes
+    public static readonly DateOnly Day = new(2026, 10, 12); // Monday
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
 public static FakeHttpServer Oanda(string token = "TOKEN")
@@ -32,7 +32,7 @@ public static FakeHttpServer Oanda(string token = "TOKEN")
             var to = DateTime.Parse(req.Query("to"), Inv, DateTimeStyles.AdjustToUniversal);
             int step = req.Query("granularity") switch { "S5" => 5, "M1" => 60, "M5" => 300, _ => 900 };
             var candles = new List<string>();
-            // una hora de datos: de 13:00 a 14:00 UTC
+            // one hour of data: from 13:00 to 14:00 UTC
             for (var t = start; t < start.AddHours(1); t = t.AddSeconds(step))
             {
                 if (t < from || t >= to) continue;
@@ -138,7 +138,7 @@ public static FakeHttpServer Databento()
             if (req.Query("encoding") != "csv") return (422, "{\"detail\":\"encoding\"}");
             long baseNs = new DateTimeOffset(FakeBrokers.Day.ToDateTime(new TimeOnly(14, 30), DateTimeKind.Utc)).ToUnixTimeMilliseconds() * 1_000_000;
             var sb = new StringBuilder("ts_recv,ts_event,rtype,publisher_id,instrument_id,action,side,depth,price,size,flags,ts_in_delta,sequence\n");
-            // compra agresiva, venta agresiva, sin lado (regla del tick: bajó → venta) y una con precio raro que se redondea al tick
+            // aggressive buy, aggressive sell, no side (tick rule: it went down -> a sell) and one with an odd price that is rounded to the tick
             sb.Append($"{baseNs + 10},{baseNs},0,1,42,T,B,0,20000250000000,2,0,0,1\n");
             sb.Append($"{baseNs + 1_000_010},{baseNs + 1_000_000},0,1,42,T,A,0,20000000000000,1,0,0,2\n");
             sb.Append($"{baseNs + 2_000_010},{baseNs + 2_000_000},0,1,42,T,N,0,19999750000000,3,0,0,3\n");
@@ -153,7 +153,7 @@ public static FakeHttpServer Databento()
 
 }
 
-/// <summary>Open API de mentira: autenticación, cuentas, símbolos, precios en vivo, ticks con páginas y velas.</summary>
+/// <summary>Fake Open API: authentication, accounts, symbols, live prices, paginated ticks and candles.</summary>
 internal sealed class FakeCTrader : IDisposable
 {
     public readonly FakeHttpServer Server = new();
@@ -162,7 +162,7 @@ internal sealed class FakeCTrader : IDisposable
     public int TickRequests;
     public long DayStartMs = new DateTimeOffset(FakeBrokers.Day.ToDateTime(new TimeOnly(10, 0), DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 
-    /// <summary>100 ticks del día: uno por segundo desde las 10:00, precio 20000.00 + i*0.01 (en 1/100000).</summary>
+    /// <summary>100 ticks of the day: one per second from 10:00, price 20000.00 + i*0.01 (in 1/100000).</summary>
     public (long Ms, long Price) Tick(int i) => (DayStartMs + i * 1000, 2_000_000_000 + i * 1000);
 
     public FakeCTrader()
@@ -238,7 +238,7 @@ internal sealed class FakeCTrader : IDisposable
                     {
                         Interlocked.Increment(ref TickRequests);
                         long from = p["fromTimestamp"]!.GetValue<long>(), to = p["toTimestamp"]!.GetValue<long>();
-                        // de la más nueva a la más vieja, la primera absoluta y las demás como diferencia
+                        // from the newest to the oldest, the first one absolute and the rest as a difference
                         var inRange = Enumerable.Range(0, 100).Select(Tick).Where(t => t.Ms >= from && t.Ms <= to).OrderByDescending(t => t.Ms).ToList();
                         var page = inRange.Take(TickPage).ToList();
                         var arr = new JsonArray();
@@ -270,7 +270,7 @@ internal sealed class FakeCTrader : IDisposable
 }
 
 
-/// <summary>Tradovate de mentira: login con CID/secret, cuentas, contratos, órdenes con ejecuciones y los dos sockets.</summary>
+/// <summary>Fake Tradovate: login with CID/secret, accounts, contracts, orders with fills and both sockets.</summary>
 internal sealed class FakeTradovate : IDisposable
 {
     public readonly FakeHttpServer Server = new();
@@ -363,15 +363,15 @@ internal sealed class FakeTradovate : IDisposable
                     case "md/getChart":
                     {
                         int seq = Interlocked.Increment(ref ChartRequests);
-                        long hid = 100 + seq * 2, rid = hid + 1; // cada gráfico con sus propios ids
+                        long hid = 100 + seq * 2, rid = hid + 1; // each chart with its own ids
                         var req = JsonNode.Parse(body)!.AsObject();
                         var range = req["timeRange"]!.AsObject();
                         bool live = range["closestTimestamp"] == null;
-                        // la respuesta y los primeros paquetes van pegados (como el servidor real)
+                        // the response and the first packets go glued together (like the real server)
                         await FakeHttpServer.SendText(ws, $"a[{{\"s\":200,\"i\":{id},\"d\":{{\"historicalId\":{hid},\"realtimeId\":{rid}}}}}]", ct);
                         if (live)
                         {
-                            // un tick de historia, fin de historia y después ticks en vivo
+                            // one history tick, end of history and then live ticks
                             await FakeHttpServer.SendText(ws, Packet(hid, BaseMs, new[] { (0, 0, 1, -1, 0, 1L) }), ct);
                             await FakeHttpServer.SendText(ws, $"a[{{\"e\":\"chart\",\"d\":{{\"charts\":[{{\"id\":{hid},\"eoh\":true}}]}}}}]", ct);
                             await Task.Delay(50, ct);
@@ -379,14 +379,14 @@ internal sealed class FakeTradovate : IDisposable
                         }
                         else
                         {
-                            // historia: 12 ticks por segundo de las 14:30 hacia atrás, de a 5 por pedido (el cliente pagina)
+                            // history: 12 ticks per second back from 14:30, 5 at a time per request (the client paginates)
                             var closest = DateTime.Parse(range["closestTimestamp"]!.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal);
                             long closestMs = new DateTimeOffset(closest).ToUnixTimeMilliseconds();
                             var ticks = Enumerable.Range(0, 12).Select(i => (Ms: BaseMs + i * 1000, Id: 100L + i)).Where(t => t.Ms <= closestMs).OrderByDescending(t => t.Ms).Take(5).ToList();
                             if (ticks.Count > 0)
                             {
                                 long bt = ticks.Min(t => t.Ms);
-                                // precio que sube un tick cada segundo; compra si es par (al ask), venta si es impar (al bid)
+                                // price rising one tick every second; a buy if it is even (at the ask), a sell if it is odd (at the bid)
                                 var tks = ticks.Select(t => ((int)(t.Ms - bt), (int)(t.Id - 100), 1, (int)(t.Id - 100) - ((t.Id % 2 == 0) ? 1 : 0), (int)(t.Id - 100) + ((t.Id % 2 == 0) ? 0 : 1), t.Id)).ToArray();
                                 await FakeHttpServer.SendText(ws, Packet(hid, bt, tks), ct);
                             }
@@ -409,7 +409,7 @@ internal sealed class FakeTradovate : IDisposable
         };
     }
 
-    /// <summary>Paquete de ticks: tiempo y precios relativos a la base (precio base 20000 ticks de 0.25 = 5000).</summary>
+    /// <summary>Tick packet: time and prices relative to the base (base price 20000 ticks of 0.25 = 5000).</summary>
     private static string Packet(long id, long bt, IEnumerable<(int T, int P, int S, int B, int A, long Id)> ticks)
     {
         var tks = string.Join(",", ticks.Select(t => $"{{\"t\":{t.T},\"p\":{t.P},\"s\":{t.S},\"b\":{t.B},\"a\":{t.A},\"bs\":4,\"as\":5,\"id\":{t.Id}}}"));
@@ -423,7 +423,7 @@ internal sealed class FakeTradovate : IDisposable
         await FakeHttpServer.SendText(_user, $"a[{{\"e\":\"props\",\"d\":{{\"entityType\":\"{entityType}\",\"eventType\":\"{eventType}\",\"entity\":{entity}}}}}]", CancellationToken.None);
     }
 
-    /// <summary>Orden creada; las de mercado se ejecutan (ejecución, posición y orden completa).</summary>
+    /// <summary>Order created; the market ones are filled (fill, position and complete order).</summary>
     private async Task OrderLifecycle(long id, JsonObject o)
     {
         string action = o["action"]!.GetValue<string>();

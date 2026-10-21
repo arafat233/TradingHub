@@ -4,7 +4,7 @@ using TradingHub.Market;
 
 namespace TradingHub.Tests;
 
-/// <summary>Historia larga: velas del exchange convertidas en operaciones y mezcladas con ticks reales.</summary>
+/// <summary>Long history: exchange candles turned into trades and mixed with real ticks.</summary>
 public class LongHistoryTests
 {
     private static readonly Instrument Inst = new() { Symbol = "TEST", FeedId = "test", TickSize = 0.5m, VolumeStep = 0.001m };
@@ -12,14 +12,14 @@ public class LongHistoryTests
     private static long Ms(DateTime t) => new DateTimeOffset(t).ToUnixTimeMilliseconds();
 
     [Fact]
-    public void Las_velas_armadas_respetan_ohlc_volumen_y_delta()
+    public void The_built_candles_respect_ohlc_volume_and_delta()
     {
         var t0 = new DateTime(2026, 9, 1, 10, 0, 0, DateTimeKind.Utc);
         var klines = new List<Kline>
         {
-            new(Ms(t0), 100, 104, 99, 103, 10, 7, true),               // alcista: compra 7, vende 3
-            new(Ms(t0.AddMinutes(1)), 103, 103.5m, 97, 98, 4, 0, true), // solo ventas
-            new(Ms(t0.AddMinutes(2)), 98, 99, 98, 99, 2, 2, true),      // solo compras
+            new(Ms(t0), 100, 104, 99, 103, 10, 7, true),               // bullish: buys 7, sells 3
+            new(Ms(t0.AddMinutes(1)), 103, 103.5m, 97, 98, 4, 0, true), // sells only
+            new(Ms(t0.AddMinutes(2)), 98, 99, 98, 99, 2, 2, true),      // buys only
         };
         var trades = new List<Trade>();
         KlineHistory.Synthesize(klines, Inst, 1, new[] { (t0, t0.AddMinutes(3)) }, trades);
@@ -43,10 +43,10 @@ public class LongHistoryTests
             Assert.Equal(k.Close, m1.TicksToPrice(c.CloseTicks));
             Assert.Equal(k.Volume, c.Volume);
             Assert.Equal(k.BuyVolume - (k.Volume - k.BuyVolume), c.Delta);
-            Assert.Equal(0m, c.MaxTradeVolume); // no cuentan como "big trades"
+            Assert.Equal(0m, c.MaxTradeVolume); // they do not count as "big trades"
         }
 
-        // agregadas en una vela de una hora: totales exactos
+        // aggregated into a one-hour candle: exact totals
         var h1 = new CandleSeries(Inst, ChartPeriod.H1);
         h1.Rebuild(store);
         Assert.Single(h1.Candles);
@@ -57,7 +57,7 @@ public class LongHistoryTests
     }
 
     [Fact]
-    public void Las_velas_solo_llenan_los_huecos_sin_ticks()
+    public void The_candles_only_fill_the_gaps_with_no_ticks()
     {
         var t0 = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
         var real = new List<Trade>
@@ -76,13 +76,13 @@ public class LongHistoryTests
         var klines = Enumerable.Range(0, 60).Select(i => new Kline(Ms(t0.AddMinutes(i)), 100, 101, 99, 100, 1, 0.5m, true)).ToList();
         var synth = new List<Trade>();
         KlineHistory.Synthesize(klines, Inst, 1, windows, synth);
-        // 30 minutos antes y 27 después (los minutos con ticks reales no se inventan)
+        // 30 minutes before and 27 after (the minutes with real ticks are not invented)
         Assert.Equal((30 + 27) * 4, synth.Count);
         var merged = KlineHistory.MergeByTime(synth, real);
         Assert.True(merged.Zip(merged.Skip(1)).All(p => p.First.Time <= p.Second.Time));
     }
 
-    /// <summary>Feed falso: ticks reales solo para lo pedido y velas de 1 minuto para todo.</summary>
+    /// <summary>Fake feed: real ticks only for what was requested and 1-minute candles for everything.</summary>
     private sealed class FakeFeed : IMarketDataFeed, IKlineHistory
     {
         public int TickRequests;
@@ -124,7 +124,7 @@ public class LongHistoryTests
     }
 
     [Fact]
-    public void Un_anio_de_historia_carga_en_velas_y_lo_reciente_en_ticks()
+    public void A_year_of_history_loads_in_candles_and_the_recent_part_in_ticks()
     {
         var feed = new FakeFeed();
         var data = new InstrumentData(Inst, feed) { TickWindow = TimeSpan.FromHours(1) };
@@ -139,7 +139,7 @@ public class LongHistoryTests
         int initial = data.Trades.Count;
         Assert.True(initial > 0);
 
-        // pedir un año: lo de más de una hora atrás viene en velas
+        // requesting a year: anything more than an hour back comes in candles
         Assert.True(data.ExtendHistory(feed.Now.AddDays(-365)));
         for (int i = 0; i < 1000 && data.IsExtending; i++)
         {
@@ -149,7 +149,7 @@ public class LongHistoryTests
 
         Assert.False(data.IsExtending);
         Assert.Null(data.HistoryError);
-        Assert.True(feed.EarliestTickRequested >= feed.Now.AddHours(-1.1), "no pidió ticks de un año atrás");
+        Assert.True(feed.EarliestTickRequested >= feed.Now.AddHours(-1.1), "it did not request ticks from a year back");
         Assert.True(data.Trades.FirstTime <= feed.Now.AddDays(-364));
         Assert.True(data.Trades.Count < 3_000_000);
 

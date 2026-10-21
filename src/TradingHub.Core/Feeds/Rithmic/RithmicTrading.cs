@@ -3,10 +3,10 @@ using System.Globalization;
 
 namespace TradingHub.Feeds.Rithmic;
 
-/// <summary>Campos de las plantas de órdenes y de PnL (definiciones oficiales de R|Protocol).</summary>
+/// <summary>Fields of the order and PnL plants (official R|Protocol definitions).</summary>
 internal static class RpO
 {
-    // plantillas
+    // templates
     public const int RequestLoginInfo = 300, ResponseLoginInfo = 301;
     public const int RequestAccountList = 302, ResponseAccountList = 303;
     public const int RequestSubscribeOrders = 308, ResponseSubscribeOrders = 309;
@@ -22,7 +22,7 @@ internal static class RpO
     public const int InstrumentPnl = 450, AccountPnl = 451;
     public const int Reject = 75, ForcedLogout = 77;
 
-    // campos
+    // fields
     public const int RqHandlerRpCode = 132764;
     public const int FcmId = 154013, IbId = 154014, UserType = 154036;
     public const int AccountId = 154008, AccountName = 154002, AccountCurrency = 154383;
@@ -41,7 +41,7 @@ internal static class RpO
     public const int Ssboe = 150100, Usecs = 150101;
 }
 
-/// <summary>Saldo y resultado de una cuenta (planta de PnL).</summary>
+/// <summary>Balance and result of an account (PnL plant).</summary>
 public sealed class RithmicAccountSummary
 {
     public decimal? Balance { get; set; }
@@ -56,13 +56,13 @@ public sealed class RithmicAccountSummary
     public DateTime Updated { get; set; }
 }
 
-/// <summary>Una ejecución (parcial o total) de una orden.</summary>
+/// <summary>A fill (partial or full) of an order.</summary>
 public sealed record RithmicFill(string Id, string Account, string Symbol, string Exchange, bool IsBuy, decimal Quantity, decimal Price, DateTime Time, string BasketId);
 
-/// <summary>Una cuenta de Rithmic.</summary>
+/// <summary>A Rithmic account.</summary>
 public sealed record RithmicAccountInfo(string FcmId, string IbId, string AccountId, string Name, string Currency);
 
-/// <summary>Una orden en Rithmic, como la cuentan sus notificaciones.</summary>
+/// <summary>An order in Rithmic, as its notifications report it.</summary>
 public sealed class RithmicOrderState
 {
     public string BasketId { get; set; } = "";
@@ -72,7 +72,7 @@ public sealed class RithmicOrderState
     public string Exchange { get; set; } = "";
     public bool IsBuy { get; set; }
 
-    /// <summary>1 límite, 2 mercado, 3 stop límite, 4 stop mercado.</summary>
+    /// <summary>1 limit, 2 market, 3 stop limit, 4 stop market.</summary>
     public int PriceType { get; set; }
 
     public decimal Quantity { get; set; }
@@ -86,11 +86,11 @@ public sealed class RithmicOrderState
     public bool Cancelled { get; set; }
     public string Reason { get; set; } = "";
 
-    /// <summary>Cuándo se vio la orden por primera vez (UTC).</summary>
+    /// <summary>When the order was first seen (UTC).</summary>
     public DateTime Time { get; set; } = DateTime.UtcNow;
 }
 
-/// <summary>Posición de un instrumento en una cuenta (planta de PnL).</summary>
+/// <summary>Position of an instrument in an account (PnL plant).</summary>
 public sealed class RithmicPosition
 {
     public decimal Net { get; set; }
@@ -100,8 +100,8 @@ public sealed class RithmicPosition
 }
 
 /// <summary>
-/// Sesión de trading de Rithmic para un usuario: planta de órdenes (cuentas, rutas, órdenes y ejecuciones) y planta
-/// de PnL (posiciones y resultado). Se conecta en segundo plano y se reconecta sola.
+/// Rithmic trading session for a user: order plant (accounts, routes, orders and fills) and
+/// the PnL one (positions and result). It connects in the background and reconnects on its own.
 /// </summary>
 public sealed class RithmicTradingSession : IDisposable
 {
@@ -126,22 +126,22 @@ public sealed class RithmicTradingSession : IDisposable
         _settings = settings;
     }
 
-    /// <summary>Sistema de la sesión (para saber si es de práctica).</summary>
+    /// <summary>System of the session (to know whether it is a practice one).</summary>
     public string System => _settings.System;
 
-    /// <summary>Paper Trading y Test son de práctica; el resto (Rithmic 01, prop firms…) se trata como real.</summary>
+    /// <summary>Paper Trading and Test are practice ones; the rest (Rithmic 01, prop firms…) are treated as real.</summary>
     public bool IsPractice => _settings.System is "Rithmic Paper Trading" or "Rithmic Test";
 
     public IReadOnlyList<RithmicAccountInfo> Accounts { get; private set; } = Array.Empty<RithmicAccountInfo>();
     public bool IsConnected { get; private set; }
-    public string StatusText { get; private set; } = "Conectando…";
+    public string StatusText { get; private set; } = "Connecting…";
 
-    /// <summary>Cambió algo (cuentas, órdenes, posiciones). Llega desde hilos de red.</summary>
+    /// <summary>Something changed (accounts, orders, positions). It arrives from network threads.</summary>
     public event Action? Changed;
 
     public void Start() => _loop ??= Task.Run(RunAsync);
 
-    /// <summary>Cambió la configuración: la misma sesión vuelve a entrar con los datos nuevos (las cuentas abiertas siguen andando).</summary>
+    /// <summary>The configuration changed: the same session logs in again with the new data (the open accounts keep working).</summary>
     public void Reconfigure(RithmicSettings settings)
     {
         _settings = settings;
@@ -154,7 +154,7 @@ public sealed class RithmicTradingSession : IDisposable
         }
     }
 
-    /// <summary>Marca como vista la excepción de una tarea que ya no se espera (si no, el recolector la reporta como error).</summary>
+    /// <summary>Marks as observed the exception of a task that is no longer awaited (otherwise the collector reports it as an error).</summary>
     private static void Observe(Task t) => t.ContinueWith(x => _ = x.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
 
     private static string Key(string account, string symbol, string exchange) => $"{account}|{symbol}|{exchange}";
@@ -169,11 +169,11 @@ public sealed class RithmicTradingSession : IDisposable
 
     public RithmicOrderState? OrderByTag(string userTag) => _orders.Values.FirstOrDefault(o => o.UserTag == userTag);
 
-    /// <summary>Todas las órdenes de la cuenta que se vieron en esta sesión (las de hoy, activas y terminadas).</summary>
+    /// <summary>Every order of the account seen in this session (today's, active and finished).</summary>
     public IReadOnlyList<RithmicOrderState> OrdersOf(string account) =>
         _orders.Values.Where(o => o.Account == account).OrderBy(o => o.Time).ToList();
 
-    /// <summary>Posiciones de la cuenta por contrato (incluye las que ya quedaron planas hoy).</summary>
+    /// <summary>Positions of the account by contract (including the ones already flat today).</summary>
     public IReadOnlyList<(string Symbol, string Exchange, RithmicPosition Position)> PositionsOf(string account) =>
         _positions.Where(kv => kv.Key.StartsWith(account + "|", StringComparison.Ordinal))
             .Select(kv => kv.Key.Split('|') is [_, var sym, var ex] ? (sym, ex, kv.Value) : ("", "", kv.Value))
@@ -184,10 +184,10 @@ public sealed class RithmicTradingSession : IDisposable
     public IReadOnlyList<RithmicFill> FillsOf(string account) =>
         _fills.Values.Where(f => f.Account == account).OrderBy(f => f.Time).ToList();
 
-    /// <summary>Llegó una ejecución nueva (también las de hoy que Rithmic repite al conectarse). Desde hilos de red.</summary>
+    /// <summary>A new fill arrived (including today's, which Rithmic repeats on connecting). From network threads.</summary>
     public event Action<RithmicFill>? FillReceived;
 
-    // ------------------------------------------------------------------ conexión
+    // ------------------------------------------------------------------ connection
 
     private async Task RunAsync()
     {
@@ -201,7 +201,7 @@ public sealed class RithmicTradingSession : IDisposable
             var ct = conn.Token;
             try
             {
-                StatusText = "Conectando a la planta de órdenes…";
+                StatusText = "Connecting to the order plant…";
                 orders = new RithmicClient();
                 await orders.ConnectAsync(_settings.Uri, ct, _settings.TimeoutMs).ConfigureAwait(false);
                 var login = await orders.LoginAsync(_settings.User, _settings.Password, _settings.System, _settings.AppName, _settings.AppVersion, 2, ct).ConfigureAwait(false);
@@ -234,15 +234,15 @@ public sealed class RithmicTradingSession : IDisposable
                 }
 
                 Accounts = accounts;
-                // órdenes en vivo de cada cuenta + las que ya estaban abiertas
+                // live orders of each account + the ones that were already open
                 foreach (var a in accounts)
                 {
                     await orders.SendAsync(Account(new ProtoWriter().Int(Rp.TemplateId, RpO.RequestSubscribeOrders).String(Rp.UserMsg, "sub"), a), ct).ConfigureAwait(false);
                     await orders.SendAsync(Account(new ProtoWriter().Int(Rp.TemplateId, RpO.RequestShowOrders).String(Rp.UserMsg, "show"), a), ct).ConfigureAwait(false);
                 }
 
-                // posiciones y resultado
-                StatusText = "Conectando a la planta de PnL…";
+                // positions and result
+                StatusText = "Connecting to the PnL plant…";
                 pnl = new RithmicClient();
                 await pnl.ConnectAsync(_settings.Uri, ct, _settings.TimeoutMs).ConfigureAwait(false);
                 var pl = await pnl.LoginAsync(_settings.User, _settings.Password, _settings.System, _settings.AppName, _settings.AppVersion, 4, ct).ConfigureAwait(false);
@@ -256,17 +256,17 @@ public sealed class RithmicTradingSession : IDisposable
                 _orderClient = orders;
                 IsConnected = true;
                 failures = 0;
-                StatusText = accounts.Count == 1 ? $"Cuenta {accounts[0].AccountId} conectada" : $"{accounts.Count} cuentas conectadas";
+                StatusText = accounts.Count == 1 ? $"Account {accounts[0].AccountId} connected" : $"{accounts.Count} accounts connected";
                 Changed?.Invoke();
 
-                // escucha las dos plantas hasta que alguna se corte
+                // listens to both plants until one of them drops
                 var a1 = ReadLoopAsync(orders, ct);
                 var a2 = ReadLoopAsync(pnl, ct);
                 Observe(a1);
                 Observe(a2);
                 await Task.WhenAny(a1, a2).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                throw new IOException("se cortó la conexión con Rithmic");
+                throw new IOException("the connection to Rithmic dropped");
             }
             catch (OperationCanceledException) when (root.IsCancellationRequested)
             {
@@ -274,10 +274,10 @@ public sealed class RithmicTradingSession : IDisposable
             }
             catch (OperationCanceledException)
             {
-                // configuración nueva: entra otra vez al toque
+                // new configuration: it logs in again right away
                 IsConnected = false;
                 failures = 0;
-                StatusText = "Conectando con la configuración nueva…";
+                StatusText = "Connecting with the new configuration…";
                 Changed?.Invoke();
             }
             catch (RithmicRejectedException ex)
@@ -285,19 +285,19 @@ public sealed class RithmicTradingSession : IDisposable
                 IsConnected = false;
                 StatusText = ex.Message;
                 Changed?.Invoke();
-                failures = Math.Max(failures, 4); // credenciales o permisos: reintenta despacio
+                failures = Math.Max(failures, 4); // credentials or permissions: retry slowly
             }
             catch (Exception ex)
             {
                 IsConnected = false;
                 failures++;
-                StatusText = $"Reconectando las órdenes de Rithmic · intento {failures} ({ex.Message})";
+                StatusText = $"Reconnecting the Rithmic order session · attempt {failures} ({ex.Message})";
                 Changed?.Invoke();
             }
             finally
             {
                 _orderClient = null;
-                foreach (var p in _pending.Values) p.TrySetException(new IOException("se cortó la conexión con Rithmic"));
+                foreach (var p in _pending.Values) p.TrySetException(new IOException("the connection to Rithmic dropped"));
                 _pending.Clear();
                 if (orders != null) await orders.DisposeAsync().ConfigureAwait(false);
                 if (pnl != null) await pnl.DisposeAsync().ConfigureAwait(false);
@@ -320,29 +320,29 @@ public sealed class RithmicTradingSession : IDisposable
     private static ProtoWriter Account(ProtoWriter w, RithmicAccountInfo a) =>
         w.String(RpO.FcmId, a.FcmId).String(RpO.IbId, a.IbId).String(RpO.AccountId, a.AccountId);
 
-    /// <summary>Pedido con una sola respuesta (antes de que arranquen los lectores).</summary>
+    /// <summary>Request with a single response (before the readers start).</summary>
     private static async Task<ProtoMessage> AskAsync(RithmicClient c, ProtoWriter w, int responseTemplate, CancellationToken ct)
     {
         await c.SendAsync(w.String(Rp.UserMsg, "q"), ct).ConfigureAwait(false);
         for (int i = 0; i < 200; i++)
         {
-            var m = await c.ReceiveAsync(ct).ConfigureAwait(false) ?? throw new IOException("Rithmic cerró la conexión");
+            var m = await c.ReceiveAsync(ct).ConfigureAwait(false) ?? throw new IOException("Rithmic closed the connection");
             if (m.Int(Rp.TemplateId) == responseTemplate) return m;
         }
 
-        throw new IOException($"Rithmic no respondió ({responseTemplate})");
+        throw new IOException($"Rithmic did not respond ({responseTemplate})");
     }
 
-    /// <summary>Pedido con varias filas: junta las filas hasta la que trae el código final.</summary>
+    /// <summary>Request with several rows: it gathers the rows up to the one carrying the final code.</summary>
     private static async Task<List<ProtoMessage>> CollectAsync(RithmicClient c, ProtoWriter w, int responseTemplate, CancellationToken ct)
     {
         await c.SendAsync(w.String(Rp.UserMsg, "c"), ct).ConfigureAwait(false);
         var rows = new List<ProtoMessage>();
         for (int i = 0; i < 5000; i++)
         {
-            var m = await c.ReceiveAsync(ct).ConfigureAwait(false) ?? throw new IOException("Rithmic cerró la conexión");
+            var m = await c.ReceiveAsync(ct).ConfigureAwait(false) ?? throw new IOException("Rithmic closed the connection");
             if (m.Int(Rp.TemplateId) != responseTemplate) continue;
-            if (m.Strings(RpO.RqHandlerRpCode).Any()) rows.Add(m); // fila de datos
+            if (m.Strings(RpO.RqHandlerRpCode).Any()) rows.Add(m); // data row
             var rp = m.Strings(Rp.RpCode).ToList();
             if (rp.Count > 0)
             {
@@ -366,7 +366,7 @@ public sealed class RithmicTradingSession : IDisposable
             }
             catch (Exception)
             {
-                // un mensaje raro no corta la sesión
+                // an odd message does not drop the session
             }
         }
     }
@@ -403,12 +403,12 @@ public sealed class RithmicTradingSession : IDisposable
                 Changed?.Invoke();
                 return;
             case RpO.ForcedLogout:
-                StatusText = "Rithmic cerró la sesión de órdenes (otro inicio de sesión con el mismo usuario)";
+                StatusText = "Rithmic closed the order session (another sign-in with the same user)";
                 Changed?.Invoke();
                 return;
         }
 
-        // respuesta a un pedido nuestro
+        // response to a request of ours
         foreach (var tag in m.Strings(Rp.UserMsg))
         {
             if (_pending.TryRemove(tag, out var tcs))
@@ -460,15 +460,15 @@ public sealed class RithmicTradingSession : IDisposable
         {
             switch (notify)
             {
-                case 3: // cancelada
+                case 3: // cancelled
                     o.Done = true;
                     o.Cancelled = true;
                     break;
-                case 5: // ejecución
+                case 5: // fill
                 {
                     if (!m.Has(RpO.TotalFillSize))
                     {
-                        // sin totales: se suma
+                        // with no totals: it is added up
                         o.Filled += m.Int(RpO.FillSize);
                         o.Unfilled = Math.Max(0, o.Quantity - o.Filled);
                     }
@@ -476,14 +476,14 @@ public sealed class RithmicTradingSession : IDisposable
                     decimal size = m.Number(RpO.FillSize) ?? 0, price = m.Number(RpO.FillPrice) ?? o.AvgFillPrice;
                     if (size > 0 && price > 0 && o.Account.Length > 0)
                     {
-                        // el total ejecutado después de esta ejecución la identifica (Rithmic la repite al reconectar)
+                        // the total filled after this fill identifies it (Rithmic repeats it on reconnecting)
                         var fill = new RithmicFill($"{basket}|{o.Filled.ToString(CultureInfo.InvariantCulture)}", o.Account, o.Symbol, o.Exchange, o.IsBuy, size, price, when, basket);
                         if (_fills.TryAdd(fill.Id, fill)) FillReceived?.Invoke(fill);
                     }
 
                     break;
                 }
-                case 6: // rechazada por el exchange
+                case 6: // rejected by the exchange
                     o.Done = true;
                     o.Rejected = true;
                     o.Reason = text;
@@ -494,7 +494,7 @@ public sealed class RithmicTradingSession : IDisposable
         }
         else
         {
-            if (notify == 15) // completa: llenada, cancelada o rechazada
+            if (notify == 15) // complete: filled, cancelled or rejected
             {
                 o.Done = true;
                 string why = (m.String(RpO.CompletionReason) ?? "").ToLowerInvariant();
@@ -503,35 +503,35 @@ public sealed class RithmicTradingSession : IDisposable
             }
             else if (notify is 16 or 17)
             {
-                o.Reason = text.Length > 0 ? text : notify == 16 ? "no se pudo modificar" : "no se pudo cancelar";
+                o.Reason = text.Length > 0 ? text : notify == 16 ? "it could not be modified" : "it could not be cancelled";
             }
         }
 
         Changed?.Invoke();
     }
 
-    // ------------------------------------------------------------------ pedidos
+    // ------------------------------------------------------------------ requests
 
     private async Task<ProtoMessage> RequestAsync(ProtoWriter w, CancellationToken ct)
     {
-        var client = _orderClient ?? throw new InvalidOperationException("Rithmic todavía no está conectado (" + StatusText + ")");
+        var client = _orderClient ?? throw new InvalidOperationException("Rithmic is not connected yet (" + StatusText + ")");
         string tag = "v" + Interlocked.Increment(ref _seq).ToString(CultureInfo.InvariantCulture);
         var tcs = new TaskCompletionSource<ProtoMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[tag] = tcs;
         await client.SendAsync(w.String(Rp.UserMsg, tag), ct).ConfigureAwait(false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
-        await using (timeout.Token.Register(() => tcs.TrySetException(new TimeoutException("Rithmic no respondió a tiempo"))))
+        await using (timeout.Token.Register(() => tcs.TrySetException(new TimeoutException("Rithmic did not respond in time"))))
         {
             var r = await tcs.Task.ConfigureAwait(false);
             var rp = r.Strings(Rp.RpCode).ToList();
-            if (rp.Count > 0 && rp[0] != "0") throw new InvalidOperationException("Rithmic rechazó: " + string.Join(" — ", rp.Skip(1).DefaultIfEmpty(rp[0])));
+            if (rp.Count > 0 && rp[0] != "0") throw new InvalidOperationException("Rithmic rejected: " + string.Join(" — ", rp.Skip(1).DefaultIfEmpty(rp[0])));
             return r;
         }
     }
 
     private RithmicAccountInfo AccountOf(string accountId) =>
-        Accounts.FirstOrDefault(a => a.AccountId == accountId) ?? throw new InvalidOperationException($"La cuenta {accountId} no está en esta sesión de Rithmic");
+        Accounts.FirstOrDefault(a => a.AccountId == accountId) ?? throw new InvalidOperationException($"Account {accountId} is not in this Rithmic session");
 
     private string RouteFor(string exchange)
     {
@@ -539,12 +539,12 @@ public sealed class RithmicTradingSession : IDisposable
         {
             var r = _routes.Where(x => x.Exchange == exchange && x.Up).OrderByDescending(x => x.Default).FirstOrDefault();
             if (r.Route == null) r = _routes.FirstOrDefault(x => x.Exchange == exchange);
-            return r.Route ?? throw new InvalidOperationException($"Rithmic no tiene una ruta de órdenes para {exchange}");
+            return r.Route ?? throw new InvalidOperationException($"Rithmic has no order route for {exchange}");
         }
     }
 
-    /// <summary>Manda una orden. Devuelve el basket id (el número de la orden en Rithmic).</summary>
-    /// <param name="priceType">1 límite, 2 mercado, 4 stop mercado.</param>
+    /// <summary>Sends an order. Returns the basket id (the order's number in Rithmic).</summary>
+    /// <param name="priceType">1 limit, 2 market, 4 stop market.</param>
     public async Task<string> PlaceAsync(string accountId, string symbol, string exchange, bool buy, int priceType, int quantity, decimal price, decimal trigger, string userTag, CancellationToken ct)
     {
         var a = AccountOf(accountId);
@@ -555,7 +555,7 @@ public sealed class RithmicTradingSession : IDisposable
             .String(RpO.TradeRoute, RouteFor(exchange)).Int(RpO.ManualOrAuto, 1);
         if (priceType is 1 or 3) w.Double(RpO.Price, (double)price);
         if (priceType is 3 or 4) w.Double(RpO.TriggerPrice, (double)trigger);
-        // la orden aparece enseguida (las notificaciones completan el resto)
+        // the order shows up right away (the notifications fill in the rest)
         _orders.TryAdd("tag:" + userTag, new RithmicOrderState { UserTag = userTag, Account = accountId, Symbol = symbol, Exchange = exchange, IsBuy = buy, PriceType = priceType, Quantity = quantity, Unfilled = quantity, Price = price, Trigger = trigger });
         try
         {

@@ -14,9 +14,9 @@ using TradingHub.Trading;
 namespace TradingHub.App.Views;
 
 /// <summary>
-/// Chart Trader de cada gráfico (como en ATAS): cuenta, cross trading (mirar un instrumento y ejecutar en
-/// otro, p. ej. el mini y el micro), cantidad, botones de mercado/ask/bid, cancelar, revertir, breakeven,
-/// cerrar, resultado y stop/objetivo automáticos. Cada gráfico opera solo lo suyo.
+/// Each chart's Chart Trader (as in ATAS): account, cross trading (watch one instrument and execute on
+/// another, e.g. the mini and the micro), quantity, market/ask/bid buttons, cancel, reverse, breakeven,
+/// close, result and automatic stop/target. Each chart trades only its own.
 /// </summary>
 internal sealed class ChartTraderPanel : UserControl
 {
@@ -28,7 +28,7 @@ internal sealed class ChartTraderPanel : UserControl
     private readonly WrapPanel _presets = new() { ItemSpacing = 4, LineSpacing = 4 };
     private readonly TextBlock _pnl = new() { FontSize = 18, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly TextBlock _position = new() { Classes = { "muted", "small" }, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap };
-    // alto fijo (un renglón; el texto entero en el tooltip): que cambie con el precio nunca corre los botones de abajo
+    // fixed height (one line; the full text in the tooltip): letting it change with the price would shift the buttons below
     private readonly TextBlock _target = new() { FontSize = 11, Height = 16, MaxLines = 1, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ui.Accent };
     private readonly TextBlock _buyAsk = new() { FontSize = 10.5, HorizontalAlignment = HorizontalAlignment.Center, Opacity = 0.85 };
     private readonly TextBlock _sellAsk = new() { FontSize = 10.5, HorizontalAlignment = HorizontalAlignment.Center, Opacity = 0.85 };
@@ -38,18 +38,18 @@ internal sealed class ChartTraderPanel : UserControl
     private readonly NumericUpDown _sl = new() { Minimum = 0, Maximum = 100000, Increment = 1, FormatString = "0", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel _targets = new() { Spacing = 6 };
     private readonly StackPanel _bracketBox = new() { Spacing = 8 };
-    private readonly CheckBox _be = new() { Content = "Breakeven al TP1", FontSize = 11.5 };
+    private readonly CheckBox _be = new() { Content = "Breakeven at TP1", FontSize = 11.5 };
     private readonly TextBlock _chartLabel = new() { Classes = { "faint", "small" }, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly bool _docked;
     private string _templateSig = "";
     private readonly Border _expanded = new();
     private readonly Border _collapsed = new();
-    private readonly TextBlock _realWarning = new() { Text = "CUENTA REAL", Foreground = Brushes.OrangeRed, FontWeight = FontWeight.Bold, FontSize = 11, IsVisible = false };
+    private readonly TextBlock _realWarning = new() { Text = "REAL ACCOUNT", Foreground = Brushes.OrangeRed, FontWeight = FontWeight.Bold, FontSize = 11, IsVisible = false };
     private readonly TextBlock _accountHint = new() { FontSize = 11, Height = 16, MaxLines = 1, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ui.Warn, IsVisible = false };
     private string _settingsKey = "";
     private bool _syncing;
 
-    /// <param name="docked">En el panel de la derecha (junto al DOM): siempre abierto y del ancho del panel.</param>
+    /// <param name="docked">In the right panel (next to the DOM): always open and the width of the panel.</param>
     public ChartTraderPanel(TradingView host, ChartTab chart, bool docked = false)
     {
         _host = host;
@@ -65,7 +65,7 @@ internal sealed class ChartTraderPanel : UserControl
         }
 
         var open = new Button { Content = Ui.Icon(MaterialIconKind.ChevronLeft, 14), Padding = new Thickness(0), MinHeight = 0, Width = 14, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
-        ToolTip.SetTip(open, "Mostrar el Chart Trader de este gráfico");
+        ToolTip.SetTip(open, "Show this chart's Chart Trader");
         open.Click += (_, _) => _host.SetTraderVisible(_chart, true);
         _collapsed.Child = open;
         _collapsed.Background = Ui.Bg1;
@@ -75,7 +75,7 @@ internal sealed class ChartTraderPanel : UserControl
         ApplyVisible();
     }
 
-    /// <summary>Gráfico al que opera este panel.</summary>
+    /// <summary>Chart this panel trades.</summary>
     public ChartTab Chart => _chart;
 
     public void ApplyVisible()
@@ -86,7 +86,7 @@ internal sealed class ChartTraderPanel : UserControl
 
     private Control Build()
     {
-        var close = Ui.IconButton(MaterialIconKind.ChevronRight, "Ocultar el Chart Trader de este gráfico", () => _host.SetTraderVisible(_chart, false), 15);
+        var close = Ui.IconButton(MaterialIconKind.ChevronRight, "Hide this chart's Chart Trader", () => _host.SetTraderVisible(_chart, false), 15);
         var head = new DockPanel { Margin = new Thickness(10, 8, 4, 4) };
         DockPanel.SetDock(close, Dock.Right);
         head.Children.Add(close);
@@ -95,11 +95,11 @@ internal sealed class ChartTraderPanel : UserControl
         _account.SelectionChanged += (_, _) =>
         {
             if (_syncing || _account.SelectedItem is not ComboBoxItem { Tag: AccountOption a } || a.Id == _chart.AccountId) return;
-            // después de que el selector termine de cerrarse (cambiarlo adentro de su propio evento lo dejaba trabado)
+            // after the picker finishes closing (changing it inside its own event left it stuck)
             Dispatcher.UIThread.Post(() => _host.SetChartAccount(_chart, a.Id));
         };
         _cross.Click += (_, _) => ShowCrossPicker();
-        ToolTip.SetTip(_cross, "Cross trading: mirás este gráfico y las órdenes van a otro instrumento (por ejemplo, mirás el ES y ejecutás en el MES)");
+        ToolTip.SetTip(_cross, "Cross trading: you watch this chart and the orders go to another instrument (for example, you watch ES and execute on MES)");
         _qty.ValueChanged += (_, _) =>
         {
             if (_syncing) return;
@@ -121,41 +121,41 @@ internal sealed class ChartTraderPanel : UserControl
 
         decimal Q() => _chart.Quantity > 0 ? _chart.Quantity : 0;
         var grid = Pairs(
-            (Trade("Comprar MKT", null, "buy", "Compra a mercado", () => _ = _host.TradeAsync(_chart, OrderTypes.Market, OrderDirections.Buy, 0, Q())),
-             Trade("Vender MKT", null, "sell", "Venta a mercado", () => _ = _host.TradeAsync(_chart, OrderTypes.Market, OrderDirections.Sell, 0, Q()))),
-            (Trade("Comprar Ask", _buyAsk, "buy-soft", "Compra límite en el ask (se llena enseguida, con precio tope)", () => AtBook(OrderDirections.Buy, ask: true)),
-             Trade("Vender Ask", _sellAsk, "sell-soft", "Venta límite en el ask (espera en la oferta)", () => AtBook(OrderDirections.Sell, ask: true))),
-            (Trade("Comprar Bid", _buyBid, "buy-soft", "Compra límite en el bid (espera en la demanda)", () => AtBook(OrderDirections.Buy, ask: false)),
-             Trade("Vender Bid", _sellBid, "sell-soft", "Venta límite en el bid (se llena enseguida, con precio tope)", () => AtBook(OrderDirections.Sell, ask: false))),
-            (Trade("Canc. compras", null, "", "Cancela las órdenes de compra", () => CancelSide(OrderDirections.Buy)),
-             Trade("Canc. ventas", null, "", "Cancela las órdenes de venta", () => CancelSide(OrderDirections.Sell))),
-            (Trade("Cancelar todo", null, "", "Cancela todas las órdenes", () => _ = _host.AccountActionAsync(_chart, a => a.CancelAll(), "Órdenes canceladas")),
-             Trade("Revertir", null, "", "Da vuelta la posición", () => _ = _host.AccountActionAsync(_chart, a => a.Reverse(), "Posición revertida"))));
-        var be = Trade("Breakeven", null, "", "Mueve el stop al precio de entrada", () => _ = _host.BracketActionAsync(_chart, b => b.MoveStopToBreakeven(), "Mover el stop a breakeven"));
-        // parciales: cierran una parte a mercado; el stop y los objetivos se ajustan solos
+            (Trade("Buy MKT", null, "buy", "Buy at market", () => _ = _host.TradeAsync(_chart, OrderTypes.Market, OrderDirections.Buy, 0, Q())),
+             Trade("Sell MKT", null, "sell", "Sell at market", () => _ = _host.TradeAsync(_chart, OrderTypes.Market, OrderDirections.Sell, 0, Q()))),
+            (Trade("Buy Ask", _buyAsk, "buy-soft", "Buy limit at the ask (fills right away, with a price cap)", () => AtBook(OrderDirections.Buy, ask: true)),
+             Trade("Sell Ask", _sellAsk, "sell-soft", "Sell limit at the ask (waits on the offer)", () => AtBook(OrderDirections.Sell, ask: true))),
+            (Trade("Buy Bid", _buyBid, "buy-soft", "Buy limit at the bid (waits on the demand)", () => AtBook(OrderDirections.Buy, ask: false)),
+             Trade("Sell Bid", _sellBid, "sell-soft", "Sell limit at the bid (fills right away, with a price cap)", () => AtBook(OrderDirections.Sell, ask: false))),
+            (Trade("Canc. buys", null, "", "Cancels the buy orders", () => CancelSide(OrderDirections.Buy)),
+             Trade("Canc. sells", null, "", "Cancels the sell orders", () => CancelSide(OrderDirections.Sell))),
+            (Trade("Cancel all", null, "", "Cancels every order", () => _ = _host.AccountActionAsync(_chart, a => a.CancelAll(), "Orders cancelled")),
+             Trade("Reverse", null, "", "Flips the position", () => _ = _host.AccountActionAsync(_chart, a => a.Reverse(), "Position reversed"))));
+        var be = Trade("Breakeven", null, "", "Moves the stop to the entry price", () => _ = _host.BracketActionAsync(_chart, b => b.MoveStopToBreakeven(), "Move the stop to breakeven"));
+        // partials: they close part of it at market; the stop and the targets adjust themselves
         var partials = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,4,*,4,*") };
-        partials.Children.Add(new TextBlock { Text = "Cerrar", Classes = { "muted", "small" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        partials.Children.Add(new TextBlock { Text = "Close", Classes = { "muted", "small" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         int col = 1;
         foreach (var pct in new[] { 25, 50, 75 })
         {
             decimal f = pct / 100m;
-            var b = Trade($"{pct}%", null, "", $"Cierra el {pct}% de la posición a mercado (el stop y los objetivos se ajustan)", () => _ = _host.BracketActionAsync(_chart, br => br.ClosePartial(f), $"Cerrar el {pct}% de la posición"));
+            var b = Trade($"{pct}%", null, "", $"Closes {pct}% of the position at market (the stop and the targets adjust)", () => _ = _host.BracketActionAsync(_chart, br => br.ClosePartial(f), $"Close {pct}% of the position"));
             b.MinHeight = 26;
             Grid.SetColumn(b, col);
             partials.Children.Add(b);
             col += 2;
         }
-        var flat = Trade("Cerrar posición", null, "primary", "Cierra toda la posición a mercado y cancela las órdenes", () => _ = _host.AccountActionAsync(_chart, a => a.Flatten(), "Posición cerrada"));
+        var flat = Trade("Close position", null, "primary", "Closes the whole position at market and cancels the orders", () => _ = _host.AccountActionAsync(_chart, a => a.Flatten(), "Position closed"));
 
-        // stop y objetivo automáticos (plantilla del instrumento donde se ejecuta)
+        // automatic stop and target (template of the instrument it executes on)
         _brackets.IsCheckedChanged += (_, _) => EditTemplate(t => t.Enabled = _brackets.IsChecked == true);
         _sl.ValueChanged += (_, _) => EditTemplate(t => t.StopTicks = (int)(_sl.Value ?? 0));
         _be.IsCheckedChanged += (_, _) => EditTemplate(t => t.BreakevenAfterFirstTarget = _be.IsChecked == true);
         var slHead = new DockPanel();
         DockPanel.SetDock(_brackets, Dock.Right);
         slHead.Children.Add(_brackets);
-        slHead.Children.Add(new TextBlock { Text = "SL / TP automáticos", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
-        ToolTip.SetTip(slHead, "Al entrar se ponen solos el stop y el objetivo (en ticks desde la entrada), en OCO");
+        slHead.Children.Add(new TextBlock { Text = "Automatic SL / TP", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
+        ToolTip.SetTip(slHead, "On entry the stop and the target are set automatically (in ticks from the entry), in OCO");
         Control TicksRow(string label, IBrush color, NumericUpDown box)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("26,*,Auto") };
@@ -169,8 +169,8 @@ internal sealed class ChartTraderPanel : UserControl
         }
 
         var slRow = TicksRow("SL", Ui.Down, _sl);
-        var addTarget = new Button { Content = "+ objetivo", Padding = new Thickness(6, 2), MinHeight = 24, FontSize = 11 };
-        ToolTip.SetTip(addTarget, "Hasta 3 objetivos parciales: cada uno cierra un % de la posición");
+        var addTarget = new Button { Content = "+ target", Padding = new Thickness(6, 2), MinHeight = 24, FontSize = 11 };
+        ToolTip.SetTip(addTarget, "Up to 3 partial targets: each one closes a % of the position");
         addTarget.Click += (_, _) => EditTemplate(t =>
         {
             if (t.Targets.Count >= 3) return;
@@ -178,9 +178,9 @@ internal sealed class ChartTraderPanel : UserControl
             else t.Targets.Add(new BracketTarget { Ticks = Math.Max(1, t.Targets.Max(x => x.Ticks) * 2) });
             Rebalance(t);
         }, reload: true);
-        var apply = new Button { Content = "Aplicar a la posición", Padding = new Thickness(6, 2), MinHeight = 24, FontSize = 11 };
-        ToolTip.SetTip(apply, "Reemplaza el stop y los objetivos de la posición abierta por estos");
-        apply.Click += (_, _) => _ = _host.BracketActionAsync(_chart, b => b.ApplyTemplate(), "Poner el stop y los objetivos a la posición");
+        var apply = new Button { Content = "Apply to the position", Padding = new Thickness(6, 2), MinHeight = 24, FontSize = 11 };
+        ToolTip.SetTip(apply, "Replaces the open position's stop and targets with these");
+        apply.Click += (_, _) => _ = _host.BracketActionAsync(_chart, b => b.ApplyTemplate(), "Set the stop and the targets on the position");
         _bracketBox.Children.Add(slHead);
         _bracketBox.Children.Add(slRow);
         _bracketBox.Children.Add(_targets);
@@ -189,14 +189,14 @@ internal sealed class ChartTraderPanel : UserControl
 
         var body = new StackPanel { Spacing = 8, Margin = new Thickness(10, 0, 10, 12) };
         if (_docked) body.Children.Add(_chartLabel);
-        body.Children.Add(Label("Cuenta"));
+        body.Children.Add(Label("Account"));
         body.Children.Add(_account);
         body.Children.Add(_realWarning);
         body.Children.Add(_accountHint);
         body.Children.Add(Label("Cross trading"));
         body.Children.Add(_cross);
         body.Children.Add(_target);
-        body.Children.Add(Label("Cantidad"));
+        body.Children.Add(Label("Quantity"));
         body.Children.Add(_qty);
         body.Children.Add(_presets);
         body.Children.Add(grid);
@@ -222,7 +222,7 @@ internal sealed class ChartTraderPanel : UserControl
 
     private static TextBlock Label(string text) => new() { Text = text, Classes = { "muted", "small" }, Margin = new Thickness(0, 2, 0, -4) };
 
-    /// <summary>Botones de a dos columnas (como en ATAS).</summary>
+    /// <summary>Buttons in two columns (as in ATAS).</summary>
     private static Grid Pairs(params (Control Left, Control Right)[] rows)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,6,*"), RowSpacing = 6 };
@@ -247,7 +247,7 @@ internal sealed class ChartTraderPanel : UserControl
         if (price <= 0) price = data.LastPrice;
         if (price <= 0)
         {
-            _host.SetStatus("Todavía no hay precio del libro para esa orden");
+            _host.SetStatus("There is no book price for that order yet");
             return;
         }
 
@@ -258,7 +258,7 @@ internal sealed class ChartTraderPanel : UserControl
         _ = _host.AccountActionAsync(_chart, a =>
         {
             foreach (var o in a.ActiveOrders.Where(o => o.Direction == dir).ToList()) a.Cancel(o);
-        }, dir == OrderDirections.Buy ? "Órdenes de compra canceladas" : "Órdenes de venta canceladas");
+        }, dir == OrderDirections.Buy ? "Buy orders cancelled" : "Sell orders cancelled");
 
     private BracketTemplate? Template() => _host.TradeData(_chart) is { } data ? _host.Services.Settings.BracketTemplateFor(data.Instrument.Key) : null;
 
@@ -274,7 +274,7 @@ internal sealed class ChartTraderPanel : UserControl
     private static string Sig(BracketTemplate t) =>
         $"{t.Enabled}|{t.StopTicks}|{t.BreakevenAfterFirstTarget}|{string.Join(",", t.Targets.Select(x => x.Ticks.ToString(CultureInfo.InvariantCulture) + ":" + x.Percent.ToString(CultureInfo.InvariantCulture)))}";
 
-    /// <summary>Reparte el 100% entre los objetivos (el último se lleva el resto).</summary>
+    /// <summary>Spreads 100% among the targets (the last one takes the remainder).</summary>
     private static void Rebalance(BracketTemplate t)
     {
         if (t.Targets.Count == 0) return;
@@ -282,7 +282,7 @@ internal sealed class ChartTraderPanel : UserControl
         for (int i = 0; i < t.Targets.Count; i++) t.Targets[i].Percent = i == t.Targets.Count - 1 ? 100 - each * (t.Targets.Count - 1) : each;
     }
 
-    /// <summary>Muestra la plantilla de stop y objetivos (la misma en el panel del gráfico y en el de la derecha).</summary>
+    /// <summary>Shows the stop and target template (the same one in the chart's panel and in the right one).</summary>
     private void LoadTemplate(BracketTemplate t)
     {
         _syncing = true;
@@ -301,7 +301,7 @@ internal sealed class ChartTraderPanel : UserControl
                 int v = (int)(ticks.Value ?? 0);
                 if (index < tt.Targets.Count)
                 {
-                    if (v <= 0 && tt.Targets.Count == 1) tt.Targets.Clear(); // 0 = sin objetivo
+                    if (v <= 0 && tt.Targets.Count == 1) tt.Targets.Clear(); // 0 = no target
                     else tt.Targets[index].Ticks = Math.Max(1, v);
                 }
                 else if (v > 0) tt.Targets.Add(new BracketTarget { Ticks = v, Percent = 100 });
@@ -313,7 +313,7 @@ internal sealed class ChartTraderPanel : UserControl
             if (n > 1)
             {
                 var pct = new NumericUpDown { Minimum = 1, Maximum = 100, Increment = 5, FormatString = "0", Value = target?.Percent ?? 100, ShowButtonSpinner = false, NumberFormat = CultureInfo.InvariantCulture.NumberFormat };
-                ToolTip.SetTip(pct, "% de la posición que cierra este objetivo");
+                ToolTip.SetTip(pct, "% of the position this target closes");
                 pct.ValueChanged += (_, _) => EditTemplate(tt =>
                 {
                     if (index < tt.Targets.Count) tt.Targets[index].Percent = pct.Value ?? 100;
@@ -321,7 +321,7 @@ internal sealed class ChartTraderPanel : UserControl
                 Grid.SetColumn(pct, 3);
                 g.Children.Add(pct);
                 var remove = new Button { Content = "×", Padding = new Thickness(0), MinHeight = 0, Width = 20, Height = 24, FontSize = 13, Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
-                ToolTip.SetTip(remove, "Quitar este objetivo");
+                ToolTip.SetTip(remove, "Remove this target");
                 remove.Click += (_, _) => EditTemplate(tt =>
                 {
                     if (index < tt.Targets.Count) tt.Targets.RemoveAt(index);
@@ -349,9 +349,9 @@ internal sealed class ChartTraderPanel : UserControl
     private async void ShowCrossPicker()
     {
         var list = new ListBox { MaxHeight = 320, Width = 260 };
-        var search = new TextBox { Watermark = "Buscar instrumento (MES, MNQ, BTCUSDC…)" };
+        var search = new TextBox { Watermark = "Search instrument (MES, MNQ, BTCUSDC…)" };
         var flyout = new Flyout { Placement = PlacementMode.LeftEdgeAlignedTop };
-        var none = new ListBoxItem { Content = $"Ninguno · ejecutar en {_chart.Symbol}", Tag = "" };
+        var none = new ListBoxItem { Content = $"None · execute on {_chart.Symbol}", Tag = "" };
         IReadOnlyList<Instrument> instruments = Array.Empty<Instrument>();
         try
         {
@@ -359,7 +359,7 @@ internal sealed class ChartTraderPanel : UserControl
         }
         catch (Exception ex)
         {
-            _host.SetStatus("No pude traer los instrumentos: " + ex.Message);
+            _host.SetStatus("Could not fetch the instruments: " + ex.Message);
         }
 
         void Fill()
@@ -367,7 +367,7 @@ internal sealed class ChartTraderPanel : UserControl
             var q = (search.Text ?? "").Trim();
             list.Items.Clear();
             list.Items.Add(none);
-            // primero los "hermanos" del instrumento (mismo subyacente: ES ↔ MES, NQ ↔ MNQ, BTC…)
+            // first the instrument's "siblings" (same underlying: ES <-> MES, NQ <-> MNQ, BTC…)
             var root = Root(_chart.Symbol);
             foreach (var i in instruments
                          .Where(i => !i.Symbol.Equals(_chart.Symbol, StringComparison.OrdinalIgnoreCase))
@@ -391,7 +391,7 @@ internal sealed class ChartTraderPanel : UserControl
             await _host.SetCrossTradingAsync(_chart, symbol.Length == 0 ? null : symbol);
         };
         Fill();
-        flyout.Content = Ui.V(8, Ui.H3("Ejecutar en"), search, list, Ui.Faint("Las órdenes, el stop y los objetivos de este gráfico van al instrumento elegido; los precios se mandan tal cual (ideal para mini y micro).")).Also(v =>
+        flyout.Content = Ui.V(8, Ui.H3("Execute on"), search, list, Ui.Faint("This chart's orders, stop and targets go to the chosen instrument; the prices are sent exactly as they are (ideal for mini and micro).")).Also(v =>
         {
             v.Margin = new Thickness(12);
             v.Width = 280;
@@ -400,7 +400,7 @@ internal sealed class ChartTraderPanel : UserControl
         search.Focus();
     }
 
-    /// <summary>Subyacente aproximado para ordenar sugerencias (MESZ6 → ES, MNQ → NQ, BTCUSDC → BTC).</summary>
+    /// <summary>Approximate underlying for sorting suggestions (MESZ6 -> ES, MNQ -> NQ, BTCUSDC -> BTC).</summary>
     private static string Root(string symbol)
     {
         var s = symbol.ToUpperInvariant();
@@ -410,9 +410,9 @@ internal sealed class ChartTraderPanel : UserControl
         return s.Length > 2 ? s[..2] : s;
     }
 
-    // ------------------------------------------------------------------ refresco
+    // ------------------------------------------------------------------ refresh
 
-    /// <summary>Vuelve a armar cuentas, cantidades sugeridas y plantilla (cambió el instrumento o la cuenta).</summary>
+    /// <summary>Rebuilds accounts, suggested quantities and template (the instrument or the account changed).</summary>
     public void Rebind()
     {
         _settingsKey = "";
@@ -426,7 +426,7 @@ internal sealed class ChartTraderPanel : UserControl
         _syncing = false;
     }
 
-    /// <summary>Se llama unas veces por segundo: posición, resultado y precios del libro.</summary>
+    /// <summary>Called a few times per second: position, result and book prices.</summary>
     public void Refresh()
     {
         var model = _chart.Model;
@@ -435,15 +435,15 @@ internal sealed class ChartTraderPanel : UserControl
         var tradeData = _host.TradeData(_chart) ?? data;
         var inst = tradeData.Instrument;
 
-        // cuentas: la lista se rehace solo si cambió y la elegida se marca sin tocar las demás
+        // accounts: the list is only rebuilt if it changed and the chosen one is marked without touching the rest
         var accounts = _host.AccountOptions(_chart, data);
         _syncing = true;
         Ui.SyncAccounts(_account, accounts, _chart.AccountId);
         _syncing = false;
-        ToolTip.SetTip(_account, (_account.SelectedItem as ComboBoxItem)?.Content as string); // el nombre entero (el panel es angosto)
+        ToolTip.SetTip(_account, (_account.SelectedItem as ComboBoxItem)?.Content as string); // the whole name (the panel is narrow)
         _realWarning.IsVisible = accounts.FirstOrDefault(a => a.Id == _chart.AccountId)?.IsReal == true;
 
-        // cantidades y stop/objetivo del instrumento (solo si cambió el instrumento o la cuenta)
+        // quantities and stop/target of the instrument (only if the instrument or the account changed)
         string key = inst.Key + "#" + _chart.AccountId;
         if (key != _settingsKey)
         {
@@ -467,14 +467,14 @@ internal sealed class ChartTraderPanel : UserControl
         }
         else if (!_bracketBox.IsKeyboardFocusWithin && Sig(_host.Services.Settings.BracketTemplateFor(inst.Key)) != _templateSig)
         {
-            // la cambió el otro panel (el del gráfico o el de la derecha)
+            // the other panel changed it (the chart's or the right one's)
             LoadTemplate(_host.Services.Settings.BracketTemplateFor(inst.Key));
         }
 
-        if (_docked) _chartLabel.Text = $"Opera en el gráfico activo: {_chart.Symbol} · {model.Period.DisplayName}";
+        if (_docked) _chartLabel.Text = $"Trades on the active chart: {_chart.Symbol} · {model.Period.DisplayName}";
 
-        // cuentas de Rithmic: si todavía no aparecen, se dice por qué (conectando, rechazo…). En los gráficos de Rithmic el
-        // renglón queda reservado aunque esté vacío: que el aviso aparezca o se vaya nunca corre los botones de abajo
+        // Rithmic accounts: if they do not show up yet, the reason is given (connecting, rejection…). On Rithmic charts the
+        // row stays reserved even when empty: the notice appearing or going never shifts the buttons below
         var rithmic = _host.Services.RithmicStatusFor(data);
         _accountHint.Text = rithmic ?? "";
         ToolTip.SetTip(_accountHint, rithmic);
@@ -482,12 +482,12 @@ internal sealed class ChartTraderPanel : UserControl
 
         _cross.Content = _chart.CrossSymbol is { } cs
             ? Ui.H(6, Ui.Icon(MaterialIconKind.SwapHorizontal, 14, Ui.Accent), new TextBlock { Text = cs, FontWeight = FontWeight.SemiBold })
-            : Ui.H(6, Ui.Icon(MaterialIconKind.SwapHorizontal, 14, Ui.Text2), new TextBlock { Text = "Ninguno", Classes = { "muted" } });
+            : Ui.H(6, Ui.Icon(MaterialIconKind.SwapHorizontal, 14, Ui.Text2), new TextBlock { Text = "None", Classes = { "muted" } });
         if (_chart.CrossSymbol != null)
         {
             decimal a = data.LastPrice, b = tradeData.LastPrice;
             bool far = a > 0 && b > 0 && Math.Abs(a - b) / a > 0.001m;
-            _target.Text = $"Mirás {_chart.Symbol}, ejecuta en {_chart.CrossSymbol}" + (far ? $" · ojo: precios distintos ({inst.FormatPrice(b)})" : "");
+            _target.Text = $"You watch {_chart.Symbol}, it executes on {_chart.CrossSymbol}" + (far ? $" · note: different prices ({inst.FormatPrice(b)})" : "");
             ToolTip.SetTip(_target, _target.Text);
             _target.Foreground = far ? Ui.Warn : Ui.Accent;
             _target.IsVisible = true;
@@ -508,11 +508,11 @@ internal sealed class ChartTraderPanel : UserControl
         if (pos == null || pos.IsFlat)
         {
             decimal realized = Math.Round(pos?.RealizedPnL ?? 0, 2);
-            _pnl.Text = realized != 0 ? $"{realized:+0.00;-0.00}" : "Sin posición";
+            _pnl.Text = realized != 0 ? $"{realized:+0.00;-0.00}" : "Flat";
             _pnl.Foreground = realized > 0 ? Ui.Up : realized < 0 ? Ui.Down : Ui.Text1;
             _pnl.FontSize = realized != 0 ? 18 : 13;
             int orders = acc?.ActiveOrders.Count() ?? 0;
-            _position.Text = (realized != 0 ? "Plana · resultado del día" : "Plana") + (orders > 0 ? $" · {orders} orden(es)" : "");
+            _position.Text = (realized != 0 ? "Flat · day's result" : "Flat") + (orders > 0 ? $" · {orders} order(s)" : "");
         }
         else
         {
@@ -520,7 +520,7 @@ internal sealed class ChartTraderPanel : UserControl
             _pnl.Foreground = pos.UnrealizedPnL >= 0 ? Ui.Up : Ui.Down;
             _pnl.FontSize = 18;
             int orders = acc!.ActiveOrders.Count();
-            _position.Text = $"{(pos.Volume > 0 ? "LARGO" : "CORTO")} {Math.Abs(pos.Volume).ToString("0.########", CultureInfo.InvariantCulture)} @ {inst.FormatPrice(pos.AveragePrice)}" + (orders > 0 ? $" · {orders} orden(es)" : "");
+            _position.Text = $"{(pos.Volume > 0 ? "LONG" : "SHORT")} {Math.Abs(pos.Volume).ToString("0.########", CultureInfo.InvariantCulture)} @ {inst.FormatPrice(pos.AveragePrice)}" + (orders > 0 ? $" · {orders} order(s)" : "");
         }
     }
 }

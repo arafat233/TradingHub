@@ -1,6 +1,6 @@
 namespace TradingHub.Strategies;
 
-/// <summary>Resultado agrupado (por lado, hora, día de la semana…).</summary>
+/// <summary>Grouped result (by side, hour, day of the week…).</summary>
 public sealed class BucketStat
 {
     public string Label { get; set; } = "";
@@ -34,7 +34,7 @@ public sealed class BucketStat
     }
 }
 
-/// <summary>Un período de drawdown: del máximo al mínimo y (si pasó) a la recuperación.</summary>
+/// <summary>A drawdown period: from the peak to the trough and (if it happened) to the recovery.</summary>
 public sealed class DrawdownPeriod
 {
     public DateTime Start { get; set; }
@@ -45,7 +45,7 @@ public sealed class DrawdownPeriod
     public double Days { get; set; }
 }
 
-/// <summary>Rendimiento de un año, mes por mes (en % del capital al empezar cada mes).</summary>
+/// <summary>Performance of a year, month by month (in % of the capital at the start of each month).</summary>
 public sealed class YearReturns
 {
     public int Year { get; set; }
@@ -56,9 +56,9 @@ public sealed class YearReturns
 }
 
 /// <summary>
-/// Estadísticas de un informe profesional a partir de las operaciones y la curva de capital:
-/// CAGR, Calmar, SQN, Ulcer, Kelly, MAE/MFE, rachas, duración, días, mensual, por hora, por día,
-/// drawdowns principales, distribución y mejores/peores operaciones.
+/// Statistics of a professional report from the trades and the equity curve:
+/// CAGR, Calmar, SQN, Ulcer, Kelly, MAE/MFE, streaks, duration, days, monthly, by hour, by day,
+/// main drawdowns, distribution and best/worst trades.
 /// </summary>
 public sealed class TradeAnalytics
 {
@@ -97,8 +97,8 @@ public sealed class TradeAnalytics
     public double MaxDrawdownDays { get; private set; }
     public double LongestFlatDays { get; private set; }
 
-    public BucketStat Long { get; } = new() { Label = "Largos" };
-    public BucketStat Short { get; } = new() { Label = "Cortos" };
+    public BucketStat Long { get; } = new() { Label = "Longs" };
+    public BucketStat Short { get; } = new() { Label = "Shorts" };
     public List<YearReturns> Monthly { get; } = new();
     public List<BucketStat> ByHour { get; } = new();
     public List<BucketStat> ByWeekday { get; } = new();
@@ -107,10 +107,10 @@ public sealed class TradeAnalytics
     public List<ClosedTrade> Best { get; } = new();
     public List<ClosedTrade> Worst { get; } = new();
 
-    /// <summary>Curva de capital al cierre de cada operación (para el drawdown "de cierre").</summary>
+    /// <summary>Equity curve at the close of each trade (for the "closing" drawdown).</summary>
     public List<(DateTime Time, decimal Equity)> ClosedEquity { get; } = new();
 
-    private static readonly string[] WeekdayNames = { "Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado" };
+    private static readonly string[] WeekdayNames = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 
     public static TradeAnalytics Compute(IReadOnlyList<ClosedTrade> trades, IReadOnlyList<EquityPoint> equity, decimal capital, PerformanceMetrics m,
         TimeZoneInfo? tz = null, DateTime? from = null, DateTime? to = null)
@@ -123,7 +123,7 @@ public sealed class TradeAnalytics
         a.Days = Math.Max(1e-9, (a.To - a.From).TotalDays);
         a.FinalEquity = capital + m.NetProfit;
 
-        // rendimiento anualizado y relación con el drawdown
+        // annualized return and its relation to the drawdown
         if (capital > 0 && a.FinalEquity > 0 && a.Days >= 1)
             a.CagrPercent = (Math.Pow((double)(a.FinalEquity / capital), 365.0 / a.Days) - 1) * 100;
         else if (capital > 0) a.CagrPercent = (double)(m.NetProfit / capital) * 100 * 365.0 / Math.Max(1, a.Days);
@@ -165,7 +165,7 @@ public sealed class TradeAnalytics
 
             foreach (var t in sorted) (t.IsLong ? a.Long : a.Short).Add(t);
 
-            // por hora (de entrada, en la zona de la sesión) y por día de la semana
+            // by hour (of entry, in the session's zone) and by day of the week
             var hours = new SortedDictionary<int, BucketStat>();
             var weekdays = new SortedDictionary<int, BucketStat>();
             foreach (var t in sorted)
@@ -173,7 +173,7 @@ public sealed class TradeAnalytics
                 var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(t.EntryTime, DateTimeKind.Utc), tz);
                 if (!hours.TryGetValue(local.Hour, out var h)) hours[local.Hour] = h = new BucketStat { Label = $"{local.Hour:00}:00" };
                 h.Add(t);
-                int wd = ((int)local.DayOfWeek + 6) % 7; // lunes primero
+                int wd = ((int)local.DayOfWeek + 6) % 7; // Monday first
                 if (!weekdays.TryGetValue(wd, out var d)) weekdays[wd] = d = new BucketStat { Label = WeekdayNames[(int)local.DayOfWeek] };
                 d.Add(t);
             }
@@ -181,7 +181,7 @@ public sealed class TradeAnalytics
             a.ByHour.AddRange(hours.Values);
             a.ByWeekday.AddRange(weekdays.Values);
 
-            // días operados
+            // days traded
             var daily = sorted.GroupBy(t => DateOnly.FromDateTime(t.ExitTime)).Select(g => g.Sum(x => x.NetPnl)).ToList();
             a.TradingDays = daily.Count;
             a.AverageDailyPnl = daily.Average();
@@ -189,7 +189,7 @@ public sealed class TradeAnalytics
             a.WorstDay = daily.Min();
             a.ProfitableDaysPercent = 100.0 * daily.Count(x => x > 0) / daily.Count;
 
-            // mensual: % sobre el capital al empezar el mes
+            // monthly: % of the capital at the start of the month
             decimal running = capital;
             foreach (var g in sorted.GroupBy(t => (t.ExitTime.Year, t.ExitTime.Month)).OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month))
             {
@@ -214,7 +214,7 @@ public sealed class TradeAnalytics
                 startOfYear += yr.YearNet;
             }
 
-            // distribución de resultados (hasta 12 tramos)
+            // distribution of results (up to 12 buckets)
             decimal lo = sorted.Min(t => t.NetPnl), hi = sorted.Max(t => t.NetPnl);
             if (hi > lo)
             {
@@ -231,7 +231,7 @@ public sealed class TradeAnalytics
             a.Best.AddRange(sorted.OrderByDescending(t => t.NetPnl).Take(5));
             a.Worst.AddRange(sorted.OrderBy(t => t.NetPnl).Take(5));
 
-            // curva al cierre de cada operación y sus drawdowns
+            // curve at the close of each trade and its drawdowns
             decimal eq = capital;
             a.ClosedEquity.Add((a.From, capital));
             foreach (var t in sorted)
@@ -243,7 +243,7 @@ public sealed class TradeAnalytics
             a.ComputeDrawdowns();
         }
 
-        // Ulcer index (sobre la curva de capital): raíz del promedio de los drawdowns % al cuadrado
+        // Ulcer index (over the equity curve): root of the average of the squared % drawdowns
         if (equity.Count > 1)
         {
             decimal peak = capital;

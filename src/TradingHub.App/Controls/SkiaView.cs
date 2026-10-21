@@ -9,8 +9,8 @@ using SkiaSharp;
 namespace TradingHub.App.Controls;
 
 /// <summary>
-/// Control que dibuja con SkiaSharp. Graba los comandos en un SKPicture en el hilo de UI
-/// (donde viven los datos) y el hilo de render solo lo reproduce: sin locks y con aceleración.
+/// A control that draws with SkiaSharp. It records the commands into an SKPicture on the UI thread
+/// (where the data lives) and the render thread only replays it: no locks and hardware accelerated.
 /// </summary>
 public abstract class SkiaView : Control
 {
@@ -22,7 +22,7 @@ public abstract class SkiaView : Control
 
     protected abstract void Draw(SKCanvas canvas, float width, float height);
 
-    /// <summary>Esquinas redondeadas del dibujo (0 = rectas), para que el fondo acompañe al recuadro que lo contiene.</summary>
+    /// <summary>Rounded corners for the drawing (0 = square), so the background follows the box containing it.</summary>
     public double CornerRadius { get; set; }
 
     public override void Render(DrawingContext context)
@@ -44,7 +44,7 @@ public abstract class SkiaView : Control
         catch (Exception ex)
         {
             using var p = new SKPaint { Color = SKColors.OrangeRed, IsAntialias = true };
-            canvas.DrawText("Error al dibujar: " + ex.Message, 10, 20, p);
+            canvas.DrawText("Error while drawing: " + ex.Message, 10, 20, p);
             CrashLog.Write(ex);
         }
 

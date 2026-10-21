@@ -1,13 +1,13 @@
 namespace TradingHub.Strategies;
 
-/// <summary>Una estrategia dentro de un portafolio: una corrida guardada y su peso.</summary>
+/// <summary>A strategy inside a portfolio: a stored run and its weight.</summary>
 public sealed class PortfolioComponent
 {
     public string StrategyId { get; set; } = "";
     public string StrategyName { get; set; } = "";
     public string RunId { get; set; } = "";
 
-    /// <summary>Multiplicador del tamaño (1 = como en la corrida).</summary>
+    /// <summary>Size multiplier (1 = as in the run).</summary>
     public decimal Weight { get; set; } = 1;
 
     public string Label { get; set; } = "";
@@ -28,22 +28,22 @@ public sealed class PortfolioComponent
     };
 }
 
-/// <summary>Resultado de combinar varias estrategias.</summary>
+/// <summary>Result of combining several strategies.</summary>
 public sealed class PortfolioResult
 {
     public List<PortfolioComponent> Components { get; set; } = new();
     public DateTime From { get; set; }
     public DateTime To { get; set; }
 
-    /// <summary>True si los componentes no comparten fechas y se usó la unión de los rangos.</summary>
+    /// <summary>True if the components share no dates and the union of the ranges was used.</summary>
     public bool NoOverlap { get; set; }
 
     public List<DateOnly> Days { get; set; } = new();
 
-    /// <summary>Resultado diario de cada componente (ya multiplicado por su peso), alineado con <see cref="Days"/>.</summary>
+    /// <summary>Daily result of each component (already multiplied by its weight), aligned with <see cref="Days"/>.</summary>
     public List<decimal[]> DailyPnl { get; set; } = new();
 
-    /// <summary>Correlación de los resultados diarios (Pearson), componente × componente.</summary>
+    /// <summary>Correlation of the daily results (Pearson), component x component.</summary>
     public double[,] Correlation { get; set; } = new double[0, 0];
 
     public List<ClosedTrade> Trades { get; set; } = new();
@@ -56,13 +56,13 @@ public sealed class PortfolioResult
     public decimal SumOfComponentDrawdowns { get; set; }
     public double AverageComponentSharpe { get; set; }
 
-    /// <summary>Cuánto menos drawdown tiene el portafolio que la suma de los drawdowns individuales (%).</summary>
+    /// <summary>How much less drawdown the portfolio has than the sum of the individual drawdowns (%).</summary>
     public double DrawdownReductionPercent => SumOfComponentDrawdowns > 0 ? (double)(1 - Metrics.MaxDrawdown / SumOfComponentDrawdowns) * 100 : 0;
 }
 
 /// <summary>
-/// Portafolios de estrategias: suma los resultados diarios de cada una (con su peso), mide la correlación
-/// entre ellas y busca combinaciones poco correlacionadas que mejoren el Sharpe y bajen el drawdown.
+/// Strategy portfolios: it adds up each one's daily results (with its weight), measures the correlation
+/// between them and looks for lightly correlated combinations that improve the Sharpe and lower the drawdown.
 /// </summary>
 public static class PortfolioAnalyzer
 {
@@ -82,7 +82,7 @@ public static class PortfolioAnalyzer
         return d;
     }
 
-    /// <summary>Correlación de Pearson (0 si alguno no varía).</summary>
+    /// <summary>Pearson correlation (0 if one of them does not vary).</summary>
     public static double Pearson(IReadOnlyList<decimal> a, IReadOnlyList<decimal> b)
     {
         int n = Math.Min(a.Count, b.Count);
@@ -108,7 +108,7 @@ public static class PortfolioAnalyzer
         return va > 0 && vb > 0 ? cov / Math.Sqrt(va * vb) : 0;
     }
 
-    /// <summary>Combina los componentes en el período que comparten (o en la unión si no comparten nada).</summary>
+    /// <summary>Combines the components over the period they share (or over the union if they share nothing).</summary>
     public static PortfolioResult Analyze(IReadOnlyList<PortfolioComponent> components, decimal capital)
     {
         var res = new PortfolioResult { Components = components.ToList() };
@@ -148,7 +148,7 @@ public static class PortfolioAnalyzer
         res.AverageCorrelation = pairs > 0 ? sum / pairs : 0;
         res.MaxCorrelation = pairs > 0 ? max : 0;
 
-        // operaciones del portafolio (con su peso) y curva diaria
+        // the portfolio's trades (with their weight) and daily curve
         res.Trades = components
             .SelectMany(c => c.Trades.Where(t => t.ExitTime >= from && t.ExitTime <= to)
                 .Select(t => t with { Pnl = t.Pnl * c.Weight, Commission = t.Commission * c.Weight, Quantity = t.Quantity * c.Weight }))
@@ -165,8 +165,8 @@ public static class PortfolioAnalyzer
         bool crypto = components.All(c => c.Settings.FeedId.StartsWith("binance") || c.Settings.FeedId.StartsWith("bybit") || c.Settings.FeedId == "sim");
         res.Metrics = PerformanceMetrics.Compute(res.Trades, res.Equity, capital, crypto, 0, 0);
 
-        // cada componente solo, en el mismo período, con su peso y la misma curva diaria (días sin operaciones incluidos),
-        // así sus métricas son comparables con las del portafolio
+        // each component on its own, over the same period, with its weight and the same daily curve (days with no trades included),
+        // so its metrics are comparable with the portfolio's
         for (int i = 0; i < components.Count; i++)
         {
             var c = components[i];
@@ -189,7 +189,7 @@ public static class PortfolioAnalyzer
         return res;
     }
 
-    /// <summary>Pesos por riesgo parejo: cada estrategia pesa la inversa de la volatilidad de su resultado diario.</summary>
+    /// <summary>Equal-risk weights: each strategy weighs the inverse of the volatility of its daily result.</summary>
     public static decimal[] InverseVolatilityWeights(IReadOnlyList<PortfolioComponent> components, decimal capital)
     {
         var unit = components.Select(c => new PortfolioComponent { Settings = c.Settings, Trades = c.Trades, Metrics = c.Metrics, Weight = 1 }).ToList();
@@ -204,9 +204,9 @@ public static class PortfolioAnalyzer
     }
 
     /// <summary>
-    /// Arma una combinación poco correlacionada: empieza por el mejor Sharpe y agrega, de a una, la estrategia
-    /// que más mejora el Sharpe del conjunto sin superar la correlación máxima con las ya elegidas.
-    /// Devuelve los índices elegidos (en el orden en que entraron).
+    /// Builds a lightly correlated combination: it starts with the best Sharpe and adds, one at a time, the strategy
+    /// that improves the set's Sharpe the most without exceeding the maximum correlation with the ones already chosen.
+    /// Returns the chosen indices (in the order they were added).
     /// </summary>
     public static List<int> SuggestUncorrelated(IReadOnlyList<PortfolioComponent> candidates, decimal capital, int maxComponents = 5, double maxCorrelation = 0.5)
     {

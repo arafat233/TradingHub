@@ -1,6 +1,6 @@
 namespace TradingHub.Indicators;
 
-/// <summary>Factor volumen→dinero de un instrumento (y su moneda). Vive en el núcleo para que Valuation lo use.</summary>
+/// <summary>Volume-to-money factor of an instrument (and its currency). It lives in the core so Valuation can use it.</summary>
 public readonly struct VolumeValueFactor
 {
     public VolumeValueFactor(decimal factor, global::TradingHub.Trading.MoneyCurrency? currency = null)

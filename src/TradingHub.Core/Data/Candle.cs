@@ -3,13 +3,13 @@ using TradingHub.Market;
 namespace TradingHub.Data;
 
 /// <summary>
-/// Vela con footprint completo: OHLC, volumen bid/ask, delta y los niveles de precio.
-/// Los precios están en ticks del instrumento; las filas del footprint en "filas" (ticks / paso).
+/// Candle with a full footprint: OHLC, bid/ask volume, delta and the price levels.
+/// The prices are in instrument ticks; the footprint rows in "rows" (ticks / step).
 /// </summary>
 public sealed class Candle
 {
-    public DateTime Time;       // apertura (UTC)
-    public DateTime LastTime;   // última operación (UTC)
+    public DateTime Time;       // open (UTC)
+    public DateTime LastTime;   // last trade (UTC)
 
     public long OpenTicks;
     public long HighTicks;
@@ -17,8 +17,8 @@ public sealed class Candle
     public long CloseTicks;
 
     public decimal Volume;
-    public decimal Bid;         // volumen vendedor agresivo
-    public decimal Ask;         // volumen comprador agresivo
+    public decimal Bid;         // aggressive sell volume
+    public decimal Ask;         // aggressive buy volume
     public decimal Between;
     public decimal MaxDelta;
     public decimal MinDelta;
@@ -31,27 +31,27 @@ public sealed class Candle
     public int FirstTradeIndex = -1;
     public int LastTradeIndex = -1;
 
-    /// <summary>Filas del footprint.</summary>
+    /// <summary>Footprint rows.</summary>
     public readonly PriceLevels Levels = new();
 
-    /// <summary>Fila con más volumen (POC de la vela).</summary>
+    /// <summary>Row with the most volume (the candle's POC).</summary>
     public long PocRow;
     public decimal PocVolume;
 
-    /// <summary>Volumen operado en esta vela por la operación más grande (para filtros de "big trades").</summary>
+    /// <summary>Volume traded in this candle by the largest single trade (for "big trades" filters).</summary>
     public decimal MaxTradeVolume;
 
     public bool IsClosed;
 
-    /// <summary>Tiene al menos una operación real (no armada a partir de velas del exchange).</summary>
+    /// <summary>It has at least one real trade (not built from exchange candles).</summary>
     public bool HasRealTrades;
 
-    /// <summary>Vela armada solo con historia en velas de 1 minuto: OHLC, volumen y delta reales, sin footprint.</summary>
+    /// <summary>Candle built only from 1-minute candle history: real OHLC, volume and delta, with no footprint.</summary>
     public bool IsSynthetic => Trades > 0 && !HasRealTrades;
 
     public decimal Delta => Ask - Bid;
 
-    /// <summary>Agrega una operación a la vela. <paramref name="row"/> = priceTicks / paso.</summary>
+    /// <summary>Adds a trade to the candle. <paramref name="row"/> = priceTicks / step.</summary>
     public void AddTrade(long priceTicks, long row, decimal volume, TradeSide side, long timeTicks, int tradeIndex, bool synthetic = false)
     {
         if (!synthetic) HasRealTrades = true;
@@ -75,7 +75,7 @@ public sealed class Candle
 
         if (synthetic)
         {
-            // historia en velas: suma al OHLC, volumen y delta, pero no inventa niveles de footprint
+            // candle history: it adds to the OHLC, volume and delta, but does not invent footprint levels
             switch (side)
             {
                 case TradeSide.Buy: Ask += volume; break;

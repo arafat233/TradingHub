@@ -9,7 +9,7 @@ using TradingHub.Common.Collections.Synchronized;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Serie de datos de un indicador (una línea, un histograma, velas, colores...).</summary>
+    /// <summary>Data series of an indicator (a line, a histogram, candles, colors...).</summary>
     public interface IDataSeries : INotifyPropertyChanged
     {
         string Id { get; }
@@ -22,19 +22,19 @@ namespace TradingHub.Indicators
         bool DrawAbovePrice { get; set; }
         Type ValueType { get; }
 
-        /// <summary>Clave de la descripción (localización) que muestra el editor.</summary>
+        /// <summary>Key of the description (localization) the editor shows.</summary>
         string DescriptionKey { get; set; }
 
-        /// <summary>Usa el modo minimizado del panel si está activado.</summary>
+        /// <summary>Uses the panel's minimized mode if it is enabled.</summary>
         bool UseMinimizedModeIfEnabled { get; set; }
 
-        /// <summary>No se ofrece para alertas.</summary>
+        /// <summary>It is not offered for alerts.</summary>
         bool IgnoredByAlerts { get; set; }
         void Clear();
         void Resize(int count);
     }
 
-    /// <summary>Base de las series: un arreglo que crece solo al asignar y devuelve default fuera de rango.</summary>
+    /// <summary>Base of the series: an array that grows on assignment and returns default out of range.</summary>
     public abstract class BaseDataSeries<T> : IDataSeries, IEnumerable<T>
     {
         protected T[] _values = Array.Empty<T>();
@@ -171,7 +171,7 @@ namespace TradingHub.Indicators
             _count = 0;
         }
 
-        /// <summary>Valor en la última barra (o default).</summary>
+        /// <summary>Value on the last bar (or default).</summary>
         [Browsable(false)]
         public T LastValue => _count > 0 ? this[_count - 1] : default;
 
@@ -196,7 +196,7 @@ namespace TradingHub.Indicators
         public override string ToString() => Name;
     }
 
-    /// <summary>Colores por barra de una serie (Color.Empty = usar el color de la serie).</summary>
+    /// <summary>Per-bar colors of a series (Color.Empty = use the series color).</summary>
     public sealed class SeriesColors
     {
         private Color[] _colors = Array.Empty<Color>();
@@ -217,7 +217,7 @@ namespace TradingHub.Indicators
         public void Clear() => Array.Clear(_colors);
     }
 
-    /// <summary>Serie numérica: líneas, histogramas, puntos, flechas...</summary>
+    /// <summary>Numeric series: lines, histograms, dots, arrows...</summary>
     public class ValueDataSeries : BaseDataSeries<decimal>
     {
         private Color _color = Color.FromArgb(255, 70, 130, 230);
@@ -249,28 +249,28 @@ namespace TradingHub.Indicators
         [JsonIgnore]
         public SeriesColors Colors { get; } = new();
 
-        /// <summary>Formato del valor en el eje (ej. "{0:F2}").</summary>
+        /// <summary>Format of the value on the axis (e.g. "{0:F2}").</summary>
         [Browsable(false)]
         [JsonIgnore]
         public string StringFormat { get; set; }
 
-        /// <summary>Color de los valores (etiquetas).</summary>
+        /// <summary>Color of the values (labels).</summary>
         [Browsable(false)]
         public Color ValuesColor { get; set; } = Color.White;
 
-        /// <summary>Moneda si la serie muestra dinero.</summary>
+        /// <summary>Currency if the series shows money.</summary>
         [Browsable(false)]
         [JsonIgnore]
         public TradingHub.Trading.MoneyCurrency? ValueCurrency { get; set; }
 
-        [Display(Name = "Tipo", Order = 20)]
+        [Display(Name = "Type", Order = 20)]
         public VisualMode VisualType
         {
             get => _visualType;
             set => SetProperty(ref _visualType, value);
         }
 
-        [Display(Name = "Grosor", Order = 30)]
+        [Display(Name = "Width", Order = 30)]
         [Range(1, 20)]
         public int Width
         {
@@ -278,17 +278,17 @@ namespace TradingHub.Indicators
             set => SetProperty(ref _width, Math.Max(1, value));
         }
 
-        [Display(Name = "Estilo de línea", Order = 40)]
+        [Display(Name = "Line style", Order = 40)]
         public LineDashStyle LineDashStyle
         {
             get => _lineDashStyle;
             set => SetProperty(ref _lineDashStyle, value);
         }
 
-        [Display(Name = "Mostrar ceros", Order = 50)]
+        [Display(Name = "Show zeros", Order = 50)]
         public bool ShowZeroValue { get; set; } = true;
 
-        [Display(Name = "Valor actual en el eje", Order = 60)]
+        [Display(Name = "Current value on the axis", Order = 60)]
         public bool ShowCurrentValue { get; set; } = true;
 
         [Browsable(false)]
@@ -303,7 +303,7 @@ namespace TradingHub.Indicators
         [Browsable(false)]
         public Color ValueAxisBackground { get; set; } = Color.Empty;
 
-        /// <summary>Corta la línea después de esta barra (no la une con la siguiente).</summary>
+        /// <summary>Breaks the line after this bar (it does not join it with the next one).</summary>
         public void SetPointOfEndLine(int bar) => _endLines.Add(bar);
 
         public void RemovePointOfEndLine(int bar) => _endLines.Remove(bar);
@@ -341,7 +341,7 @@ namespace TradingHub.Indicators
         }
     }
 
-    /// <summary>Valor de una banda (superior e inferior).</summary>
+    /// <summary>Value of a band (upper and lower).</summary>
     public class RangeValue
     {
         public decimal Upper { get; set; }
@@ -360,7 +360,7 @@ namespace TradingHub.Indicators
         public override string ToString() => $"{Lower} - {Upper}";
     }
 
-    /// <summary>Serie de bandas: rellena entre Upper y Lower.</summary>
+    /// <summary>Band series: it fills between Upper and Lower.</summary>
     public class RangeDataSeries : BaseDataSeries<RangeValue>
     {
         public RangeDataSeries(string id, string name) : base(id, name)
@@ -371,14 +371,14 @@ namespace TradingHub.Indicators
         {
         }
 
-        [Display(Name = "Color de relleno", Order = 10)]
+        [Display(Name = "Fill color", Order = 10)]
         public Color RangeColor { get; set; } = Color.FromArgb(40, 70, 130, 230);
 
         protected override bool CreatesOnRead => true;
         protected override RangeValue CreateDefault(int index) => new();
     }
 
-    /// <summary>Vela de una CandleDataSeries (por ejemplo, el delta acumulado dibujado como velas).</summary>
+    /// <summary>Candle of a CandleDataSeries (for example, the cumulative delta drawn as candles).</summary>
     public class Candle
     {
         public decimal Open { get; set; }
@@ -408,7 +408,7 @@ namespace TradingHub.Indicators
         public new Candle MemberwiseClone() => (Candle)base.MemberwiseClone();
     }
 
-    /// <summary>Dónde se ancla el tooltip de una vela.</summary>
+    /// <summary>Where a candle's tooltip is anchored.</summary>
     public enum CandleTooltipAnchor
     {
         Close,
@@ -416,7 +416,7 @@ namespace TradingHub.Indicators
         Bottom,
     }
 
-    /// <summary>Serie de velas en un panel.</summary>
+    /// <summary>Candle series on a panel.</summary>
     public class CandleDataSeries : BaseDataSeries<Candle>
     {
         public CandleDataSeries(string id, string name) : base(id, name)
@@ -427,16 +427,16 @@ namespace TradingHub.Indicators
         {
         }
 
-        [Display(Name = "Vela alcista", Order = 10)]
+        [Display(Name = "Bullish candle", Order = 10)]
         public Color UpCandleColor { get; set; } = Color.FromArgb(255, 73, 209, 73);
 
-        [Display(Name = "Vela bajista", Order = 20)]
+        [Display(Name = "Bearish candle", Order = 20)]
         public Color DownCandleColor { get; set; } = Color.FromArgb(255, 232, 69, 72);
 
-        [Display(Name = "Borde", Order = 30)]
+        [Display(Name = "Border", Order = 30)]
         public Color BorderColor { get; set; } = Color.FromArgb(255, 120, 120, 120);
 
-        [Display(Name = "Dibujar borde", Order = 40)]
+        [Display(Name = "Draw border", Order = 40)]
         public bool DrawCandleBorder { get; set; } = true;
 
         [Browsable(false)]
@@ -445,8 +445,8 @@ namespace TradingHub.Indicators
         [Browsable(false)]
         public SeriesColors Colors { get; } = new();
 
-        /// <summary>Velas o barras.</summary>
-        [Display(Name = "Modo", Order = 50)]
+        /// <summary>Candles or bars.</summary>
+        [Display(Name = "Mode", Order = 50)]
         public CandleVisualMode Mode { get; set; } = CandleVisualMode.Candles;
 
         [Browsable(false)]
@@ -456,7 +456,7 @@ namespace TradingHub.Indicators
         [JsonIgnore]
         public TradingHub.Trading.MoneyCurrency? ValueCurrency { get; set; }
 
-        /// <summary>No dibuja las velas vacías (todo en cero).</summary>
+        /// <summary>Does not draw the empty candles (everything at zero).</summary>
         [Browsable(false)]
         public bool HideZeroCandles { get; set; }
 
@@ -476,7 +476,7 @@ namespace TradingHub.Indicators
         }
     }
 
-    /// <summary>Colorea las velas del gráfico principal barra por barra (null = color normal).</summary>
+    /// <summary>Colors the main chart's candles bar by bar (null = normal color).</summary>
     public class PaintbarsDataSeries : BaseDataSeries<Color?>
     {
         public PaintbarsDataSeries(string id, string name) : base(id, name)
@@ -487,7 +487,7 @@ namespace TradingHub.Indicators
         {
         }
 
-        /// <summary>Oculta las velas del gráfico (se dibujan solo las de la serie).</summary>
+        /// <summary>Hides the chart's candles (only the series' ones are drawn).</summary>
         [Browsable(false)]
         public bool HideChart { get; set; }
 
@@ -520,7 +520,7 @@ namespace TradingHub.Indicators
         Bid,
     }
 
-    /// <summary>Marca un rango de precios en una barra (círculos de big trades, celdas resaltadas...).</summary>
+    /// <summary>Marks a price range on a bar (big trade circles, highlighted cells...).</summary>
     public class PriceSelectionValue
     {
         public PriceSelectionValue(decimal price)
@@ -566,13 +566,13 @@ namespace TradingHub.Indicators
         protected override bool CreatesOnRead => true;
         protected override SyncList<PriceSelectionValue> CreateDefault(int index) => new();
 
-        /// <summary>Cambió el contenido de la serie.</summary>
+        /// <summary>The series' content changed.</summary>
         public event Action<int> Changed;
 
         public void RaiseChanged(int bar) => Changed?.Invoke(bar);
     }
 
-    /// <summary>Serie de objetos arbitrarios (no se dibuja).</summary>
+    /// <summary>Series of arbitrary objects (it is not drawn).</summary>
     public class ObjectDataSeries : BaseDataSeries<object>
     {
         public ObjectDataSeries(string id, string name) : base(id, name)
@@ -584,7 +584,7 @@ namespace TradingHub.Indicators
         }
     }
 
-    /// <summary>Lista de series de un indicador (DataSeries[0] es la principal).</summary>
+    /// <summary>List of an indicator's series (DataSeries[0] is the main one).</summary>
     public sealed class IndicatorDataSeriesCollection : Collection<IDataSeries>
     {
         internal IndicatorDataSeriesCollection()

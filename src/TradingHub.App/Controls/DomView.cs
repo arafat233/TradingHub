@@ -6,7 +6,7 @@ using TradingHub.Trading;
 
 namespace TradingHub.App.Controls;
 
-/// <summary>DOM (escalera de precios) operable con el mouse.</summary>
+/// <summary>DOM (price ladder) you can trade with the mouse.</summary>
 public sealed class DomView : SkiaView
 {
     private readonly DomRenderer _renderer = new();
@@ -16,15 +16,15 @@ public sealed class DomView : SkiaView
     public DomModel? Dom { get; set; }
 
     /// <summary>
-    /// Pedido de orden: columna, precio y si es cancelación (clic derecho / Alt).
-    /// Si nadie escucha, el DOM opera directo en la cuenta.
+    /// Order request: column, price and whether it is a cancellation (right click / Alt).
+    /// If nobody is listening, the DOM trades straight on the account.
     /// </summary>
     public event Action<DomColumn, decimal, bool>? OrderRequested;
 
-    /// <summary>Una orden propia arrastrada a otro precio.</summary>
+    /// <summary>One of your own orders dragged to another price.</summary>
     public event Action<Order, decimal>? OrderMoved;
 
-    /// <summary>Mensaje de la última acción (para la barra de estado).</summary>
+    /// <summary>Message for the last action (for the status bar).</summary>
     public event Action<string>? Message;
 
     protected override void Draw(SKCanvas canvas, float width, float height)
@@ -46,7 +46,7 @@ public sealed class DomView : SkiaView
         var props = e.GetCurrentPoint(this).Properties;
         bool cancel = props.IsRightButtonPressed || e.KeyModifiers.HasFlag(KeyModifiers.Alt);
 
-        // arrastrar una orden propia
+        // dragging one of your own orders
         if (!cancel && _renderer.OrderAt(Dom, (float)p.X, (float)p.Y) is { } order)
         {
             Dom.DragOrder = order;
@@ -57,7 +57,7 @@ public sealed class DomView : SkiaView
             return;
         }
 
-        // con "doble clic para operar" un clic simple no manda órdenes (cancelar sí)
+        // with "double click to trade" a single click sends no orders (cancelling still works)
         if (!cancel && Dom.Settings.DoubleClickToTrade && e.ClickCount < 2) return;
 
         if (OrderRequested != null)
@@ -127,7 +127,7 @@ public sealed class DomView : SkiaView
         InvalidateVisual();
     }
 
-    /// <summary>Aplica una configuración nueva (columnas, tamaños, colores).</summary>
+    /// <summary>Applies a new configuration (columns, sizes, colors).</summary>
     public void ApplySettings(DomSettings settings)
     {
         if (Dom == null) return;
@@ -137,7 +137,7 @@ public sealed class DomView : SkiaView
     }
 }
 
-/// <summary>Cinta de operaciones (Time &amp; Sales).</summary>
+/// <summary>Time and sales tape (Time &amp; Sales).</summary>
 public sealed class TapeView : SkiaView
 {
     private readonly TapeRenderer _renderer = new();
@@ -155,7 +155,7 @@ public sealed class TapeView : SkiaView
         _renderer.Render(canvas, Tape, width, height);
     }
 
-    // rueda o trackpad: hacia abajo muestra operaciones más viejas (y se queda quieta); arriba vuelve a lo último
+    // wheel or trackpad: downwards shows older trades (and it holds still); upwards returns to the latest
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
@@ -179,7 +179,7 @@ public sealed class TapeView : SkiaView
         InvalidateVisual();
     }
 
-    /// <summary>Vuelve a lo último.</summary>
+    /// <summary>Returns to the latest.</summary>
     public void Live()
     {
         if (Tape == null) return;

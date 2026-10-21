@@ -3,16 +3,16 @@ using TradingHub.App.Services;
 
 namespace TradingHub.App.Lab;
 
-/// <summary>Un reporte del laboratorio (Markdown) con el veredicto sobre la estrategia.</summary>
+/// <summary>A lab report (Markdown) with the verdict on the strategy.</summary>
 public sealed record LabReport(string Path, string Title, string? Strategy, string Verdict, DateTime Created);
 
-/// <summary>Reportes en ~/Documents/Trading Hub/Estrategias/Reportes (los escribe Claude, se leen en la app).</summary>
+/// <summary>Reports in ~/Documents/Trading Hub/Estrategias/Reportes (Claude writes them, the app reads them).</summary>
 internal static class ReportStore
 {
     private static string IndexPath => System.IO.Path.Combine(AppPaths.Reports, "index.json");
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
-    public static readonly string[] Verdicts = { "ganadora", "prometedora", "perdedora", "descartada" };
+    public static readonly string[] Verdicts = { "winner", "promising", "loser", "discarded" };
 
     public static LabReport Save(string title, string markdown, string? strategy, string verdict, IReadOnlyList<(string Name, byte[] Png)>? images = null)
     {
@@ -28,12 +28,12 @@ internal static class ReportStore
         if (!body.StartsWith("# ", StringComparison.Ordinal))
         {
             var meta = new List<string> { DateTime.Now.ToString("dd/MM/yyyy HH:mm") };
-            if (strategy != null) meta.Insert(0, $"Estrategia: {strategy}");
-            if (verdict.Length > 0) meta.Add($"Veredicto: {verdict.ToUpperInvariant()}");
+            if (strategy != null) meta.Insert(0, $"Strategy: {strategy}");
+            if (verdict.Length > 0) meta.Add($"Verdict: {verdict.ToUpperInvariant()}");
             body = $"# {title}\n\n> {string.Join(" · ", meta)}\n\n{body}";
         }
 
-        // gráficos en una carpeta al lado del reporte
+        // charts in a folder next to the report
         var assets = System.IO.Path.ChangeExtension(path, null) + "_archivos";
         if (images is { Count: > 0 })
         {
@@ -52,7 +52,7 @@ internal static class ReportStore
         }
         catch
         {
-            // el reporte quedó guardado igual
+            // the report was stored anyway
         }
 
         return report;
@@ -66,13 +66,13 @@ internal static class ReportStore
         }
         catch
         {
-            // índice dañado: se arma con los archivos
+            // corrupt index: it is built from the files
         }
 
         return new();
     }
 
-    /// <summary>Todos los reportes, del más nuevo al más viejo (incluye .md agregados a mano).</summary>
+    /// <summary>Every report, from the newest to the oldest (including .md files added by hand).</summary>
     public static List<LabReport> List()
     {
         if (!Directory.Exists(AppPaths.Reports)) return new();
@@ -82,7 +82,7 @@ internal static class ReportStore
         return index.Values.OrderByDescending(r => r.Created).ToList();
     }
 
-    /// <summary>Veredicto del último reporte de una estrategia ("" si no tiene).</summary>
+    /// <summary>Verdict of a strategy's latest report ("" if it has none).</summary>
     public static string VerdictOf(string strategyFile) =>
         List().FirstOrDefault(r => string.Equals(r.Strategy, strategyFile, StringComparison.OrdinalIgnoreCase) && r.Verdict.Length > 0)?.Verdict ?? "";
 }

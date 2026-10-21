@@ -12,7 +12,7 @@ public enum RunKind
     WalkForward,
 }
 
-/// <summary>Una corrida guardada (backtest, optimización o walk-forward) con todo su detalle.</summary>
+/// <summary>A stored run (backtest, optimization or walk-forward) with all its detail.</summary>
 public sealed class StrategyRun
 {
     public string Id { get; set; } = $"{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..4]}";
@@ -60,7 +60,7 @@ public sealed class StrategyRun
     };
 }
 
-/// <summary>Resumen liviano para la lista del historial.</summary>
+/// <summary>Lightweight summary for the history list.</summary>
 public sealed class StrategyRunSummary
 {
     public string Id { get; set; } = "";
@@ -86,8 +86,8 @@ public sealed class StrategyRunSummary
 }
 
 /// <summary>
-/// Guarda el historial de corridas por estrategia en disco ({raíz}/{estrategia}/...), con una copia
-/// del código exacto que produjo cada resultado.
+/// Stores the run history per strategy on disk ({root}/{strategy}/...), with a copy
+/// of the exact code that produced each result.
 /// </summary>
 public static class StrategyStore
 {
@@ -114,7 +114,7 @@ public static class StrategyStore
         return Convert.ToHexString(bytes)[..12].ToLowerInvariant();
     }
 
-    /// <summary>Guarda una corrida (y el código si se pasa).</summary>
+    /// <summary>Stores a run (and the code if it is passed).</summary>
     public static void Save(StrategyRun run, string? source = null)
     {
         lock (Lock)
@@ -186,7 +186,7 @@ public static class StrategyStore
         }
     }
 
-    /// <summary>Actualiza notas o favorito de una corrida.</summary>
+    /// <summary>Updates a run's notes or favorite flag.</summary>
     public static void Annotate(string strategyId, string runId, string? notes, bool? starred)
     {
         lock (Lock)
@@ -212,7 +212,7 @@ public static class StrategyStore
         }
         catch
         {
-            // índice dañado: se reconstruye
+            // corrupt index: it is rebuilt
         }
 
         var list = new List<StrategyRunSummary>();
@@ -220,7 +220,7 @@ public static class StrategyStore
         if (!Directory.Exists(dir)) return list;
         foreach (var f in Directory.EnumerateFiles(dir, "*.json"))
         {
-            // solo corridas (empiezan con la fecha); index.json, ui.json y demás se ignoran
+            // runs only (they start with the date); index.json, ui.json and the rest are ignored
             if (!char.IsDigit(Path.GetFileName(f)[0])) continue;
             try
             {
@@ -229,7 +229,7 @@ public static class StrategyStore
             }
             catch
             {
-                // archivo inválido
+                // invalid file
             }
         }
 

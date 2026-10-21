@@ -6,7 +6,7 @@ using TradingHub.Strategies;
 
 namespace TradingHub.App.Controls;
 
-/// <summary>Editores de los parámetros de una estrategia (número, sí/no, opciones o texto), con su descripción de ayuda.</summary>
+/// <summary>Editors for a strategy's parameters (number, yes/no, options or text), with their help description.</summary>
 internal sealed class ParameterEditor : StackPanel
 {
     private readonly List<(PropertyInfo Prop, Func<object?> Read, Control Editor)> _editors = new();
@@ -14,10 +14,10 @@ internal sealed class ParameterEditor : StackPanel
 
     public ParameterEditor() => Spacing = 8;
 
-    /// <summary>Hay algún parámetro.</summary>
+    /// <summary>There is at least one parameter.</summary>
     public bool HasParameters => _editors.Count > 0;
 
-    /// <summary>Arma los editores con los valores dados (los que falten, los de la clase).</summary>
+    /// <summary>Builds the editors with the given values (whatever is missing comes from the class).</summary>
     public void Load(Type? type, IReadOnlyDictionary<string, object?> values, bool readOnly = false, IReadOnlyCollection<string>? hidden = null)
     {
         Children.Clear();
@@ -25,7 +25,7 @@ internal sealed class ParameterEditor : StackPanel
         _type = type;
         if (type == null)
         {
-            Children.Add(new TextBlock { Text = "La estrategia no está compilada: abrila en Backtesting.", Classes = { "faint", "small" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+            Children.Add(new TextBlock { Text = "The strategy is not compiled: open it in Backtesting.", Classes = { "faint", "small" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
             return;
         }
 
@@ -33,7 +33,7 @@ internal sealed class ParameterEditor : StackPanel
         current.SetParameters(values);
         foreach (var p in Strategy.Parameters(type))
         {
-            // los que se editan aparte (por ejemplo, la condición de mercado) quedan como están
+            // the ones edited elsewhere (for example, the market condition) are left as they are
             if (hidden != null && hidden.Contains(p.Name)) continue;
             object? value = p.GetValue(current);
             Control editor;
@@ -88,10 +88,10 @@ internal sealed class ParameterEditor : StackPanel
             _editors.Add((p, read, editor));
         }
 
-        if (_editors.Count == 0) Children.Add(new TextBlock { Text = "Esta estrategia no tiene parámetros.", Classes = { "faint", "small" } });
+        if (_editors.Count == 0) Children.Add(new TextBlock { Text = "This strategy has no parameters.", Classes = { "faint", "small" } });
     }
 
-    /// <summary>Los valores elegidos (los inválidos quedan como estaban).</summary>
+    /// <summary>The chosen values (invalid ones are left as they were).</summary>
     public Dictionary<string, object?> Read(IReadOnlyDictionary<string, object?> current)
     {
         if (_type == null) return new Dictionary<string, object?>(current);
@@ -105,7 +105,7 @@ internal sealed class ParameterEditor : StackPanel
             }
             catch (Exception)
             {
-                // valor inválido: queda el anterior
+                // invalid value: the previous one stays
             }
         }
 

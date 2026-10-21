@@ -4,15 +4,15 @@ using System.Text.Json;
 namespace TradingHub.Strategies;
 
 /// <summary>
-/// Un llenado de una estrategia en vivo. <paramref name="Symbol"/> y <paramref name="PointValue"/> dicen en qué contrato
-/// se ejecutó (por ejemplo MNQ aunque la estrategia mire el NQ); los llenados viejos no los tienen y usan los del
-/// instrumento de la estrategia.
+/// A fill of a live strategy. <paramref name="Symbol"/> and <paramref name="PointValue"/> say which contract
+/// it executed on (for example MNQ even if the strategy watches NQ); older fills do not have them and use the ones from the
+/// strategy's instrument.
 /// </summary>
 public sealed record LiveFill(DateTime Time, bool Buy, decimal Quantity, decimal Price, string? Symbol = null, decimal PointValue = 0);
 
 /// <summary>
-/// Contabilidad propia de una estrategia en vivo: sus llenados, su posición (aunque otras estrategias
-/// operen el mismo instrumento en la misma cuenta), resultado realizado, operaciones cerradas y curva.
+/// A live strategy's own bookkeeping: its fills, its position (even if other strategies
+/// trade the same instrument on the same account), realized result, closed trades and curve.
 /// </summary>
 public sealed class LiveLedger
 {
@@ -27,20 +27,20 @@ public sealed class LiveLedger
 
     public string Key { get; }
 
-    /// <summary>Valor del punto del instrumento de la estrategia (el de los llenados que no traen el suyo).</summary>
+    /// <summary>Point value of the strategy's instrument (the one for fills that do not carry their own).</summary>
     public decimal PointValue { get; }
     public List<LiveFill> Fills { get; } = new();
 
-    /// <summary>Posición en unidades del contrato en el que está abierta (<see cref="OpenSymbol"/>).</summary>
+    /// <summary>Position in units of the contract it is open on (<see cref="OpenSymbol"/>).</summary>
     public decimal Position { get; private set; }
     public decimal AveragePrice { get; private set; }
     public decimal Realized { get; private set; }
     public List<ClosedTrade> Trades { get; } = new();
 
-    /// <summary>Contrato de la posición abierta (null = el de la estrategia, o plana).</summary>
+    /// <summary>Contract of the open position (null = the strategy's, or flat).</summary>
     public string? OpenSymbol { get; private set; }
 
-    /// <summary>Valor del punto de la posición abierta.</summary>
+    /// <summary>Point value of the open position.</summary>
     public decimal OpenPointValue { get; private set; }
 
     public decimal OpenPnL(decimal last) => Position == 0 || last <= 0 ? 0 : (last - AveragePrice) * Position * (OpenPointValue > 0 ? OpenPointValue : PointValue);
@@ -79,7 +79,7 @@ public sealed class LiveLedger
         }
         else if (Math.Sign(Position) != Math.Sign(before))
         {
-            // dio vuelta: lo que sobra abre al precio del llenado
+            // it reversed: the leftover opens at the fill price
             AveragePrice = f.Price;
             _openTime = f.Time;
             OpenSymbol = f.Symbol;
@@ -87,7 +87,7 @@ public sealed class LiveLedger
         }
     }
 
-    /// <summary>Curva de capital al cierre de cada operación (empieza en 0).</summary>
+    /// <summary>Equity curve at the close of each trade (it starts at 0).</summary>
     public List<EquityPoint> Curve(decimal capital)
     {
         var res = new List<EquityPoint>();
@@ -104,7 +104,7 @@ public sealed class LiveLedger
     }
 }
 
-/// <summary>Estado de una estrategia en vivo (lo que se guarda y lee el laboratorio).</summary>
+/// <summary>State of a live strategy (what is stored and read by the lab).</summary>
 public sealed class LiveRunnerInfo
 {
     public string Key { get; set; } = "";
@@ -119,14 +119,14 @@ public sealed class LiveRunnerInfo
     public decimal Size { get; set; } = 1;
     public decimal PointValue { get; set; } = 1;
 
-    /// <summary>Contrato en el que ejecuta, si no es el que mira (por ejemplo MNQ para una estrategia del NQ).</summary>
+    /// <summary>Contract it executes on, if it is not the one it watches (for example MNQ for an NQ strategy).</summary>
     public string? ExecSymbol { get; set; }
     public decimal Position { get; set; }
     public decimal OpenPnL { get; set; }
     public decimal Realized { get; set; }
     public int Trades { get; set; }
 
-    /// <summary>De dónde se lanzó (panel, chart u otro), cuenta y conexión, para volver a lanzarla igual.</summary>
+    /// <summary>Where it was launched from (panel, chart or other), account and connection, to relaunch it the same way.</summary>
     public string Source { get; set; } = "panel";
     public string AccountId { get; set; } = "";
     public string ProfileId { get; set; } = "";
@@ -134,19 +134,19 @@ public sealed class LiveRunnerInfo
     public string? TimeZoneId { get; set; }
     public double SessionStartHours { get; set; }
 
-    /// <summary>Límites de riesgo (en dinero; 0 = sin límite) y si al tocarlos se cierra la posición.</summary>
+    /// <summary>Risk limits (in money; 0 = no limit) and whether hitting them closes the position.</summary>
     public decimal MaxDailyLoss { get; set; }
     public decimal MaxDrawdown { get; set; }
     public bool CloseOnLimit { get; set; } = true;
     public string? PortfolioId { get; set; }
     public string? StopReason { get; set; }
 
-    /// <summary>Pausada (no abre operaciones nuevas) y si opera dinero real.</summary>
+    /// <summary>Paused (it opens no new trades) and whether it trades real money.</summary>
     public bool Paused { get; set; }
     public bool IsReal { get; set; }
 }
 
-/// <summary>Un portafolio en vivo: estrategias que corren juntas, con su capital y, si querés, un agente de riesgo.</summary>
+/// <summary>A live portfolio: strategies that run together, with their capital and, if you want, a risk agent.</summary>
 public sealed class LivePortfolioDef
 {
     public const string AutoId = "auto";
@@ -154,13 +154,13 @@ public sealed class LivePortfolioDef
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
     public string Name { get; set; } = "";
 
-    /// <summary>El automático: todas las estrategias que corren en vivo sin un portafolio asignado.</summary>
+    /// <summary>The automatic one: every strategy running live with no portfolio assigned.</summary>
     public bool Auto { get; set; }
 
-    /// <summary>Estrategias del portafolio (clave estrategia|mercado|cuenta). En el automático se calcula sola.</summary>
+    /// <summary>Strategies of the portfolio (key strategy|market|account). In the automatic one it is computed on its own.</summary>
     public List<string> Members { get; set; } = new();
 
-    /// <summary>Capital de referencia (para porcentajes, drawdown y Sharpe).</summary>
+    /// <summary>Reference capital (for percentages, drawdown and Sharpe).</summary>
     public decimal Capital { get; set; } = 25_000m;
 
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
@@ -168,36 +168,36 @@ public sealed class LivePortfolioDef
 }
 
 /// <summary>
-/// Agente de riesgo de un portafolio: Claude mira cómo viene cada estrategia (resultado, racha, drawdown, volatilidad y
-/// correlación) y reparte el riesgo cambiando el tamaño de cada una. Por defecto propone y vos aprobás cada cambio;
-/// en modo automático (solo cuentas que no son reales) aplica solo, siempre dentro de los topes.
+/// A portfolio's risk agent: Claude looks at how each strategy is doing (result, streak, drawdown, volatility and
+/// correlation) and spreads the risk by changing the size of each one. By default it proposes and you approve every change;
+/// in automatic mode (only non-real accounts) it applies on its own, always within the caps.
 /// </summary>
 public sealed class LiveRiskAgentSettings
 {
     public bool Enabled { get; set; }
 
-    /// <summary>propose (cada cambio lo aprobás vos) o auto (aplica solo; nunca con cuentas reales).</summary>
+    /// <summary>propose (you approve every change) or auto (it applies on its own; never with real accounts).</summary>
     public string Mode { get; set; } = "propose";
 
-    /// <summary>Cada cuántos minutos revisa (si hubo operaciones nuevas) y cada cuántas horas igual aunque no haya.</summary>
+    /// <summary>How many minutes between reviews (if there were new trades) and how many hours between reviews anyway.</summary>
     public int EveryMinutes { get; set; } = 60;
     public int MinNewTrades { get; set; } = 3;
     public int ForceEveryHours { get; set; } = 8;
     public int MaxRunsPerDay { get; set; } = 8;
     public double MaxUsdPerRun { get; set; } = 2;
 
-    /// <summary>Topes del tamaño que puede asignar a cada estrategia.</summary>
+    /// <summary>Caps on the size it can assign to each strategy.</summary>
     public decimal MinSize { get; set; } = 0.25m;
     public decimal MaxSize { get; set; } = 3m;
 
-    /// <summary>Riesgo total por día que reparte entre las estrategias (% del capital) y drawdown máximo del portafolio (%).</summary>
+    /// <summary>Total risk per day it spreads among the strategies (% of capital) and maximum portfolio drawdown (%).</summary>
     public decimal DailyRiskPercent { get; set; } = 2m;
     public decimal MaxDrawdownPercent { get; set; } = 10m;
 
-    /// <summary>Indicaciones tuyas para el agente (por ejemplo «priorizá las de NQ», «nada más de ×2»).</summary>
+    /// <summary>Your own instructions for the agent (for example "prioritize the NQ ones", "nothing above x2").</summary>
     public string Instructions { get; set; } = "";
 
-    /// <summary>Modelo y esfuerzo del agente (por defecto Opus 5.5 con esfuerzo extra).</summary>
+    /// <summary>Model and effort of the agent (Opus 5.5 with extra effort by default).</summary>
     public string Model { get; set; } = "claude-opus-5-5";
     public string Effort { get; set; } = "xhigh";
 
@@ -209,7 +209,7 @@ public sealed class LiveRiskAgentSettings
     public double CostTotal { get; set; }
 }
 
-/// <summary>Un cambio de tamaño propuesto para una estrategia.</summary>
+/// <summary>A size change proposed for a strategy.</summary>
 public sealed class SizingItem
 {
     public string Key { get; set; } = "";
@@ -218,7 +218,7 @@ public sealed class SizingItem
     public decimal ProposedSize { get; set; }
     public string Reason { get; set; } = "";
 
-    /// <summary>Límites propuestos (null = no se tocan) y los que tenía.</summary>
+    /// <summary>Proposed limits (null = they are not touched) and the ones it had.</summary>
     public decimal? ProposedMaxDailyLoss { get; set; }
     public decimal? ProposedMaxDrawdown { get; set; }
     public decimal CurrentMaxDailyLoss { get; set; }
@@ -228,22 +228,22 @@ public sealed class SizingItem
     public string Status { get; set; } = "pending";
 }
 
-/// <summary>Propuesta de cambios de tamaño (de las reglas o de Claude). Nada se aplica sin aprobación.</summary>
+/// <summary>Proposal of size changes (from the rules or from Claude). Nothing is applied without approval.</summary>
 public sealed class SizingProposal
 {
     public string Id { get; set; } = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N")[..4];
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-    public string Source { get; set; } = "reglas";
+    public string Source { get; set; } = "rules";
     public string Summary { get; set; } = "";
     public List<SizingItem> Items { get; set; } = new();
 
-    /// <summary>Portafolio en vivo del que salió (las del agente de riesgo).</summary>
+    /// <summary>Live portfolio it came from (the risk agent's ones).</summary>
     public string? PortfolioId { get; set; }
     public string? PortfolioName { get; set; }
     public bool IsPending => Items.Any(i => i.Status == "pending");
 }
 
-/// <summary>Métricas en vivo de una estrategia, para la cartera.</summary>
+/// <summary>Live metrics of a strategy, for the portfolio.</summary>
 public sealed class LiveStats
 {
     public LiveRunnerInfo Info { get; set; } = new();
@@ -256,8 +256,8 @@ public sealed class LiveStats
 }
 
 /// <summary>
-/// Persistencia de la cartera en vivo (en {raíz}/Live): llenados por estrategia, estado de cada estrategia y
-/// propuestas de tamaño. La app escribe el estado; el laboratorio de Claude lo lee y escribe propuestas.
+/// Persistence of the live portfolio (in {root}/Live): fills per strategy, state of each strategy and
+/// size proposals. The app writes the state; Claude's lab reads it and writes proposals.
 /// </summary>
 public static class LiveStore
 {
@@ -269,10 +269,10 @@ public static class LiveStore
     private static string Clean(string key) => string.Concat(key.Select(c => Path.GetInvalidFileNameChars().Contains(c) || c is ':' or '|' ? '_' : c));
     private static string LedgerPath(string key) => Path.Combine(Root, "llenados", Clean(key) + ".jsonl");
 
-    /// <summary>Archivo de llenados de una estrategia (para saber si cambió).</summary>
+    /// <summary>Fills file of a strategy (to know whether it changed).</summary>
     public static string LedgerFile(string key) => LedgerPath(key);
 
-    /// <summary>Borra el historial de ejecuciones de una estrategia (queda en la cartera, sin operaciones).</summary>
+    /// <summary>Clears a strategy's fill history (it stays in the portfolio, with no trades).</summary>
     public static void DeleteFills(string key)
     {
         lock (Gate)
@@ -283,7 +283,7 @@ public static class LiveStore
             }
             catch
             {
-                // se reintenta
+                // it is retried
             }
         }
     }
@@ -304,7 +304,7 @@ public static class LiveStore
             }
             catch
             {
-                // se reintenta con el próximo llenado
+                // it is retried with the next fill
             }
         }
     }
@@ -320,7 +320,7 @@ public static class LiveStore
         }
         catch
         {
-            // archivo dañado: se usa lo que se pudo leer
+            // corrupt file: whatever could be read is used
         }
 
         return l;
@@ -336,14 +336,14 @@ public static class LiveStore
             }
             catch
             {
-                // se reconstruye
+                // it is rebuilt
             }
 
             return new();
         }
     }
 
-    /// <summary>Guarda el estado (mezcla con lo guardado: las estrategias detenidas quedan con su historia).</summary>
+    /// <summary>Stores the state (merged with what is stored: stopped strategies keep their history).</summary>
     public static void SaveRunners(IEnumerable<LiveRunnerInfo> current)
     {
         lock (Gate)
@@ -356,14 +356,14 @@ public static class LiveStore
             }
             catch
             {
-                // archivo dañado
+                // corrupt file
             }
 
             foreach (var r in all.Values) r.Running = false;
             foreach (var r in current) all[r.Key] = r;
             try
             {
-                // solo si cambió algo (se llama cada pocos segundos)
+                // only if something changed (this is called every few seconds)
                 var json = JsonSerializer.Serialize(all.Values.ToList(), Json);
                 if (json == _lastRunnersJson && _lastRunnersPath == RunnersPath && File.Exists(RunnersPath)) return;
                 Directory.CreateDirectory(Root);
@@ -373,17 +373,17 @@ public static class LiveStore
             }
             catch
             {
-                // se reintenta en la próxima vuelta
+                // it is retried on the next pass
             }
         }
     }
 
     public static decimal SizeFor(string key) => LoadRunners().FirstOrDefault(r => r.Key == key)?.Size ?? 1;
 
-    /// <summary>Lo guardado de una estrategia (tamaño, límites, portafolio), o null.</summary>
+    /// <summary>What is stored for a strategy (size, limits, portfolio), or null.</summary>
     public static LiveRunnerInfo? InfoFor(string key) => LoadRunners().FirstOrDefault(r => r.Key == key);
 
-    /// <summary>Saca una estrategia de la cartera (y, si se pide, borra su historial de ejecuciones).</summary>
+    /// <summary>Removes a strategy from the portfolio (and, if asked, clears its fill history).</summary>
     public static void RemoveRunner(string key, bool deleteFills)
     {
         lock (Gate)
@@ -399,12 +399,12 @@ public static class LiveStore
             }
             catch
             {
-                // se reintenta
+                // it is retried
             }
         }
     }
 
-    /// <summary>Actualiza lo guardado de una estrategia que no está corriendo (tamaño, límites, portafolio).</summary>
+    /// <summary>Updates what is stored for a strategy that is not running (size, limits, portfolio).</summary>
     public static void UpdateRunner(string key, Action<LiveRunnerInfo> change)
     {
         lock (Gate)
@@ -420,12 +420,12 @@ public static class LiveStore
             }
             catch
             {
-                // se reintenta
+                // it is retried
             }
         }
     }
 
-    /// <summary>Portafolios en vivo guardados (el automático incluido, con su configuración).</summary>
+    /// <summary>Stored live portfolios (the automatic one included, with its configuration).</summary>
     public static List<LivePortfolioDef> LoadPortfolios()
     {
         lock (Gate)
@@ -436,7 +436,7 @@ public static class LiveStore
             }
             catch
             {
-                // dañado: se arma de nuevo
+                // corrupt: it is rebuilt
             }
 
             return new();
@@ -454,7 +454,7 @@ public static class LiveStore
             }
             catch
             {
-                // se reintenta en el próximo cambio
+                // it is retried on the next change
             }
         }
     }
@@ -469,7 +469,7 @@ public static class LiveStore
             }
             catch
             {
-                // dañado
+                // corrupt
             }
 
             return new();
@@ -497,7 +497,7 @@ public static class LiveStore
 
     public static DateTime ProposalsStamp => File.Exists(ProposalsPath) ? File.GetLastWriteTimeUtc(ProposalsPath) : DateTime.MinValue;
 
-    /// <summary>Métricas de cada estrategia guardada (en vivo o detenida) a partir de sus llenados.</summary>
+    /// <summary>Metrics of each stored strategy (live or stopped) from its fills.</summary>
     public static List<LiveStats> Stats(decimal capital = 10_000)
     {
         var res = new List<LiveStats>();
@@ -537,8 +537,8 @@ public static class LiveStore
 }
 
 /// <summary>
-/// Reglas simples de tamaño: más a las que rinden (profit factor reciente alto y sin drawdown fuerte), menos a
-/// las que no, y pausa para las que superan su peor drawdown con mala racha. Solo propone: aplica el usuario.
+/// Simple sizing rules: more for the ones performing (high recent profit factor and no heavy drawdown), less for
+/// the ones that are not, and a pause for the ones exceeding their worst drawdown on a bad streak. It only proposes: the user applies.
 /// </summary>
 public static class LiveSizing
 {
@@ -547,34 +547,34 @@ public static class LiveSizing
 
     public static SizingProposal SuggestByRules(IReadOnlyList<LiveStats> stats)
     {
-        var p = new SizingProposal { Source = "reglas" };
+        var p = new SizingProposal { Source = "rules" };
         foreach (var s in stats.Where(s => s.Info.Running))
         {
             decimal size = s.Info.Size;
             string name = $"{s.Info.Strategy} · {s.Info.Symbol}";
-            if (s.Metrics.TotalTrades < MinTrades) continue; // poca muestra: no se toca
+            if (s.Metrics.TotalTrades < MinTrades) continue; // little sample: it is not touched
             decimal pf = s.RecentProfitFactor;
             decimal maxDd = s.Metrics.MaxDrawdown;
             decimal typicalLoss = Math.Abs(s.Metrics.AverageLoss);
-            // "profundo": cerca del peor drawdown y de al menos tres pérdidas típicas (una racha corta es normal)
+            // "deep": close to the worst drawdown and to at least three typical losses (a short streak is normal)
             bool deepDd = maxDd > 0 && s.CurrentDrawdown >= maxDd * 0.9m && s.CurrentDrawdown >= typicalLoss * 3 && s.CurrentDrawdown > 0;
             bool shallowDd = s.CurrentDrawdown <= Math.Max(maxDd * 0.5m, typicalLoss * 2);
             if (pf < 0.7m && deepDd && s.RecentTrades >= 15)
-                p.Items.Add(new SizingItem { Key = s.Info.Key, Strategy = name, CurrentSize = size, ProposedSize = 0, Reason = $"Pausar: PF de las últimas {s.RecentTrades} operaciones {pf:0.00} y está en su peor drawdown ({s.CurrentDrawdown:N2})." });
+                p.Items.Add(new SizingItem { Key = s.Info.Key, Strategy = name, CurrentSize = size, ProposedSize = 0, Reason = $"Pause: the PF of the last {s.RecentTrades} trades is {pf:0.00} and it is at its worst drawdown ({s.CurrentDrawdown:N2})." });
             else if (pf < 0.9m || deepDd)
-                p.Items.Add(new SizingItem { Key = s.Info.Key, Strategy = name, CurrentSize = size, ProposedSize = Math.Max(MinSize, Math.Round(size * 0.5m, 2)), Reason = $"Reducir a la mitad: PF reciente {pf:0.00}{(deepDd ? ", drawdown cerca del máximo" : "")}." });
+                p.Items.Add(new SizingItem { Key = s.Info.Key, Strategy = name, CurrentSize = size, ProposedSize = Math.Max(MinSize, Math.Round(size * 0.5m, 2)), Reason = $"Halve it: recent PF {pf:0.00}{(deepDd ? ", drawdown close to the maximum" : "")}." });
             else if (pf >= 1.5m && s.RecentExpectancy > 0 && shallowDd && size < MaxSize)
-                p.Items.Add(new SizingItem { Key = s.Info.Key, Strategy = name, CurrentSize = size, ProposedSize = Math.Min(MaxSize, Math.Round(size * 1.25m, 2)), Reason = $"Aumentar 25 %: PF reciente {pf:0.00}, expectativa {s.RecentExpectancy:N2} por operación y drawdown bajo." });
+                p.Items.Add(new SizingItem { Key = s.Info.Key, Strategy = name, CurrentSize = size, ProposedSize = Math.Min(MaxSize, Math.Round(size * 1.25m, 2)), Reason = $"Raise by 25 %: recent PF {pf:0.00}, expectancy {s.RecentExpectancy:N2} per trade and a low drawdown." });
         }
 
         p.Summary = p.Items.Count == 0
-            ? "Sin cambios: las estrategias con suficientes operaciones están dentro de lo esperado (o todavía tienen poca muestra)."
-            : $"{p.Items.Count} cambio(s) sugerido(s) por las reglas (PF de las últimas 20 operaciones y drawdown).";
+            ? "No changes: the strategies with enough trades are within expectations (or still have a small sample)."
+            : $"{p.Items.Count} change(s) suggested by the rules (the PF of the last 20 trades and the drawdown).";
         return p;
     }
 }
 
-/// <summary>MAE y MFE de operaciones en vivo (en dinero, como en el backtest), con los precios entre la entrada y la salida.</summary>
+/// <summary>MAE and MFE of live trades (in money, as in the backtest), with the prices between the entry and the exit.</summary>
 public static class TradeExcursion
 {
     public static (decimal Mae, decimal Mfe) Compute(ClosedTrade t, IEnumerable<decimal> prices, decimal pointValue)
@@ -588,7 +588,7 @@ public static class TradeExcursion
             if (exc < mae) mae = exc;
         }
 
-        // la salida también es un precio por el que pasó
+        // the exit is also a price it went through
         decimal last = (t.ExitPrice - t.EntryPrice) * sign;
         mfe = Math.Max(mfe, last);
         mae = Math.Min(mae, last);

@@ -5,8 +5,8 @@ using System.Text.RegularExpressions;
 namespace TradingHub.App.Lab;
 
 /// <summary>
-/// Exporta un reporte Markdown a un HTML autocontenido (gráficos incrustados) con estilo de informe,
-/// listo para abrir en el navegador e imprimir o guardar como PDF.
+/// Exports a Markdown report to a self-contained HTML (charts embedded) with report styling,
+/// ready to open in the browser and print or save as a PDF.
 /// </summary>
 internal static class ReportExport
 {
@@ -155,7 +155,7 @@ internal static class ReportExport
             """;
     }
 
-    /// <summary>Escribe el HTML al lado del reporte y devuelve su ruta.</summary>
+    /// <summary>Writes the HTML next to the report and returns its path.</summary>
     public static string Export(LabReport report)
     {
         var md = File.ReadAllText(report.Path);

@@ -4,8 +4,8 @@ using TradingHub.Market;
 namespace TradingHub.Strategies;
 
 /// <summary>
-/// Operaciones de un rango en memoria, en columnas compactas (~25 bytes por tick). Se carga una vez
-/// y la comparten todas las corridas de una optimización. <see cref="Slice"/> no copia.
+/// Trades of a range in memory, in compact columns (~25 bytes per tick). It is loaded once
+/// and shared by every run of an optimization. <see cref="Slice"/> does not copy.
 /// </summary>
 public sealed class TickData
 {
@@ -27,16 +27,16 @@ public sealed class TickData
     }
 
     /// <summary>
-    /// Las operaciones seguidas al mismo precio, del mismo lado y en el mismo segundo están juntas en una (con el volumen
-    /// sumado): ver <see cref="Compress"/>.
+    /// Consecutive trades at the same price, on the same side and within the same second are merged into one (with the volume
+    /// added up): see <see cref="Compress"/>.
     /// </summary>
     public bool Compressed { get; }
 
     /// <summary>
-    /// Junta las operaciones seguidas al mismo precio, del mismo lado y en el mismo segundo (suma el volumen). Las velas de
-    /// tiempo o de rango quedan iguales (apertura, máximo, mínimo, cierre, volumen, delta y footprint) y las órdenes se
-    /// llenan en los mismos precios, con muchos menos eventos que recorrer. Cambia la cantidad de operaciones de cada vela:
-    /// no sirve para velas por cantidad de operaciones, de volumen o de delta, ni para estrategias que miran cada tick.
+    /// Merges consecutive trades at the same price, on the same side and within the same second (adding up the volume). Time or
+    /// range candles come out identical (open, high, low, close, volume, delta and footprint) and the orders are
+    /// filled at the same prices, with far fewer events to walk through. It changes the trade count of each candle:
+    /// it is no good for candles by trade count, by volume or by delta, nor for strategies that look at every tick.
     /// </summary>
     public TickData Compress()
     {
@@ -85,7 +85,7 @@ public sealed class TickData
 
     public Trade Get(int i) => new(i, new DateTime(_times[i], DateTimeKind.Utc), Instrument.FromTicks(_prices[i]), (decimal)_volumes[i], (TradeSide)_sides[i]);
 
-    /// <summary>Sub-rango por tiempo (sin copiar).</summary>
+    /// <summary>Sub-range by time (without copying).</summary>
     public TickData Slice(DateTime fromUtc, DateTime toUtc)
     {
         int a = Lower(fromUtc.Ticks), b = Lower(toUtc.Ticks);
@@ -106,8 +106,8 @@ public sealed class TickData
     }
 
     /// <summary>
-    /// Carga de disco las operaciones de un instrumento entre dos instantes. Con <paramref name="compress"/> las junta
-    /// mientras carga (como <see cref="Compress"/>), sin tener nunca en memoria todas las originales.
+    /// Loads an instrument's trades between two instants from disk. With <paramref name="compress"/> it merges them
+    /// while loading (like <see cref="Compress"/>), never holding all the originals in memory.
     /// </summary>
     public static TickData Load(string root, Instrument instrument, DateTime fromUtc, DateTime toUtc, IProgress<double>? progress, CancellationToken ct, bool compress = false)
     {
@@ -137,7 +137,7 @@ public sealed class TickData
                         Array.Resize(ref sides, cap);
                     }
 
-                    // si quedó algo fuera de orden por tiempo, se acomoda manteniendo el orden por id
+                    // if something ended up out of time order, it is sorted while keeping the id order
                     long ticks = t.Time.Ticks;
                     if (n > 0 && ticks < times[n - 1]) ticks = times[n - 1];
                     long price = instrument.ToTicks(t.Price);
@@ -161,7 +161,7 @@ public sealed class TickData
 
         if (compress && n < times.Length)
         {
-            // las comprimidas suelen ocupar mucho menos que lo reservado: se recorta
+            // the compressed ones usually take far less than what was reserved: it is trimmed
             Array.Resize(ref times, n);
             Array.Resize(ref prices, n);
             Array.Resize(ref volumes, n);
@@ -171,8 +171,8 @@ public sealed class TickData
         return new TickData(instrument, times, prices, volumes, sides, 0, n, compress);
     }
 
-    /// <summary>Crea datos desde una lista (pruebas y datos sintéticos).</summary>
-    /// <summary>Copia la historia que tiene cargada un gráfico (sin pasar por objetos Trade).</summary>
+    /// <summary>Creates data from a list (tests and synthetic data).</summary>
+    /// <summary>Copies the history a chart has loaded (without going through Trade objects).</summary>
     public static TickData FromStore(TradeStore store)
     {
         int n = store.Count;

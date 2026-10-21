@@ -3,9 +3,9 @@ using TradingHub.Market;
 namespace TradingHub.Feeds;
 
 /// <summary>
-/// Mercado simulado offline: genera un tape realista (ráfagas, barridas, prints grandes,
-/// cambios de régimen de volatilidad) y un libro de órdenes coherente con el precio.
-/// Sirve para usar la plataforma sin conexión y para practicar.
+/// Offline simulated market: it generates a realistic tape (bursts, sweeps, large prints,
+/// volatility regime changes) and an order book consistent with the price.
+/// It is useful for using the platform offline and for practising.
 /// </summary>
 public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHistory
 {
@@ -15,16 +15,16 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
     private readonly object _lock = new();
 
     public string Id => FeedId;
-    public string DisplayName => "Simulador (sin conexión)";
+    public string DisplayName => "Simulator (offline)";
     public bool SupportsHistory => true;
     public bool IsLive => false;
 
     private static readonly (Instrument Instrument, double StartPrice, double TradesPerSec, double BaseVolume, double VolTicksPerSqrtSec)[] Specs =
     {
-        (new Instrument { Symbol = "SIM-BTC", FeedId = FeedId, Exchange = "Simulador", TickSize = 0.1m, VolumeStep = 0.001m, BaseAsset = "BTC", QuoteAsset = "USDT", Description = "Bitcoin simulado" }, 86800, 9, 0.06, 6.0),
-        (new Instrument { Symbol = "SIM-ES", FeedId = FeedId, Exchange = "Simulador", TickSize = 0.25m, VolumeStep = 1m, PointValue = 50m, Description = "E-mini S&P 500 simulado" }, 6650, 14, 2.2, 0.55),
-        (new Instrument { Symbol = "SIM-NQ", FeedId = FeedId, Exchange = "Simulador", TickSize = 0.25m, VolumeStep = 1m, PointValue = 20m, Description = "E-mini Nasdaq simulado" }, 24300, 11, 1.6, 2.4),
-        (new Instrument { Symbol = "SIM-ETH", FeedId = FeedId, Exchange = "Simulador", TickSize = 0.01m, VolumeStep = 0.001m, BaseAsset = "ETH", QuoteAsset = "USDT", Description = "Ethereum simulado" }, 3210, 8, 0.9, 12.0),
+        (new Instrument { Symbol = "SIM-BTC", FeedId = FeedId, Exchange = "Simulator", TickSize = 0.1m, VolumeStep = 0.001m, BaseAsset = "BTC", QuoteAsset = "USDT", Description = "Simulated bitcoin" }, 86800, 9, 0.06, 6.0),
+        (new Instrument { Symbol = "SIM-ES", FeedId = FeedId, Exchange = "Simulator", TickSize = 0.25m, VolumeStep = 1m, PointValue = 50m, Description = "Simulated E-mini S&P 500" }, 6650, 14, 2.2, 0.55),
+        (new Instrument { Symbol = "SIM-NQ", FeedId = FeedId, Exchange = "Simulator", TickSize = 0.25m, VolumeStep = 1m, PointValue = 20m, Description = "Simulated E-mini Nasdaq" }, 24300, 11, 1.6, 2.4),
+        (new Instrument { Symbol = "SIM-ETH", FeedId = FeedId, Exchange = "Simulator", TickSize = 0.01m, VolumeStep = 0.001m, BaseAsset = "ETH", QuoteAsset = "USDT", Description = "Simulated ethereum" }, 3210, 8, 0.9, 12.0),
     };
 
     public Task<IReadOnlyDictionary<string, TickerStats>> GetTickerStatsAsync(CancellationToken ct)
@@ -42,13 +42,13 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
     public Task<IReadOnlyList<Instrument>> GetInstrumentsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Instrument>>(Specs.Select(s => s.Instrument).ToList());
 
-    // ======================================================================= velas (historia larga)
+    // ======================================================================= candles (long history)
 
     public Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct) => Task.FromResult<DateTime?>(DateTime.UtcNow.Date.AddYears(-3));
 
     /// <summary>
-    /// Historia larga simulada: caminata aleatoria determinística generada hacia atrás desde
-    /// <paramref name="endPrice"/> (el primer precio que ya hay), así empalma con lo cargado.
+    /// Simulated long history: a deterministic random walk generated backwards from
+    /// <paramref name="endPrice"/> (the first price already there), so it splices with what is loaded.
     /// </summary>
     public Task LoadKlinesAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc, int minutes, decimal endPrice,
         Func<IReadOnlyList<Kline>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
@@ -134,7 +134,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
             {
             lock (model)
             {
-                // La historia se genera de forma determinística desde el inicio del rango.
+                // The history is generated deterministically from the start of the range.
                 model.Reset(fromUtc);
                 var batch = new List<Trade>(4096);
                 double total = Math.Max(1, (toUtc - fromUtc).TotalSeconds);
@@ -179,11 +179,11 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
 
     private static void LiveLoop(Model model, IMarketDataSink sink, CancellationToken ct)
     {
-        // espera a que termine la historia (si se pidió) para que el vivo continúe donde terminó
+        // it waits for the history to finish (if it was requested) so the live feed carries on where it ended
         var waitStart = DateTime.UtcNow;
         while (!ct.IsCancellationRequested && !model.HistoryDone && (model.HistoryActive || (DateTime.UtcNow - waitStart).TotalMilliseconds < 1500))
             Thread.Sleep(50);
-        sink.OnStatus(model.Instrument, FeedStatus.Connected, "Simulador activo");
+        sink.OnStatus(model.Instrument, FeedStatus.Connected, "Simulator active");
         var lastDepth = DateTime.MinValue;
         bool first = true;
         while (!ct.IsCancellationRequested)
@@ -240,7 +240,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
         public void Dispose() => _cts.Cancel();
     }
 
-    /// <summary>Modelo estocástico del mercado.</summary>
+    /// <summary>Stochastic model of the market.</summary>
     private sealed class Model
     {
         public readonly Instrument Instrument;
@@ -252,19 +252,19 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
         private readonly double _baseVol;
         private Random _rng = new(1);
 
-        private double _fair;        // valor "justo" latente, en ticks
+        private double _fair;        // latent "fair" value, in ticks
         private double _drift;       // ticks/seg
         private double _volMult = 1;
-        private double _regimeLeft;  // segundos hasta el próximo cambio de régimen
+        private double _regimeLeft;  // seconds until the next regime change
         private DateTime _time;
         private long _nextId;
         private Trade? _pushed;
 
-        // ráfaga (barrida agresiva)
+        // burst (aggressive sweep)
         private int _burstLeft;
         private TradeSide _burstSide;
 
-        // libro
+        // book
         private readonly OrderBookBuilder _book = new();
         private readonly Dictionary<long, double> _bidSizes = new();
         private readonly Dictionary<long, double> _askSizes = new();
@@ -283,7 +283,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
 
         public void Reset(DateTime from)
         {
-            // semilla estable por instrumento y día: la misma fecha genera el mismo mercado
+            // stable seed per instrument and day: the same date generates the same market
             int seed = HashCode.Combine(Instrument.Symbol.GetHashCode(StringComparison.Ordinal) & 0x7fffffff, from.Date.Ticks.GetHashCode());
             seed = StableSeed(Instrument.Symbol, from.Date);
             _rng = new Random(seed);
@@ -315,7 +315,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
         {
             if (_liveStarted) return;
             _liveStarted = true;
-            // si el modelo quedó muy atrás (sin historia), salta al presente
+            // if the model fell far behind (with no history), it jumps to the present
             if (_pushed is { } p && (now - p.Time).TotalMinutes > 5)
             {
                 _pushed = null;
@@ -336,7 +336,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
             return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
         }
 
-        /// <summary>Actividad según la hora UTC (más movimiento en la sesión de EE.UU.).</summary>
+        /// <summary>Activity based on the UTC hour (more movement in the US session).</summary>
         private static double ActivityFactor(DateTime t)
         {
             double h = t.Hour + t.Minute / 60.0;
@@ -360,7 +360,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
             double dt;
             if (_burstLeft > 0)
             {
-                dt = _rng.NextDouble() * 0.004; // prácticamente simultáneas
+                dt = _rng.NextDouble() * 0.004; // practically simultaneous
             }
             else
             {
@@ -370,7 +370,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
             dt = Math.Min(dt, 30);
             _time = _time.AddTicks((long)(dt * TimeSpan.TicksPerSecond) + 1);
 
-            // régimen
+            // regime
             _regimeLeft -= dt;
             if (_regimeLeft <= 0)
             {
@@ -380,7 +380,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
                 _regimeLeft = 120 + _rng.NextDouble() * 1500;
             }
 
-            // reversión suave hacia el precio inicial para que no se vaya a cualquier lado
+            // gentle reversion towards the starting price so it does not wander off
             double meanRev = (_startPriceTicks - _fair) * 0.00002;
             _fair += (_drift + meanRev) * dt + _baseVol * _volMult * Math.Sqrt(dt) * Gaussian();
 
@@ -393,7 +393,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
             {
                 side = _burstSide;
                 _burstLeft--;
-                // la barrida camina el libro
+                // the sweep walks the book
                 if (_rng.NextDouble() < 0.35) _fair += side == TradeSide.Buy ? 1 : -1;
                 bid = (long)Math.Floor(_fair);
                 ask = bid + 1;
@@ -415,7 +415,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
 
             double vol = _baseVolume * Math.Exp(Gaussian() * 0.95 - 0.45);
             double big = _rng.NextDouble();
-            if (big < 0.004) vol *= 15 + _rng.NextDouble() * 45;      // print grande
+            if (big < 0.004) vol *= 15 + _rng.NextDouble() * 45;      // large print
             else if (big < 0.03) vol *= 3 + _rng.NextDouble() * 5;
             if (_burstLeft > 0) vol *= 1.5;
 
@@ -445,7 +445,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
             const int levels = 120;
             double baseDepth = _baseVolume * 6;
 
-            // limpia niveles cruzados
+            // clears crossed levels
             foreach (var k in _bidSizes.Keys.Where(k => k > bestBid || k < bestBid - levels * 2).ToList()) _bidSizes.Remove(k);
             foreach (var k in _askSizes.Keys.Where(k => k < bestAsk || k > bestAsk + levels * 2).ToList()) _askSizes.Remove(k);
 
@@ -474,7 +474,7 @@ public sealed class SimulatedFeed : IMarketDataFeed, ITickerStatsProvider, IKlin
             if (!dict.TryGetValue(price, out var size) || size <= 0)
             {
                 size = baseDepth * (0.4 + distance * 0.05) * Math.Exp(Gaussian() * 0.7);
-                // paredes ocasionales en números redondos
+                // occasional walls at round numbers
                 if (price % 50 == 0 && _rng.NextDouble() < 0.6) size *= 6 + _rng.NextDouble() * 10;
                 dict[price] = size;
             }

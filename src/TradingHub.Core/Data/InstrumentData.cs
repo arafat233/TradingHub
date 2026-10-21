@@ -5,9 +5,9 @@ using TradingHub.Market;
 namespace TradingHub.Data;
 
 /// <summary>
-/// Todos los datos de un instrumento: operaciones (historia + vivo), libro y estado de la conexión.
-/// Los feeds escriben desde sus hilos en colas; la UI llama a <see cref="Pump"/> en su hilo para
-/// aplicar los cambios y disparar los eventos. Varios gráficos pueden compartir la misma instancia.
+/// All of an instrument's data: trades (history + live), book and connection state.
+/// The feeds write from their own threads into queues; the UI calls <see cref="Pump"/> on its thread to
+/// apply the changes and fire the events. Several charts can share the same instance.
 /// </summary>
 public sealed class InstrumentData : IMarketDataSink, IDisposable
 {
@@ -43,42 +43,42 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     public double HistoryProgress { get; private set; }
     public string? HistoryError { get; private set; }
 
-    /// <summary>Desde cuándo hay historia pedida/cargada (UTC).</summary>
+    /// <summary>Since when there is history requested/loaded (UTC).</summary>
     public DateTime HistoryFrom { get; private set; } = DateTime.MaxValue;
 
-    /// <summary>Si está trayendo historia más vieja en segundo plano.</summary>
+    /// <summary>Whether it is fetching older history in the background.</summary>
     public bool IsExtending { get; private set; }
 
     private List<Trade>? _olderToMerge;
     private DateTime _pendingFrom;
 
-    /// <summary>Última operación del mercado cuando está cerrado (la historia se arma hasta ahí).</summary>
+    /// <summary>The market's last trade when it is closed (the history is built up to there).</summary>
     private DateTime? _anchor;
 
     public decimal LastPrice => Trades.Count > 0 ? Trades.GetPrice(Trades.Count - 1) : 0m;
     public decimal BestBid => Depth.HasBid ? Instrument.FromTicks(Depth.BestBidTicks) : 0m;
     public decimal BestAsk => Depth.HasAsk ? Instrument.FromTicks(Depth.BestAskTicks) : 0m;
 
-    /// <summary>Operaciones nuevas agregadas al almacén (índice inicial, cantidad). Hilo de UI.</summary>
+    /// <summary>New trades added to the store (start index, count). UI thread.</summary>
     public event Action<int, int>? TradesAppended;
 
-    /// <summary>La historia terminó de cargarse (los gráficos deben reconstruirse). Hilo de UI.</summary>
+    /// <summary>The history finished loading (the charts must be rebuilt). UI thread.</summary>
     public event Action? HistoryLoaded;
 
-    /// <summary>Cambió el libro. Hilo de UI.</summary>
+    /// <summary>The book changed. UI thread.</summary>
     public event Action<DepthUpdate>? DepthUpdated;
 
     public event Action? StatusChanged;
 
-    /// <summary>Carpeta donde se graban los ticks (null = no grabar).</summary>
+    /// <summary>Folder the ticks are recorded into (null = do not record).</summary>
     public string? RecordingRoot { get; set; }
 
-    /// <summary>Si graba lo recibido en vivo (la carpeta se sigue leyendo aunque no grabe).</summary>
+    /// <summary>Whether it records what arrives live (the folder keeps being read even if it does not record).</summary>
     public bool RecordLive { get; set; } = true;
 
-    // ----------------------------------------------------------------- arranque
+    // ----------------------------------------------------------------- startup
 
-    /// <summary>Se suscribe al vivo y carga historia desde <paramref name="historyFrom"/>.</summary>
+    /// <summary>Subscribes to the live feed and loads history from <paramref name="historyFrom"/>.</summary>
     public void Start(DateTime historyFrom)
     {
         Stop();
@@ -89,12 +89,12 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         HistoryFrom = historyFrom;
         HistoryProgress = 0;
         HistoryError = null;
-        SetStatus(FeedStatus.Connecting, "Conectando…");
+        SetStatus(FeedStatus.Connecting, "Connecting…");
 
         if (Feed.IsLive && RecordingRoot != null && RecordLive)
             _recorder = new TickRecorder(RecordingRoot, Instrument);
 
-        // 1) vivo primero (se acumula mientras carga la historia)
+        // 1) live first (it accumulates while the history loads)
         try
         {
             _subscription = Feed.Subscribe(Instrument, this);
@@ -104,7 +104,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
             SetStatus(FeedStatus.Error, ex.Message);
         }
 
-        // 2) historia: archivos locales + los huecos que falten desde el feed
+        // 2) history: local files + whatever gaps are left, from the feed
         _ = Task.Run(async () =>
         {
             List<Trade> all;
@@ -113,7 +113,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
                 var from = historyFrom;
                 if (Feed is ISessionAwareFeed session)
                 {
-                    // mercado cerrado (noche, fin de semana): el mismo largo de historia, terminando en la última operación
+                    // market closed (night, weekend): the same length of history, ending at the last trade
                     try
                     {
                         var last = await session.LastTradeTimeAsync(Instrument, ct).ConfigureAwait(false);
@@ -126,7 +126,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
-                        // sin la hora de la última operación se carga como siempre
+                        // without the time of the last trade it loads as usual
                     }
                 }
 
@@ -147,27 +147,27 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     }
 
     /// <summary>
-    /// Hasta qué antigüedad se piden ticks al exchange cuando faltan. Lo anterior (y sin ticks en disco)
-    /// se completa con velas del exchange: así se cargan meses o años en segundos, como en cualquier plataforma.
+    /// How far back ticks are requested from the exchange when they are missing. Anything older (and with no ticks on disk)
+    /// is filled in with exchange candles: that way months or years load in seconds, as on any platform.
     /// </summary>
     public TimeSpan TickWindow { get; set; } = TimeSpan.FromHours(2);
 
-    /// <summary>Máximo de operaciones reales que se leen de disco por carga (lo que no entra se completa con velas).</summary>
+    /// <summary>Maximum real trades read from disk per load (what does not fit is filled in with candles).</summary>
     public static int MaxDiskTrades { get; set; } = 30_000_000;
 
-    /// <summary>Desde cuándo hay ticks reales (antes, la historia viene de velas del exchange).</summary>
+    /// <summary>Since when there are real ticks (before that, the history comes from exchange candles).</summary>
     public DateTime RealTicksFrom { get; private set; } = DateTime.MaxValue;
 
     /// <summary>
-    /// Lee lo grabado/descargado entre <paramref name="from"/> y <paramref name="to"/> y completa los huecos:
-    /// lo reciente con ticks del exchange (se graban para no volver a pedirlos) y lo viejo con velas.
+    /// Reads what was recorded/downloaded between <paramref name="from"/> and <paramref name="to"/> and fills the gaps:
+    /// the recent part with exchange ticks (they are recorded so they are not requested again) and the old part with candles.
     /// </summary>
     private async Task<List<Trade>> LoadRangeAsync(DateTime from, DateTime to, long maxIdExclusive, CancellationToken ct)
     {
         var real = new List<Trade>();
         if (RecordingRoot != null && Feed.IsLive)
         {
-            // de lo más nuevo a lo más viejo, hasta el tope de memoria
+            // from the newest to the oldest, up to the memory cap
             var chunks = new List<List<Trade>>();
             long count = 0;
             foreach (var day in EachDay(from, to).Reverse())
@@ -189,9 +189,9 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         var gaps = FindGaps(real, from, to, tailById: maxIdExclusive == long.MaxValue);
         if (gaps.Count == 0) return real;
 
-        // lo reciente en ticks; lo viejo en velas (si el feed las tiene)
+        // the recent part as ticks; the old part as candles (if the feed has them)
         var klineSource = Feed as IKlineHistory;
-        // los ticks cubren las últimas horas de mercado (con el mercado cerrado, antes de la última operación)
+        // the ticks cover the last market hours (with the market closed, before the last trade)
         DateTime tickCut = klineSource != null ? (_anchor ?? Feed.Now) - TickWindow : DateTime.MinValue;
         var tickGaps = new List<(DateTime From, DateTime To, long? FromId)>();
         var klineGaps = new List<(DateTime From, DateTime To)>();
@@ -231,7 +231,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         if (real.Count > 0) RealTicksFrom = real[0].Time < RealTicksFrom ? real[0].Time : RealTicksFrom;
         if (klineGaps.Count == 0 || klineSource == null) return real;
 
-        // velas solo donde no hay ticks reales
+        // candles only where there are no real ticks
         var windows = KlineHistory.Subtract(klineGaps, KlineHistory.Coverage(real));
         if (windows.Count == 0) return real;
         var kFrom = windows[0].From;
@@ -246,7 +246,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         return KlineHistory.MergeByTime(synthetic, real);
     }
 
-    /// <summary>Rangos que faltan en <paramref name="local"/> (ordenado) para cubrir [from, to).</summary>
+    /// <summary>Ranges missing in <paramref name="local"/> (sorted) to cover [from, to).</summary>
     public static List<(DateTime From, DateTime To, long? FromId)> FindGaps(IReadOnlyList<Trade> local, DateTime from, DateTime to, bool tailById)
     {
         var gaps = new List<(DateTime, DateTime, long?)>();
@@ -263,7 +263,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
                 gaps.Add((local[i - 1].Time, local[i].Time, null));
         }
 
-        // demasiados cortes (instrumento poco líquido): conviene pedir todo de una
+        // too many cuts (illiquid instrument): better to request everything at once
         if (gaps.Count > 20)
         {
             gaps.Clear();
@@ -277,15 +277,15 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     }
 
     /// <summary>
-    /// Trae historia más vieja hasta <paramref name="from"/> (si hace falta): primero de los archivos
-    /// grabados/descargados y lo que falte desde el feed. Al terminar se reconstruyen los gráficos.
+    /// Fetches older history up to <paramref name="from"/> (if needed): first from the recorded/downloaded
+    /// files and whatever is missing from the feed. When it finishes, the charts are rebuilt.
     /// </summary>
     public bool ExtendHistory(DateTime from)
     {
         if (from >= HistoryFrom || IsLoadingHistory || IsExtending) return false;
         var ct = _cts?.Token ?? CancellationToken.None;
         DateTime until = Trades.Count > 0 ? Trades.FirstTime : Feed.Now;
-        // si lo primero que hay es historia en velas (ids negativos), los ids no sirven para cortar
+        // if the first thing available is candle history (negative ids), the ids are no good for cutting
         long firstId = Trades.Count > 0 && Trades.GetId(0) > 0 ? Trades.GetId(0) : long.MaxValue;
         IsExtending = true;
         HistoryProgress = 0;
@@ -310,18 +310,18 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     private long _lastDataAt;
     private int _tradedSinceAnchor;
 
-    /// <summary>Cuándo llegó el último dato en vivo (operación o libro), en hora real UTC.</summary>
+    /// <summary>When the last live data arrived (trade or book), in real UTC time.</summary>
     public DateTime LastDataAt => new(Interlocked.Read(ref _lastDataAt), DateTimeKind.Utc);
 
-    /// <summary>Al abrir, el mercado estaba cerrado (la última operación era vieja) y todavía no volvió a operar.</summary>
+    /// <summary>On opening, the market was closed (the last trade was old) and it has not traded again yet.</summary>
     public bool MarketClosed => _anchor != null && Volatile.Read(ref _tradedSinceAnchor) == 0;
 
-    /// <summary>Última operación conocida cuando el mercado estaba cerrado al abrir.</summary>
+    /// <summary>Last known trade when the market was closed on opening.</summary>
     public DateTime? ClosedAt => _anchor;
 
     /// <summary>
-    /// Fuerza la reconexión al instante (por ejemplo al despertar la Mac). Los feeds que lo soportan cortan
-    /// la conexión y rellenan lo perdido; los demás se vuelven a suscribir.
+    /// Forces an immediate reconnect (for example when the Mac wakes up). The feeds that support it drop
+    /// the connection and backfill what was missed; the rest just resubscribe.
     /// </summary>
     public void Reconnect()
     {
@@ -359,7 +359,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
             yield return d;
     }
 
-    // ----------------------------------------------------------------- IMarketDataSink (hilos del feed)
+    // ----------------------------------------------------------------- IMarketDataSink (feed threads)
 
     void IMarketDataSink.OnTrades(Instrument instrument, IReadOnlyList<Trade> trades)
     {
@@ -375,7 +375,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         _latestDepth = update.Snapshot;
         if (update.IsFullRefresh) _depthFull = true;
         foreach (var c in update.Changes) _depthChanges.Enqueue(c);
-        // evita que la cola crezca sin límite si la UI está trabada
+        // keeps the queue from growing without limit if the UI is stuck
         while (_depthChanges.Count > 50_000) _depthChanges.TryDequeue(out _);
     }
 
@@ -388,9 +388,9 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         _statusDirty = true;
     }
 
-    // ----------------------------------------------------------------- hilo de UI
+    // ----------------------------------------------------------------- UI thread
 
-    /// <summary>Aplica lo recibido. Llamar periódicamente desde el hilo de UI.</summary>
+    /// <summary>Applies what was received. Call it periodically from the UI thread.</summary>
     public void Pump()
     {
         if (_statusDirty)
@@ -431,7 +431,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
 
             if (older != null)
             {
-                // reconstruye el almacén: historia vieja + lo que ya había
+                // rebuilds the store: old history + what was already there
                 if (older.Count > 0)
                 {
                     var current = new List<Trade>(Trades.Count);
@@ -471,8 +471,8 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         long lastTicks = Trades.Count > 0 ? Trades.GetTimeTicks(Trades.Count - 1) : long.MinValue;
         while (_incoming.TryDequeue(out var t))
         {
-            // ya estaba: id conocido y no más nuevo que lo último guardado. Si un id raro quedó adelante
-            // (archivo dañado), lo nuevo de verdad se reconoce por el tiempo y no se pierde el vivo.
+            // it was already there: known id and not newer than the last stored one. If an odd id ended up ahead
+            // (corrupt file), the genuinely new data is recognized by time and the live feed is not lost.
             if (skipKnown && t.Id <= lastId && t.Time.Ticks <= lastTicks) continue;
             Trades.Add(t);
             lastId = Math.Max(lastId, t.Id);
@@ -486,7 +486,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     public void Dispose() => Stop();
 }
 
-/// <summary>Graba ticks en disco en un hilo aparte (no traba la UI).</summary>
+/// <summary>Records ticks to disk on a separate thread (it does not block the UI).</summary>
 public sealed class TickRecorder : IDisposable
 {
     private readonly string _root;
@@ -501,14 +501,14 @@ public sealed class TickRecorder : IDisposable
     {
         _root = root;
         _instrument = instrument;
-        // un solo proceso graba cada instrumento: si otro Trading Hub ya lo graba, este solo lee
+        // a single process records each instrument: if another Trading Hub is already recording it, this one only reads
         _lock = TickFile.TryLock(root, instrument.FeedId, instrument.Symbol);
         if (_lock == null) return;
         _thread = new Thread(Run) { IsBackground = true, Name = "recorder-" + instrument.Symbol };
         _thread.Start();
     }
 
-    /// <summary>False si otro proceso ya graba este instrumento (no se escribe nada).</summary>
+    /// <summary>False if another process is already recording this instrument (nothing is written).</summary>
     public bool IsActive => _lock != null;
 
     public void WriteLive(IReadOnlyList<Trade> trades)
@@ -558,14 +558,14 @@ public sealed class TickRecorder : IDisposable
     }
 }
 
-/// <summary>Administra los <see cref="InstrumentData"/> abiertos (uno por feed+símbolo).</summary>
+/// <summary>Manages the open <see cref="InstrumentData"/> instances (one per feed+symbol).</summary>
 public sealed class MarketDataHub : IDisposable
 {
     private readonly Dictionary<string, InstrumentData> _items = new();
 
     public string? RecordingRoot { get; set; }
 
-    /// <summary>Si los instrumentos nuevos graban el vivo.</summary>
+    /// <summary>Whether new instruments record the live feed.</summary>
     public bool RecordLive { get; set; } = true;
 
     public IReadOnlyCollection<InstrumentData> Items => _items.Values;
@@ -573,7 +573,7 @@ public sealed class MarketDataHub : IDisposable
     public InstrumentData GetOrStart(IMarketDataFeed feed, Instrument instrument, TimeSpan history)
     {
         if (_items.TryGetValue(instrument.Key, out var d)) return d;
-        // ticks del exchange para lo reciente; lo más viejo se completa con velas (rápido aunque sean años)
+        // exchange ticks for the recent part; the older part is filled in with candles (fast even for years)
         var window = history < TimeSpan.FromHours(2) ? TimeSpan.FromHours(2) : history > TimeSpan.FromDays(1) ? TimeSpan.FromDays(1) : history;
         d = new InstrumentData(instrument, feed) { RecordingRoot = RecordingRoot, RecordLive = RecordLive, TickWindow = window };
         _items[instrument.Key] = d;
@@ -583,7 +583,7 @@ public sealed class MarketDataHub : IDisposable
 
     public void Release(InstrumentData data)
     {
-        // los datos se mantienen mientras la app esté abierta (cambiar de gráfico es instantáneo)
+        // the data is kept for as long as the app is open (switching charts is instant)
     }
 
     public void PumpAll()
@@ -591,7 +591,7 @@ public sealed class MarketDataHub : IDisposable
         foreach (var d in _items.Values) d.Pump();
     }
 
-    /// <summary>Reconecta todos los instrumentos en vivo (despertó la Mac, volvió internet...).</summary>
+    /// <summary>Reconnects every live instrument (the Mac woke up, the internet came back...).</summary>
     public void ReconnectAll()
     {
         foreach (var d in _items.Values) d.Reconnect();

@@ -2,39 +2,39 @@ using System.ComponentModel;
 
 namespace TradingHub.Strategies;
 
-/// <summary>Condición del mercado según la eficiencia de la tendencia de las últimas 24 horas.</summary>
+/// <summary>Market condition based on the trend efficiency of the last 24 hours.</summary>
 public enum MarketRegime
 {
-    [Description("Sin datos")] Unknown,
-    [Description("Rango")] Range,
-    [Description("Mixto")] Mixed,
-    [Description("Tendencia")] Trend,
+    [Description("No data")] Unknown,
+    [Description("Range")] Range,
+    [Description("Mixed")] Mixed,
+    [Description("Trend")] Trend,
 }
 
 /// <summary>
-/// En qué condiciones de mercado puede abrir operaciones una estrategia (filtro de contexto): cualquier combinación de
-/// rango, mixto, tendencia alcista y tendencia bajista. Los valores nuevos van siempre al final (se guardan como número).
+/// Under which market conditions a strategy can open trades (context filter): any combination of
+/// range, mixed, up trend and down trend. New values always go at the end (they are stored as a number).
 /// </summary>
 public enum RegimeFilter
 {
-    [Description("Todas")] All,
-    [Description("Solo en rango")] RangeOnly,
-    [Description("Sin tendencia (rango o mixto)")] NoTrend,
-    [Description("Solo en tendencia")] TrendOnly,
-    [Description("Sin rango (mixto o tendencia)")] NoRange,
-    [Description("Solo en tendencia alcista")] UpTrendOnly,
-    [Description("Solo en tendencia bajista")] DownTrendOnly,
-    [Description("Solo en mixto")] MixedOnly,
-    [Description("Rango o tendencia alcista")] RangeOrUpTrend,
-    [Description("Rango o tendencia bajista")] RangeOrDownTrend,
-    [Description("Mixto o tendencia alcista")] MixedOrUpTrend,
-    [Description("Mixto o tendencia bajista")] MixedOrDownTrend,
-    [Description("Todo menos tendencia bajista")] NoDownTrend,
-    [Description("Todo menos tendencia alcista")] NoUpTrend,
-    [Description("Rango o tendencia (sin mixto)")] NoMixed,
+    [Description("All")] All,
+    [Description("Range only")] RangeOnly,
+    [Description("No trend (range or mixed)")] NoTrend,
+    [Description("Trend only")] TrendOnly,
+    [Description("No range (mixed or trend)")] NoRange,
+    [Description("Up trend only")] UpTrendOnly,
+    [Description("Down trend only")] DownTrendOnly,
+    [Description("Mixed only")] MixedOnly,
+    [Description("Range or up trend")] RangeOrUpTrend,
+    [Description("Range or down trend")] RangeOrDownTrend,
+    [Description("Mixed or up trend")] MixedOrUpTrend,
+    [Description("Mixed or down trend")] MixedOrDownTrend,
+    [Description("Everything but down trend")] NoDownTrend,
+    [Description("Everything but up trend")] NoUpTrend,
+    [Description("Range or trend (no mixed)")] NoMixed,
 }
 
-/// <summary>Las cuatro condiciones de mercado, combinables.</summary>
+/// <summary>The four market conditions, combinable.</summary>
 [Flags]
 public enum RegimeSet
 {
@@ -47,65 +47,65 @@ public enum RegimeSet
 }
 
 /// <summary>
-/// Contexto del mercado para las estrategias y sus filtros, con las velas ya cerradas (sin mirar el futuro):
+/// Market context for the strategies and their filters, using closed candles only (no peeking at the future):
 /// <list type="bullet">
-/// <item>Tendencia: eficiencia de los cierres por hora de las últimas 24 horas, |movimiento neto| / recorrido (0 = rango
-/// puro, 1 = tendencia limpia; una caminata al azar da ~0,2). Rango hasta 0,15, tendencia desde 0,35.</item>
-/// <item>Dirección: si en esas 24 horas subió o bajó (una tendencia es alcista o bajista según eso).</item>
-/// <item>Volatilidad: desvío de los retornos por hora de esas 24 horas, en %.</item>
-/// <item>Percentil de volatilidad: dónde está esa volatilidad entre las de los últimos 30 días (0 = la más baja).</item>
+/// <item>Trend: efficiency of the hourly closes of the last 24 hours, |net move| / distance travelled (0 = pure
+/// range, 1 = clean trend; a random walk gives ~0.2). Range up to 0.15, trend from 0.35.</item>
+/// <item>Direction: whether it rose or fell over those 24 hours (a trend is up or down based on that).</item>
+/// <item>Volatility: standard deviation of the hourly returns of those 24 hours, in %.</item>
+/// <item>Volatility percentile: where that volatility sits among the last 30 days' (0 = the lowest).</item>
 /// </list>
-/// Con velas de una hora o más se usan las últimas 25 velas en su propia escala. Se actualiza vela a vela.
+/// With candles of an hour or more, the last 25 candles are used on their own scale. It updates candle by candle.
 /// </summary>
 public sealed class MarketContextTracker
 {
     public const double RangeLimit = 0.15, TrendLimit = 0.35;
 
-    /// <summary>Percentiles de volatilidad (del último mes) hasta el que es baja y desde el que es alta.</summary>
+    /// <summary>Volatility percentiles (of the last month) up to which it is low and from which it is high.</summary>
     public const double LowVolatility = 33, HighVolatility = 67;
     private const int RankHours = 30 * 24;
 
     private readonly bool _coarse;
-    private readonly List<decimal> _closes = new(); // cierres por hora (o por vela si son de una hora o más)
-    private readonly Queue<double> _history = new(); // volatilidad de 24 horas tomada una vez por hora (30 días)
+    private readonly List<decimal> _closes = new(); // hourly closes (or per candle if they are an hour or more)
+    private readonly Queue<double> _history = new(); // 24-hour volatility sampled once per hour (30 days)
     private long _hour = long.MinValue;
 
     public MarketContextTracker(bool coarse = false) => _coarse = coarse;
 
-    /// <summary>Eficiencia de la tendencia (null si todavía no hay 7 cierres).</summary>
+    /// <summary>Trend efficiency (null if there are not 7 closes yet).</summary>
     public double? Trend { get; private set; }
 
-    /// <summary>Hacia dónde se movió en esas 24 horas: 1 subió, -1 bajó, 0 quedó igual (null sin datos).</summary>
+    /// <summary>Which way it moved over those 24 hours: 1 up, -1 down, 0 flat (null with no data).</summary>
     public int? Direction { get; private set; }
 
-    /// <summary>Movimiento neto de esas 24 horas, en % (null sin datos).</summary>
+    /// <summary>Net move of those 24 hours, in % (null with no data).</summary>
     public double? Change { get; private set; }
 
-    /// <summary>Volatilidad de las últimas 24 horas en % (null si todavía no hay datos).</summary>
+    /// <summary>Volatility of the last 24 hours in % (null if there is no data yet).</summary>
     public double? Volatility { get; private set; }
 
-    /// <summary>Percentil de la volatilidad actual entre la de los últimos 30 días (null con menos de un día de historia).</summary>
+    /// <summary>Percentile of the current volatility among the last 30 days' (null with less than a day of history).</summary>
     public double? VolatilityRank { get; private set; }
 
     public MarketRegime Regime => Trend is not { } t ? MarketRegime.Unknown : t <= RangeLimit ? MarketRegime.Range : t >= TrendLimit ? MarketRegime.Trend : MarketRegime.Mixed;
 
-    /// <summary>«Tendencia alcista», «Rango», «Mixto»… para mostrar.</summary>
+    /// <summary>"Up trend", "Range", "Mixed"… for display.</summary>
     public string RegimeLabel => Label(Regime, Direction);
 
     public static string Label(MarketRegime regime, int? direction) => regime switch
     {
-        MarketRegime.Range => "Rango",
-        MarketRegime.Mixed => "Mixto",
-        MarketRegime.Trend => direction > 0 ? "Tendencia alcista" : direction < 0 ? "Tendencia bajista" : "Tendencia",
-        _ => "Sin datos",
+        MarketRegime.Range => "Range",
+        MarketRegime.Mixed => "Mixed",
+        MarketRegime.Trend => direction > 0 ? "Up trend" : direction < 0 ? "Down trend" : "Trend",
+        _ => "No data",
     };
 
-    /// <summary>Volatilidad baja (hasta el percentil 33 del último mes), normal o alta (desde el 67).</summary>
-    public static string VolatilityLabel(double? rank) => rank is not { } r ? "sin datos" : r <= LowVolatility ? "baja" : r >= HighVolatility ? "alta" : "normal";
+    /// <summary>Low volatility (up to the 33rd percentile of the last month), normal or high (from the 67th).</summary>
+    public static string VolatilityLabel(double? rank) => rank is not { } r ? "no data" : r <= LowVolatility ? "low" : r >= HighVolatility ? "high" : "normal";
 
     /// <summary>
-    /// Suma historia previa por hora (para arrancar en vivo con las 24 horas y el mes de volatilidad completos, como en un
-    /// backtest largo). Con velas de una hora o más se agrupa en velas de <paramref name="barPeriod"/>.
+    /// Adds earlier hourly history (to start live with the full 24 hours and month of volatility, as in a long
+    /// backtest). With candles of an hour or more it is grouped into <paramref name="barPeriod"/> candles.
     /// </summary>
     public void AddHistory(IEnumerable<(DateTime Time, decimal Close)> hourly, TimeSpan barPeriod)
     {
@@ -128,7 +128,7 @@ public sealed class MarketContextTracker
         if (bucket != long.MinValue) Add(new DateTime(bucket, DateTimeKind.Utc), close);
     }
 
-    /// <summary>Suma una vela cerrada.</summary>
+    /// <summary>Adds a closed candle.</summary>
     public void Add(DateTime time, decimal close)
     {
         if (_coarse)
@@ -142,7 +142,7 @@ public sealed class MarketContextTracker
         long hour = time.Ticks / TimeSpan.TicksPerHour;
         if (hour != _hour)
         {
-            // hora nueva: la anterior quedó cerrada (se guarda su volatilidad para el percentil)
+            // new hour: the previous one is now closed (its volatility is stored for the percentile)
             bool sample = _hour != long.MinValue;
             _closes.Add(close);
             _hour = hour;
@@ -151,7 +151,7 @@ public sealed class MarketContextTracker
         }
         else if (_closes.Count > 0)
         {
-            _closes[^1] = close; // la última vela de la hora es su cierre
+            _closes[^1] = close; // the hour's last candle is its close
             Recompute(sample: false);
         }
     }
@@ -202,7 +202,7 @@ public sealed class MarketContextTracker
         VolatilityRank = Math.Round(100.0 * below / _history.Count, 1);
     }
 
-    /// <summary>¿El filtro deja abrir una operación con este contexto? Sin datos para juzgar, no bloquea.</summary>
+    /// <summary>Does the filter allow opening a trade in this context? With no data to judge, it does not block.</summary>
     public bool Allows(RegimeFilter filter, double minRank, double maxRank)
     {
         bool regimeOk = Regime == MarketRegime.Unknown || RegimeAllows(filter, Regime, Direction);
@@ -210,14 +210,14 @@ public sealed class MarketContextTracker
         return regimeOk && volOk;
     }
 
-    /// <summary>¿El filtro de régimen deja entrar en esa condición de mercado (sin mirar la volatilidad)?</summary>
+    /// <summary>Does the regime filter allow entering in that market condition (ignoring volatility)?</summary>
     public static bool RegimeAllows(RegimeFilter filter, MarketRegime regime, int? direction)
     {
         var now = SetOf(regime, direction);
         return now == RegimeSet.None || (SetOf(filter) & now) != 0;
     }
 
-    /// <summary>Las condiciones en que deja entrar un filtro.</summary>
+    /// <summary>The conditions a filter allows entering in.</summary>
     public static RegimeSet SetOf(RegimeFilter filter) => filter switch
     {
         RegimeFilter.RangeOnly => RegimeSet.Range,
@@ -237,7 +237,7 @@ public sealed class MarketContextTracker
         _ => RegimeSet.All,
     };
 
-    /// <summary>El filtro que deja entrar justo en esas condiciones (sin ninguna, o con todas: sin filtro).</summary>
+    /// <summary>The filter that allows entering in exactly those conditions (with none, or with all of them: no filter).</summary>
     public static RegimeFilter FilterOf(RegimeSet set)
     {
         if (set == RegimeSet.None) return RegimeFilter.All;
@@ -247,7 +247,7 @@ public sealed class MarketContextTracker
         return RegimeFilter.All;
     }
 
-    /// <summary>La condición de un momento: rango, mixto o tendencia alcista o bajista (una tendencia sin dirección cuenta como las dos).</summary>
+    /// <summary>The condition of a moment: range, mixed or up or down trend (a trend with no direction counts as both).</summary>
     public static RegimeSet SetOf(MarketRegime regime, int? direction) => regime switch
     {
         MarketRegime.Range => RegimeSet.Range,
@@ -256,11 +256,11 @@ public sealed class MarketContextTracker
         _ => RegimeSet.None,
     };
 
-    /// <summary>La condición según la eficiencia de la tendencia y su dirección (las que guarda cada operación).</summary>
+    /// <summary>The condition based on the trend efficiency and its direction (the ones each trade stores).</summary>
     public static RegimeSet SetOf(double trend, int? direction) =>
         SetOf(trend <= RangeLimit ? MarketRegime.Range : trend >= TrendLimit ? MarketRegime.Trend : MarketRegime.Mixed, direction);
 
-    /// <summary>Junta dos series de cierres por hora (la segunda pisa a la primera en las horas que se repiten), en orden.</summary>
+    /// <summary>Merges two series of hourly closes (the second overrides the first on the hours that repeat), in order.</summary>
     public static List<(DateTime Time, decimal Close)> Merge(IEnumerable<(DateTime Time, decimal Close)>? first, IEnumerable<(DateTime Time, decimal Close)> second)
     {
         var map = new SortedDictionary<DateTime, decimal>();
@@ -271,7 +271,7 @@ public sealed class MarketContextTracker
         return map.Select(kv => (kv.Key, kv.Value)).ToList();
     }
 
-    /// <summary>Cierres por hora de unos datos (el último precio de cada hora), para darle historia al contexto.</summary>
+    /// <summary>Hourly closes of some data (the last price of each hour), to give the context some history.</summary>
     public static List<(DateTime Time, decimal Close)> HourlyCloses(TickData data)
     {
         var list = new List<(DateTime, decimal)>();
@@ -292,9 +292,9 @@ public sealed class MarketContextTracker
         return list;
     }
 
-    /// <summary>Texto corto del contexto: «tendencia alcista (0.42) · volatilidad percentil 28».</summary>
+    /// <summary>Short text of the context: "up trend (0.42) · volatility percentile 28".</summary>
     public string Describe() =>
-        Trend is not { } t ? "sin datos de contexto todavía"
+        Trend is not { } t ? "no context data yet"
         : $"{RegimeLabel.ToLowerInvariant()} ({t.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)})" +
-          (VolatilityRank is { } r ? $" · volatilidad percentil {r:0}" : "");
+          (VolatilityRank is { } r ? $" · volatility percentile {r:0}" : "");
 }

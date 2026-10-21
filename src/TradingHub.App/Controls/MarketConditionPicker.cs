@@ -7,17 +7,17 @@ using TradingHub.Strategies;
 namespace TradingHub.App.Controls;
 
 /// <summary>
-/// En qué condiciones de mercado abre operaciones una estrategia: rango, mixto, tendencia alcista o bajista (cualquier
-/// combinación) y con qué volatilidad (baja, normal o alta respecto del último mes). Es el filtro de contexto de la
-/// estrategia: se mide con las velas ya cerradas, igual en vivo que en un backtest, y las salidas siempre pasan.
+/// In which market conditions a strategy opens trades: range, mixed, uptrend or downtrend (any
+/// combination) and at which volatility (low, normal or high against the last month). It is the strategy's
+/// context filter: it is measured with closed candles only, the same live as in a backtest, and exits always go through.
 /// </summary>
 internal sealed class MarketConditionPicker : UserControl
 {
-    private readonly CheckBox _range = Box("Rango"), _mixed = Box("Mixto"), _up = Box("Tendencia alcista"), _down = Box("Tendencia bajista");
-    private readonly CheckBox _low = Box("Baja"), _normal = Box("Normal"), _high = Box("Alta");
+    private readonly CheckBox _range = Box("Range"), _mixed = Box("Mixed"), _up = Box("Up trend"), _down = Box("Down trend");
+    private readonly CheckBox _low = Box("Low"), _normal = Box("Normal"), _high = Box("High");
     private readonly TextBlock _summary = new() { FontWeight = FontWeight.SemiBold, FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _now = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, IsVisible = false };
-    private (int Min, int Max)? _custom; // un rango de percentiles que no son las tres franjas (por ejemplo, el de una variante)
+    private (int Min, int Max)? _custom; // a percentile range that is not one of the three bands (for example, a variant's)
     private bool _loading;
     private (MarketRegime Regime, int? Direction, double? Rank)? _context;
 
@@ -29,7 +29,7 @@ internal sealed class MarketConditionPicker : UserControl
             {
                 if (_loading) return;
                 _custom = null;
-                // la volatilidad va de corrido: baja y alta incluyen la normal
+                // volatility runs continuously: low and high include normal
                 if (_low.IsChecked == true && _high.IsChecked == true && _normal.IsChecked != true)
                 {
                     _loading = true;
@@ -46,15 +46,15 @@ internal sealed class MarketConditionPicker : UserControl
             Spacing = 8,
             Children =
             {
-                Label("Opera cuando el mercado está en"), regimes,
-                Label("Con volatilidad (comparada con la del último mes)"), vols,
+                Label("Trades when the market is in"), regimes,
+                Label("With volatility (compared with the last month's)"), vols,
                 _summary, _now,
             },
         };
         Load(RegimeFilter.All, 0, 100);
     }
 
-    /// <summary>Cambió lo elegido.</summary>
+    /// <summary>The selection changed.</summary>
     public event Action? Changed;
 
     private static CheckBox Box(string text) => new() { Content = text };
@@ -79,7 +79,7 @@ internal sealed class MarketConditionPicker : UserControl
         Changed_(raise: false);
     }
 
-    /// <summary>Los percentiles de las franjas tildadas (baja 0-33, normal 34-66, alta 67-100).</summary>
+    /// <summary>The percentiles of the ticked bands (low 0-33, normal 34-66, high 67-100).</summary>
     private (int Min, int Max) Bands()
     {
         bool low = _low.IsChecked == true, normal = _normal.IsChecked == true, high = _high.IsChecked == true;
@@ -92,10 +92,10 @@ internal sealed class MarketConditionPicker : UserControl
         (_range.IsChecked == true ? RegimeSet.Range : 0) | (_mixed.IsChecked == true ? RegimeSet.Mixed : 0) |
         (_up.IsChecked == true ? RegimeSet.UpTrend : 0) | (_down.IsChecked == true ? RegimeSet.DownTrend : 0);
 
-    /// <summary>Hay al menos una condición y una franja de volatilidad tildadas.</summary>
+    /// <summary>At least one condition and one volatility band are ticked.</summary>
     public bool IsValid => Set != RegimeSet.None && (_low.IsChecked == true || _normal.IsChecked == true || _high.IsChecked == true);
 
-    /// <summary>Lo elegido como los parámetros del filtro de contexto de la estrategia.</summary>
+    /// <summary>The selection as the strategy's context filter parameters.</summary>
     public (RegimeFilter Filter, int Min, int Max) Value
     {
         get
@@ -105,7 +105,7 @@ internal sealed class MarketConditionPicker : UserControl
         }
     }
 
-    /// <summary>Sin filtro: todas las condiciones y cualquier volatilidad.</summary>
+    /// <summary>No filter: every condition and any volatility.</summary>
     public bool IsAll => Value is (RegimeFilter.All, 0, 100);
 
     public bool Editable
@@ -116,34 +116,34 @@ internal sealed class MarketConditionPicker : UserControl
         }
     }
 
-    /// <summary>Cómo está el mercado ahora (lo que ve la estrategia): dice si con lo elegido abriría operaciones.</summary>
+    /// <summary>How the market is right now (what the strategy sees): it says whether the selection would open trades.</summary>
     public void SetContext(MarketRegime regime, int? direction, double? rank)
     {
         _context = (regime, direction, rank);
         Changed_(raise: false);
     }
 
-    /// <summary>Lo que se le dice a la estrategia y a vos: «solo en rango, volatilidad baja».</summary>
+    /// <summary>What is told to the strategy and to you: “range only, low volatility”.</summary>
     public string Describe()
     {
         var (f, min, max) = Value;
         string text = Robustness.DescribeFilter(f, min, max);
-        return text.Length == 0 ? "en cualquier condición de mercado" : text;
+        return text.Length == 0 ? "in any market condition" : text;
     }
 
     private void Changed_(bool raise = true)
     {
         if (_loading) return;
-        _summary.Text = IsValid ? $"Opera {Describe()}." : "Elegí al menos una condición y una volatilidad.";
+        _summary.Text = IsValid ? $"Trades {Describe()}." : "Pick at least one condition and one volatility.";
         _summary.Foreground = IsValid ? Ui.Text0 : Ui.Warn;
         if (_context is { } c && IsValid)
         {
             var (f, min, max) = Value;
             bool regimeOk = c.Regime == MarketRegime.Unknown || MarketContextTracker.RegimeAllows(f, c.Regime, c.Direction);
             bool volOk = c.Rank is not { } r || (r >= min && r <= max);
-            string now = c.Regime == MarketRegime.Unknown ? "todavía sin datos de contexto"
-                : MarketContextTracker.Label(c.Regime, c.Direction).ToLowerInvariant() + (c.Rank is { } rk ? $", volatilidad {MarketContextTracker.VolatilityLabel(rk)} (percentil {rk:0})" : "");
-            _now.Text = regimeOk && volOk ? $"Ahora hay {now}: con esto, opera." : $"Ahora hay {now}: con esto, no abriría operaciones nuevas (las que tenga abiertas las sigue gestionando).";
+            string now = c.Regime == MarketRegime.Unknown ? "no context data yet"
+                : MarketContextTracker.Label(c.Regime, c.Direction).ToLowerInvariant() + (c.Rank is { } rk ? $", {MarketContextTracker.VolatilityLabel(rk)} volatility (percentile {rk:0})" : "");
+            _now.Text = regimeOk && volOk ? $"Right now there is {now}: with this, it trades." : $"Right now there is {now}: with this, it would not open new trades (it keeps managing any it already has open).";
             _now.Foreground = regimeOk && volOk ? Ui.Up : Ui.Warn;
             _now.IsVisible = true;
         }

@@ -7,8 +7,8 @@ using TradingHub.App.Services;
 namespace TradingHub.App.Views;
 
 /// <summary>
-/// Chart Trader, DOM y cinta en ventanas aparte (flotantes): siguen al gráfico activo, recuerdan dónde estaban y al
-/// cerrar la ventana vuelven al panel derecho.
+/// Chart Trader, DOM and tape in separate (floating) windows: they follow the active chart, remember where they were and on
+/// closing the window they go back to the right panel.
 /// </summary>
 public sealed partial class TradingView
 {
@@ -18,13 +18,13 @@ public sealed partial class TradingView
 
     internal bool DomIsFloating => _panelWindows.ContainsKey("dom");
 
-    /// <summary>Hay alguna sección en su ventana (se actualiza aunque la ventana principal esté en otra sección).</summary>
+    /// <summary>Some section is in its own window (it refreshes even if the main window is on another section).</summary>
     private bool AnyPanelFloating => _panelWindows.Count > 0;
 
     private static string PanelName(string key) => key switch
     {
         "dom" => "DOM",
-        "tape" => "Cinta de operaciones",
+        "tape" => "Time and sales tape",
         _ => "Chart Trader",
     };
 
@@ -37,7 +37,7 @@ public sealed partial class TradingView
 
     private Button BuildDetachButton(string key)
     {
-        var b = Ui.IconButton(MaterialIconKind.OpenInNew, $"Sacar {Article(key)} a una ventana aparte", () =>
+        var b = Ui.IconButton(MaterialIconKind.OpenInNew, $"Move {Article(key)} to a separate window", () =>
         {
             if (_panelWindows.ContainsKey(key)) DockSection(key);
             else DetachSection(key);
@@ -46,17 +46,17 @@ public sealed partial class TradingView
         return b;
     }
 
-    private static string Article(string key) => key == "tape" ? "la cinta" : key == "dom" ? "el DOM" : "el Chart Trader";
+    private static string Article(string key) => key == "tape" ? "the tape" : key == "dom" ? "the DOM" : "the Chart Trader";
 
     private void UpdateDetachButton(string key)
     {
         if (!_detachButtons.TryGetValue(key, out var b)) return;
         bool floating = _panelWindows.ContainsKey(key);
         b.Content = Ui.Icon(floating ? MaterialIconKind.DockRight : MaterialIconKind.OpenInNew, 15);
-        ToolTip.SetTip(b, floating ? $"Volver a poner {Article(key)} en el panel derecho" : $"Sacar {Article(key)} a una ventana aparte");
+        ToolTip.SetTip(b, floating ? $"Put {Article(key)} back in the right panel" : $"Move {Article(key)} to a separate window");
     }
 
-    /// <summary>Dónde y de qué tamaño estaba la ventana de una sección (el DOM trae lo de la versión anterior).</summary>
+    /// <summary>Where and at what size a section's window was (the DOM carries the previous version's).</summary>
     private PanelWindowState WindowStateOf(string key)
     {
         var s = _svc.Settings;
@@ -68,7 +68,7 @@ public sealed partial class TradingView
         return st;
     }
 
-    /// <summary>Saca una sección a una ventana aparte (o la trae al frente si ya está afuera).</summary>
+    /// <summary>Pulls a section out into a separate window (or brings it to the front if it is already out).</summary>
     internal void DetachSection(string key)
     {
         var section = SectionOf(key);
@@ -121,7 +121,7 @@ public sealed partial class TradingView
         UpdateDetachButton(key);
         ApplyPanelVisibility();
         w.Show(owner);
-        _status($"{PanelName(key)} en una ventana aparte: sigue al gráfico activo y, al cerrar la ventana, vuelve al panel derecho.");
+        _status($"{PanelName(key)} in a separate window: it follows the active chart and, when the window closes, it returns to the right panel.");
     }
 
     private void SaveWindowBounds(string key, Window w)
@@ -134,7 +134,7 @@ public sealed partial class TradingView
         _svc.Settings.Save();
     }
 
-    /// <summary>Devuelve una sección al panel derecho.</summary>
+    /// <summary>Returns a section to the right panel.</summary>
     internal void DockSection(string key)
     {
         if (!_panelWindows.Remove(key, out var w)) return;
@@ -164,10 +164,10 @@ public sealed partial class TradingView
         foreach (var (key, w) in _panelWindows) w.Title = PanelTitle(key);
     }
 
-    /// <summary>Al abrir la app: las secciones que estaban afuera vuelven a su ventana.</summary>
+    /// <summary>On opening the app: the sections that were out go back to their window.</summary>
     private void RestorePanelWindows()
     {
-        // ahora cada gráfico tiene su Chart Trader: la primera vez se oculta el ticket general (vuelve desde Paneles)
+        // now each chart has its own Chart Trader: the first time the general ticket is hidden (it comes back from Panels)
         if (!_svc.Settings.ChartTraderIntroduced)
         {
             _svc.Settings.ChartTraderIntroduced = true;
@@ -184,7 +184,7 @@ public sealed partial class TradingView
             }
     }
 
-    /// <summary>Al cerrar la app: cierra las ventanas sin olvidar que estaban afuera.</summary>
+    /// <summary>On closing the app: it closes the windows without forgetting that they were out.</summary>
     private void ClosePanelWindowsForShutdown()
     {
         _closingAll = true;

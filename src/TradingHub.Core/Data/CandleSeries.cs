@@ -2,7 +2,7 @@ using TradingHub.Market;
 
 namespace TradingHub.Data;
 
-/// <summary>Resultado de agregar operaciones a una serie.</summary>
+/// <summary>Result of adding trades to a series.</summary>
 public readonly record struct AppendResult(int FirstChangedBar, int NewCandles)
 {
     public static readonly AppendResult None = new(-1, 0);
@@ -10,18 +10,18 @@ public readonly record struct AppendResult(int FirstChangedBar, int NewCandles)
 }
 
 /// <summary>
-/// Serie de velas con footprint construida a partir de un <see cref="TradeStore"/>.
-/// Soporta velas de tiempo, ticks, volumen, rango, delta y renko.
+/// Candle series with footprint built from a <see cref="TradeStore"/>.
+/// It supports time, tick, volume, range, delta and renko candles.
 /// </summary>
 public sealed class CandleSeries
 {
     private readonly List<Candle> _candles = new();
-    private int _processed; // cantidad de operaciones del store ya procesadas
+    private int _processed; // number of store trades already processed
 
-    // estado para períodos no temporales
-    private long _bucketEnd;           // fin (exclusivo) del bucket temporal actual, en ticks de DateTime
+    // state for non-time periods
+    private long _bucketEnd;           // end (exclusive) of the current time bucket, in DateTime ticks
     private decimal _volumeInCandle;
-    private long _renkoBase;           // cierre del último ladrillo (ticks)
+    private long _renkoBase;           // close of the last brick (ticks)
     private int _renkoDir;
 
     public CandleSeries(Instrument instrument, ChartPeriod period, int priceStep = 1, SessionSettings? session = null)
@@ -35,12 +35,12 @@ public sealed class CandleSeries
     public Instrument Instrument { get; }
     public ChartPeriod Period { get; }
 
-    /// <summary>Ticks del instrumento por fila del footprint.</summary>
+    /// <summary>Instrument ticks per footprint row.</summary>
     public int PriceStep { get; }
 
     public SessionSettings Session { get; }
 
-    /// <summary>Tamaño de fila en precio (tick efectivo).</summary>
+    /// <summary>Row size in price (effective tick).</summary>
     public decimal RowSize => Instrument.TickSize * PriceStep;
 
     public int Count => _candles.Count;
@@ -48,19 +48,19 @@ public sealed class CandleSeries
     public Candle? Last => _candles.Count > 0 ? _candles[^1] : null;
     public IReadOnlyList<Candle> Candles => _candles;
 
-    /// <summary>Fila de un precio en ticks (división entera hacia abajo).</summary>
+    /// <summary>Row of a price in ticks (integer division rounding down).</summary>
     public long RowOf(long priceTicks) => FloorDiv(priceTicks, PriceStep);
 
-    /// <summary>Precio (límite inferior) de una fila.</summary>
+    /// <summary>Price (lower bound) of a row.</summary>
     public decimal RowPrice(long row) => row * PriceStep * Instrument.TickSize;
 
     /// <summary>
-    /// Centro visual de una fila: la fila cubre los ticks [row*paso, row*paso+paso-1], así que su centro
-    /// es (row*paso + (paso-1)/2) ticks. Con paso 1 coincide con el precio de la fila.
+    /// Visual center of a row: the row covers the ticks [row*step, row*step+step-1], so its center
+    /// is (row*step + (step-1)/2) ticks. With step 1 it matches the row's price.
     /// </summary>
     public decimal RowCenter(long row) => (row * PriceStep + (PriceStep - 1) / 2m) * Instrument.TickSize;
 
-    /// <summary>True si el precio cae justo en el límite inferior de una fila (precio de nivel).</summary>
+    /// <summary>True if the price falls exactly on a row's lower bound (level price).</summary>
     public bool IsRowPrice(decimal price) => RowSize > 0 && price % RowSize == 0;
 
     public long PriceToRow(decimal price) => RowOf(Instrument.ToTicks(price));
@@ -84,14 +84,14 @@ public sealed class CandleSeries
         _renkoDir = 0;
     }
 
-    /// <summary>Reconstruye todo desde el almacén.</summary>
+    /// <summary>Rebuilds everything from the store.</summary>
     public void Rebuild(TradeStore store)
     {
         Clear();
         Append(store);
     }
 
-    /// <summary>Procesa las operaciones nuevas del almacén.</summary>
+    /// <summary>Processes the store's new trades.</summary>
     public AppendResult Append(TradeStore store)
     {
         if (_processed >= store.Count) return AppendResult.None;
@@ -116,7 +116,7 @@ public sealed class CandleSeries
         decimal volume = store.GetVolume(i);
         var side = store.GetSide(i);
         long row = RowOf(price);
-        bool syn = store.GetId(i) < 0; // operación armada desde velas del exchange
+        bool syn = store.GetId(i) < 0; // trade built from exchange candles
 
         switch (Period.Type)
         {
@@ -135,7 +135,7 @@ public sealed class CandleSeries
                 }
                 else if (timeTicks < _candles[^1].Time.Ticks)
                 {
-                    // operación más vieja que la vela actual (datos fuera de orden): no se mete en la vela que no es
+                    // trade older than the current candle (out-of-order data): it does not go into the wrong candle
                     break;
                 }
 
@@ -231,7 +231,7 @@ public sealed class CandleSeries
         _candles.Add(new Candle { Time = time, LastTime = time });
     }
 
-    /// <summary>Calcula el inicio y fin (ticks de DateTime UTC) del bucket temporal que contiene t.</summary>
+    /// <summary>Computes the start and end (UTC DateTime ticks) of the time bucket containing t.</summary>
     public (long Start, long End) TimeBucket(long t)
     {
         long n = Math.Max(1, (long)Period.Value);
@@ -258,7 +258,7 @@ public sealed class CandleSeries
             case PeriodType.Days:
             {
                 var date = Session.SessionDate(new DateTime(t, DateTimeKind.Utc));
-                // agrupa de a n días desde una fecha ancla fija
+                // groups in batches of n days from a fixed anchor date
                 int dayNumber = date.DayNumber;
                 int startDay = dayNumber - (int)(dayNumber % n);
                 var startDate = DateOnly.FromDayNumber(startDay);
@@ -286,7 +286,7 @@ public sealed class CandleSeries
         }
     }
 
-    /// <summary>Índice de la vela que contiene un instante (o la anterior más cercana). -1 si no hay.</summary>
+    /// <summary>Index of the candle containing an instant (or the nearest earlier one). -1 if there is none.</summary>
     public int FindBar(DateTime utc)
     {
         int lo = 0, hi = _candles.Count - 1, ans = -1;
@@ -305,7 +305,7 @@ public sealed class CandleSeries
     }
 
     /// <summary>
-    /// Sugiere un paso de fila (ticks por fila) para que una vela típica tenga ~<paramref name="targetRows"/> filas.
+    /// Suggests a row step (ticks per row) so a typical candle has ~<paramref name="targetRows"/> rows.
     /// </summary>
     public static int SuggestPriceStep(TradeStore store, Instrument instrument, ChartPeriod period, int targetRows = 18)
     {

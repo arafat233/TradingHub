@@ -4,12 +4,12 @@ using System.Runtime.InteropServices;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Modo sin dormir. Mientras haya estrategias en vivo o agentes de Claude trabajando, la Mac no se duerme por
-/// inactividad: una aserción de energía de macOS (como hace una app de video), sin contraseña y se suelta sola cuando no
-/// hay nada corriendo. Con la tapa cerrada macOS duerme igual; para seguir así hace falta «seguir con la tapa cerrada»:
-/// pide tu contraseña de administrador una vez por sesión de Trading Hub y deja la Mac sin dormir (pmset disablesleep) solo
-/// mientras Trading Hub esté abierta. Se deshace solo al cerrar Trading Hub, aunque se cierre de golpe, y opcionalmente solo con el
-/// cargador conectado.
+/// No-sleep mode. While there are live strategies or Claude agents working, the Mac does not go to sleep from
+/// inactivity: a macOS power assertion (like a video app does), with no password, released on its own when there
+/// is nothing running. With the lid closed macOS sleeps anyway; to keep going like that you need "keep going with the lid closed":
+/// it asks for your administrator password once per Trading Hub session and keeps the Mac from sleeping (pmset disablesleep) only
+/// while Trading Hub is open. It is undone on its own when Trading Hub closes, even if it is killed, and optionally only on the
+/// charger connected.
 /// </summary>
 internal sealed class SleepGuard : IDisposable
 {
@@ -35,35 +35,35 @@ internal sealed class SleepGuard : IDisposable
     private Process? _helper;
     private DateTime _lastLidCheck;
 
-    /// <summary>Sobre qué carpeta se arma el aviso para el ayudante (existe mientras la tapa cerrada tenga que funcionar).</summary>
+    /// <summary>Which folder the flag for the helper is built on (it exists while the lid-closed mode has to work).</summary>
     public string FlagDirectory { get; set; } = AppPaths.Root;
 
-    /// <summary>Para las pruebas: en vez de pedir permiso y correr el ayudante, guarda el AppleScript que correría.</summary>
+    /// <summary>For the tests: instead of asking for permission and running the helper, it stores the AppleScript it would run.</summary>
     public Func<string, Process?>? RunAdminScript { get; set; }
 
-    /// <summary>Hay una aserción activa: la Mac no se duerme por inactividad.</summary>
+    /// <summary>There is an active assertion: the Mac does not sleep from inactivity.</summary>
     public bool Awake => _held;
 
-    /// <summary>Por qué está despierta (o null).</summary>
+    /// <summary>Why it is awake (or null).</summary>
     public string? Reason { get; private set; }
 
-    /// <summary>El ayudante de la tapa cerrada está corriendo (ya se dio el permiso).</summary>
+    /// <summary>The lid-closed helper is running (permission has already been given).</summary>
     public bool LidHelperRunning => _helper is { HasExited: false } || (RunAdminScript != null && File.Exists(Flag));
 
-    /// <summary>El ayudante no arrancó (por ejemplo, cancelaste el permiso).</summary>
+    /// <summary>The helper did not start (for example, you cancelled the permission prompt).</summary>
     public string? LidError { get; private set; }
 
-    private string Flag => Path.Combine(FlagDirectory, "tapa-cerrada.activo");
-    private string AcOnlyFlag => Path.Combine(FlagDirectory, "tapa-cerrada.solo-con-cargador");
+    private string Flag => Path.Combine(FlagDirectory, "lid-closed.active");
+    private string AcOnlyFlag => Path.Combine(FlagDirectory, "lid-closed.only-on-charger");
 
     /// <summary>
-    /// En herramientas y pruebas (datos en otra carpeta) no se toca la energía de la Mac ni se pide ningún permiso,
-    /// salvo con un ayudante de mentira (<see cref="RunAdminScript"/>).
+    /// In tools and tests (data in another folder) the Mac's power settings are not touched and no permission is asked for,
+    /// except with a fake helper (<see cref="RunAdminScript"/>).
     /// </summary>
     private static readonly bool Sandboxed =
         Environment.GetEnvironmentVariable("TRADINGHUB_DATA_DIR") is { Length: > 0 } || Environment.GetEnvironmentVariable("TRADINGHUB_SLEEP_GUARD") == "off";
 
-    /// <summary>Lo llama la app cada pocos segundos con lo que está corriendo.</summary>
+    /// <summary>The app calls it every few seconds with whatever is running.</summary>
     public void Update(bool keepAwake, bool lidClosed, bool onlyOnPower, string? reason)
     {
         if (Sandboxed && RunAdminScript == null) return;
@@ -72,7 +72,7 @@ internal sealed class SleepGuard : IDisposable
         else if (!needed && _held) Release();
         Reason = needed ? reason : null;
 
-        // tapa cerrada: se arranca recién cuando hay algo que lo necesita y se mantiene mientras esté activado
+        // lid closed: it only starts once there is something that needs it and is kept while it stays enabled
         try
         {
             if (onlyOnPower) File.WriteAllText(AcOnlyFlag, "1");
@@ -80,7 +80,7 @@ internal sealed class SleepGuard : IDisposable
         }
         catch
         {
-            // sin carpeta: se reintenta
+            // no folder: it is retried
         }
 
         if (lidClosed && needed && !LidHelperRunning && (DateTime.UtcNow - _lastLidCheck).TotalSeconds > 30) StartLidHelper();
@@ -92,7 +92,7 @@ internal sealed class SleepGuard : IDisposable
         if (!OperatingSystem.IsMacOS()) return;
         if (Sandboxed)
         {
-            _held = true; // en pruebas: se simula
+            _held = true; // in tests: it is simulated
             return;
         }
 
@@ -136,9 +136,9 @@ internal sealed class SleepGuard : IDisposable
     }
 
     /// <summary>
-    /// El ayudante con permisos de administrador (macOS te pide la contraseña): mientras exista el aviso y Trading Hub esté
-    /// abierta, la Mac no se duerme al cerrar la tapa (si se eligió, solo con el cargador). Al terminar deja todo como estaba.
-    /// No ejecuta nada de archivos: solo mira si existen.
+    /// The helper with administrator permissions (macOS asks you for the password): while the flag exists and Trading Hub is
+    /// open, the Mac does not sleep when the lid is closed (if chosen, only on the charger). When it finishes it leaves everything as it was.
+    /// It executes nothing from files: it only checks whether they exist.
     /// </summary>
     internal string BuildScript(int pid)
     {
@@ -150,7 +150,7 @@ internal sealed class SleepGuard : IDisposable
             "if [ \"$want\" != \"$cur\" ]; then /usr/bin/pmset -a disablesleep $want; cur=$want; fi; " +
             "sleep 5; done; /usr/bin/pmset -a disablesleep 0";
         string escaped = sh.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        return $"do shell script \"{escaped}\" with prompt \"Trading Hub necesita tu permiso para que la Mac siga funcionando con la tapa cerrada mientras corren tus estrategias o los agentes. Se deshace solo al cerrar Trading Hub.\" with administrator privileges";
+        return $"do shell script \"{escaped}\" with prompt \"Trading Hub needs your permission to keep the Mac running with the lid closed while your strategies or agents are running. It is undone on its own when Trading Hub closes.\" with administrator privileges";
     }
 
     private void StartLidHelper()
@@ -176,8 +176,8 @@ internal sealed class SleepGuard : IDisposable
             p.EnableRaisingEvents = true;
             p.Exited += (_, _) =>
             {
-                // terminó: o cancelaste el permiso (código distinto de 0) o se apagó el modo
-                if (p.ExitCode != 0) LidError = "No se activó: hace falta tu permiso de administrador.";
+                // finished: either you cancelled the permission prompt (exit code other than 0) or the mode was switched off
+                if (p.ExitCode != 0) LidError = "It was not enabled: your administrator permission is required.";
             };
         }
         catch (Exception ex)
@@ -191,7 +191,7 @@ internal sealed class SleepGuard : IDisposable
     {
         try
         {
-            if (File.Exists(Flag)) File.Delete(Flag); // el ayudante lo ve en ≤ 5 s y deja la Mac como estaba
+            if (File.Exists(Flag)) File.Delete(Flag); // the helper sees it within 5 s and leaves the Mac as it was
         }
         catch (Exception ex)
         {
@@ -201,7 +201,7 @@ internal sealed class SleepGuard : IDisposable
         _helper = null;
     }
 
-    /// <summary>¿macOS tiene el «no dormir» puesto ahora? (lo puede leer cualquiera)</summary>
+    /// <summary>Does macOS have "do not sleep" set right now? (anyone can read it)</summary>
     public static bool SystemSleepDisabled()
     {
         try

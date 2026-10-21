@@ -5,7 +5,7 @@ namespace TradingHub.Tests;
 public class BinanceSignatureTests
 {
     [Fact]
-    public void Firma_coincide_con_el_ejemplo_de_la_documentacion_de_Binance()
+    public void The_signature_matches_the_example_in_Binances_documentation()
     {
         const string secret = "NhqPtmdSJYdKjVHjA7PZj4Mge3R5YNiP1e3UZjInClVN65XAbvqqM6A7H5fATj0j";
         const string query = "symbol=LTCBTC&side=BUY&type=LIMIT&timeInForce=GTC&quantity=1&price=0.1&recvWindow=5000&timestamp=1499827319559";

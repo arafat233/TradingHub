@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Porta los indicadores públicos de ATAS (repo oficial AtasPlatform/Indicators, carpeta Technical)
-a la API de Trading Hub. Solo adapta los namespaces: el código queda igual.
+Ports the public ATAS indicators (official AtasPlatform/Indicators repo, Technical folder)
+to the Trading Hub API. It only adapts the namespaces: the code stays the same.
 
-Uso:
-    python3 tools/port_atas.py [ruta_al_repo_ATAS] [carpeta_destino]
+Usage:
+    python3 tools/port_atas.py [path_to_ATAS_repo] [destination_folder]
 
-Por defecto: third_party/ATAS-Indicators -> src/TradingHub.Indicators.Technical/Atas
+By default: third_party/ATAS-Indicators -> src/TradingHub.Indicators.Technical/Atas
 
-Para bajar el repositorio la primera vez:
+To download the repository the first time:
     git clone https://github.com/AtasPlatform/Indicators.git third_party/ATAS-Indicators
 
-Para actualizar cuando ATAS publique cambios:
+To update it when ATAS publishes changes:
     git -C third_party/ATAS-Indicators pull && python3 tools/port_atas.py
 """
 import os
@@ -23,14 +23,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "third_party", "ATAS-Indicators")
 DST = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "src", "TradingHub.Indicators.Technical", "Atas")
 
-# Carpetas/archivos que dependen de partes internas de ATAS (editores WPF/Avalonia propios,
-# heatmap y DOM v3 que usan clases internas de su plataforma).
+# Folders/files that depend on ATAS internals (their own WPF/Avalonia editors,
+# heatmap and DOM v3, which use internal classes of their platform).
 EXCLUDE_DIRS = {"Editors", "Properties", "obj", "bin", "Heatmap", "DomV3"}
 EXCLUDE_SUFFIXES = (".Windows.cs", ".xaml.cs")
-# TRADINGHUB_PORT_EXCLUDE=archivo1.cs,archivo2.cs deja afuera los que no quieras portar.
+# TRADINGHUB_PORT_EXCLUDE=file1.cs,file2.cs leaves out the ones you don't want to port.
 EXCLUDE_FILES = set(os.environ.get("TRADINGHUB_PORT_EXCLUDE", "").split(",")) - {""}
 
-# Orden importa: primero los namespaces más largos.
+# Order matters: the longest namespaces first.
 MAP = [
     (r"\bATAS\.Indicators\.Technical\b", "TradingHub.Indicators.Technical"),
     (r"\bATAS\.Indicators\.Drawing\b", "TradingHub.Indicators.Drawing"),
@@ -51,27 +51,27 @@ MAP = [
 ]
 
 HEADER = (
-    "// Portado automáticamente desde el repositorio público de ATAS (github.com/AtasPlatform/Indicators)\n"
-    "// por tools/port_atas.py. Uso personal: el código es de ATAS, respetá su licencia.\n"
+    "// Ported automatically from the public ATAS repository (github.com/AtasPlatform/Indicators)\n"
+    "// by tools/port_atas.py. Personal use: the code belongs to ATAS, respect their license.\n"
 )
 
 
-# Arreglos sobre el código de ATAS ya portado (se aplican si el original no cambió; si cambió, se avisa).
-# Valuation es una clase de TradingHub.Trading, no un namespace: su «using» no compila.
+# Fixes applied to the already ported ATAS code (they apply if the original did not change; if it did, it warns).
+# Valuation is a class in TradingHub.Trading, not a namespace: its "using" does not compile.
 PATCHES = [
     ("Volume.cs", "using TradingHub.Trading.Valuation;\n", ""),
     ("OpenInterest.cs", "\tusing TradingHub.Trading.Valuation;\n", ""),
     ("OrderFlow.cs", "\tusing TradingHub.Trading.Valuation;\n", ""),
-    # sin volatilidad (ATR = 0) no hay movimiento direccional que medir: sin esto divide por cero
+    # with no volatility (ATR = 0) there is no directional movement to measure: without this it divides by zero
     ("DmIndex.cs",
      "\t\t\t_upSeries[bar] = smoothedUp / _atr[bar] * 100m;\n\t\t\t_downSeries[bar] = smoothedDown / _atr[bar] * 100m;\n",
-     "\t\t\t// sin volatilidad (ATR = 0) no hay movimiento direccional que medir\n"
+     "\t\t\t// with no volatility (ATR = 0) there is no directional movement to measure\n"
      "\t\t\t_upSeries[bar] = _atr[bar] == 0 ? 0 : smoothedUp / _atr[bar] * 100m;\n"
      "\t\t\t_downSeries[bar] = _atr[bar] == 0 ? 0 : smoothedDown / _atr[bar] * 100m;\n"),
-    # los rectángulos grises con el pincel propio de Trading Hub (Brushes.Gray no se dibuja bien acá)
+    # the grey rectangles with Trading Hub's own brush (Brushes.Gray does not draw properly here)
     ("MarginZones.cs", "CrossPens.Transparent, Brushes.Gray)", "CrossPens.Transparent, new TradingHub.Common.UniversalSolidBrush(System.Drawing.Color.Gray))"),
-    # DynamicLevelsChannel suma el volumen de cada precio recorriendo toda la lista una y otra vez: con un diccionario
-    # armado una sola vez da lo mismo, mucho más rápido
+    # DynamicLevelsChannel sums each price's volume by walking the whole list again and again: a dictionary
+    # built once gives the same result, much faster
     ("DynamicLevelsChannel.cs", "            var low = _volumeGroup.Min(x => x.Price);\n",
      "            var low = _volumeGroup.Min(x => x.Price);\n"
      "            var volumeAt = new Dictionary<decimal, decimal>();\n"
@@ -99,14 +99,14 @@ def patch(name: str, text: str) -> str:
         if old in text:
             text = text.replace(old, new)
         else:
-            print(f"aviso: no apliqué un arreglo de {name} (el original de ATAS cambió)")
+            print(f"warning: a fix for {name} was not applied (the ATAS original changed)")
     return text
 
 
 def main():
     tech = os.path.join(SRC, "Technical")
     if not os.path.isdir(tech):
-        sys.exit(f"No encuentro {tech}")
+        sys.exit(f"Cannot find {tech}")
     if os.path.isdir(DST):
         shutil.rmtree(DST)
     count = 0
@@ -125,7 +125,7 @@ def main():
             with open(out, "w", encoding="utf-8") as f:
                 f.write(HEADER + patch(fn, port_text(text)))
             count += 1
-    print(f"Portados {count} archivos a {DST}")
+    print(f"Ported {count} files to {DST}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
-// Segunda parte de la compatibilidad con la API de ATAS: utilidades y tipos estáticos que usan
-// sus indicadores públicos (colecciones, colores, monedas, lápices predefinidos…).
+// Second part of the ATAS API compatibility: utilities and static types that
+// its public indicators use (collections, colors, currencies, predefined pens…).
 
 using System.ComponentModel.DataAnnotations;
 using System.Drawing;
@@ -14,26 +14,26 @@ using TradingHub.Trading;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Ajustes globales de la plataforma que consultan los indicadores.</summary>
+    /// <summary>Global platform settings the indicators query.</summary>
     public static class PlatformSettings
     {
-        /// <summary>Porcentaje del área de valor.</summary>
+        /// <summary>Value area percentage.</summary>
         public static int ValueAreaPercent { get; set; } = 70;
 
-        /// <summary>Paso (en filas) al expandir el área de valor.</summary>
+        /// <summary>Step (in rows) when expanding the value area.</summary>
         public static int ValueAreaStep { get; set; } = 1;
 
-        /// <summary>Demora entre recálculos del área de valor (ms).</summary>
+        /// <summary>Delay between value area recalculations (ms).</summary>
         public static int ValueAreaUpdateDelayMs { get; set; } = 500;
     }
 
-    /// <summary>Colores de mapa de calor por porcentaje (0–100).</summary>
+    /// <summary>Heat map colors by percentage (0-100).</summary>
     public static class HeatmapExtensions
     {
         public static Color GetColor(HeatmapTypes type, int rate) => HeatmapColors.GetColor(type, Math.Clamp(rate, 0, 100) / 100.0);
     }
 
-    /// <summary>Formato de valores en dinero.</summary>
+    /// <summary>Format for money values.</summary>
     public static class MoneyCurrencies
     {
         public static string Symbol(MoneyCurrency? currency) => currency switch
@@ -53,7 +53,7 @@ namespace TradingHub.Indicators
             Symbol(currency) + VolumeFormat.Compact(value, 1);
     }
 
-    /// <summary>Utilidades de colecciones, enums y colores con los nombres de ATAS.</summary>
+    /// <summary>Collection, enum and color utilities with ATAS's names.</summary>
     public static class AtasCompatExtensions
     {
         public static TValue GetOrAdd<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, Func<TKey, TValue> factory)
@@ -85,7 +85,7 @@ namespace TradingHub.Indicators
             foreach (var item in items.ToList()) action(item);
         }
 
-        /// <summary>Nombre visible de un valor de enumeración ([Display(Name)] o el nombre).</summary>
+        /// <summary>Display name of an enumeration value ([Display(Name)] or the name).</summary>
         public static string GetDisplayName(this Enum value)
         {
             var field = value.GetType().GetField(value.ToString());
@@ -100,7 +100,7 @@ namespace TradingHub.Indicators
             }
         }
 
-        /// <summary>Aplica transparencia (0 = opaco, 1 = invisible).</summary>
+        /// <summary>Applies transparency (0 = opaque, 1 = invisible).</summary>
         public static Color SetTransparency(this Color color, decimal transparency) =>
             Color.FromArgb((int)Math.Round(255 * (1 - Math.Clamp(transparency, 0m, 1m))), color);
 
@@ -124,7 +124,7 @@ namespace TradingHub.Indicators
 
         public static UniversalPen ToPen(this RenderPen pen) => new(pen.Color, pen.Width, pen.DashStyle);
 
-        /// <summary>Ejecuta una función sobre la lista con el candado tomado.</summary>
+        /// <summary>Runs a function over the list with the lock held.</summary>
         public static TResult SyncGet<T, TArg, TResult>(this SyncList<T> list, Func<List<T>, TArg, TResult> func, TArg arg)
         {
             lock (list.SyncRoot) return func(list, arg);
@@ -134,8 +134,8 @@ namespace TradingHub.Indicators
 
 namespace TradingHub.Indicators.Drawing
 {
-    /// <summary>Colores por defecto de la plataforma.</summary>
-    /// <summary>Colores por defecto de la plataforma (los nombres estándar).</summary>
+    /// <summary>Default platform colors.</summary>
+    /// <summary>Default platform colors (the standard names).</summary>
     public static class DefaultColors
     {
         public static Color Black { get; } = Color.Black;
@@ -187,7 +187,7 @@ namespace TradingHub.Indicators.Drawing
 
 namespace TradingHub.Rendering.Tools
 {
-    /// <summary>Lápices predefinidos.</summary>
+    /// <summary>Predefined pens.</summary>
     public static class RenderPens
     {
         public static RenderPen Black { get; } = new(Color.Black);

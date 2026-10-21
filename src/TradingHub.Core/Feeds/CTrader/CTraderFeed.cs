@@ -6,10 +6,10 @@ using TradingHub.Market;
 namespace TradingHub.Feeds.CTrader;
 
 /// <summary>
-/// Datos de cualquier broker con cTrader (IC Markets, Pepperstone, FxPro, Fusion…) por su Open API gratuita: CFDs de
-/// índices (US100/NAS100, US500, GER40…), forex, metales y más. Precios en vivo, historia tick a tick (bid) y velas.
-/// Las cotizaciones no son operaciones: cada tick cuenta como una operación de volumen 1 al precio bid y el lado sale
-/// de si subió o bajó (igual que los archivos importados).
+/// Data from any cTrader broker (IC Markets, Pepperstone, FxPro, Fusion…) through its free Open API: index CFDs
+/// (US100/NAS100, US500, GER40…), forex, metals and more. Live prices, tick-by-tick history (bid) and candles.
+/// The quotes are not trades: each tick counts as one trade of volume 1 at the bid price and the side comes from
+/// whether it went up or down (same as the imported files).
 /// </summary>
 public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 {
@@ -29,7 +29,7 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
         {
             foreach (var list in _sinks.Values)
                 foreach (var (inst, sink, _) in list.ToList())
-                    sink.OnStatus(inst, up ? FeedStatus.Connected : FeedStatus.Reconnecting, up ? "cTrader conectado" : $"Reconectando ({why})");
+                    sink.OnStatus(inst, up ? FeedStatus.Connected : FeedStatus.Reconnecting, up ? "cTrader connected" : $"Reconnecting ({why})");
         };
     }
 
@@ -38,7 +38,7 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
     public string DisplayName => "cTrader";
     public bool SupportsHistory => true;
     public bool IsLive => true;
-    public string HistoryNote => "ticks (bid) del broker por la Open API de cTrader";
+    public string HistoryNote => "the broker's (bid) ticks over the cTrader Open API";
 
     public async Task<IReadOnlyList<Instrument>> GetInstrumentsAsync(CancellationToken ct)
     {
@@ -70,13 +70,13 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
     {
         await _session.EnsureConnectedAsync(ct).ConfigureAwait(false);
         var s = _session.Symbols.FirstOrDefault(x => x.Name.Equals(instrument.Symbol, StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidOperationException($"{instrument.Symbol} no está en tu cuenta de cTrader.");
+                ?? throw new InvalidOperationException($"{instrument.Symbol} is not on your cTrader account.");
         return s.Id;
     }
 
     private static long Ms(DateTime utc) => new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 
-    /// <summary>Ticks bid de un rango (de a una semana como máximo por pedido, con páginas «hasMore»), en orden.</summary>
+    /// <summary>Bid ticks of a range (at most one week per request, with "hasMore" pages), in order.</summary>
     private async Task<List<(long Ms, long Price)>> TicksAsync(long symbolId, long fromMs, long toMs, IProgress<double>? progress, CancellationToken ct)
     {
         var all = new List<(long, long)>();
@@ -96,7 +96,7 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
                     ["fromTimestamp"] = winStart,
                     ["toTimestamp"] = to,
                 }, ct).ConfigureAwait(false);
-                // el primero viene absoluto y los demás como diferencia con el anterior
+                // the first one comes absolute and the rest as a difference from the previous one
                 long t = 0, p = 0, oldest = long.MaxValue;
                 int n = 0;
                 if (res.TryGetProperty("tickData", out var data))
@@ -165,7 +165,7 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
         return ticks.Count > 0 ? ToTrades(instrument, ticks) : null;
     }
 
-    // ===================================================================== velas
+    // ===================================================================== candles
 
     public Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct) => Task.FromResult<DateTime?>(null);
 
@@ -209,7 +209,7 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
 
     public string CacheTag => "ctrader";
 
-    // ===================================================================== en vivo
+    // ===================================================================== live
 
     private sealed class LiveState
     {
@@ -228,7 +228,7 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
             {
                 try
                 {
-                    sink.OnStatus(instrument, FeedStatus.Connecting, "Conectando a cTrader…");
+                    sink.OnStatus(instrument, FeedStatus.Connecting, "Connecting to cTrader…");
                     long id = await SymbolIdAsync(instrument, CancellationToken.None).ConfigureAwait(false);
                     sub.SymbolId = id;
                     _sinks.AddOrUpdate(id, _ => new() { (instrument, sink, state) }, (_, l) =>
@@ -237,7 +237,7 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
                         return l;
                     });
                     await _session.SubscribeAsync(id, CancellationToken.None).ConfigureAwait(false);
-                    sink.OnStatus(instrument, FeedStatus.Connected, "cTrader conectado");
+                    sink.OnStatus(instrument, FeedStatus.Connected, "cTrader connected");
                     return;
                 }
                 catch (Exception ex)
@@ -298,18 +298,18 @@ public sealed class CTraderFeed : IMarketDataFeed, IKlineHistory, IDayDownloader
         }
     }
 
-    /// <summary>Prueba la conexión: aplicación, token, cuenta y símbolos.</summary>
+    /// <summary>Tests the connection: application, token, account and symbols.</summary>
     public async Task<(bool Ok, string Message)> TestAsync(CancellationToken ct)
     {
         await _session.EnsureConnectedAsync(ct).ConfigureAwait(false);
         int indices = _session.Symbols.Count(s => s.Name is "US100" or "NAS100" or "USTEC" or "US500" or "SPX500" or "US30" or "GER40" or "DE40");
-        return (true, $"Conectado a {_session.AccountTitle}: {_session.Symbols.Count} símbolos{(indices > 0 ? $" ({indices} índices)" : "")}.");
+        return (true, $"Connected to {_session.AccountTitle}: {_session.Symbols.Count} symbols{(indices > 0 ? $" ({indices} indices)" : "")}.");
     }
 
     public void Dispose() => _session.Dispose();
 }
 
-/// <summary>Autorización OAuth de la Open API de cTrader (el usuario entra con su cTrader ID en el navegador).</summary>
+/// <summary>OAuth authorization of the cTrader Open API (the user logs in with their cTrader ID in the browser).</summary>
 public static class CTraderAuth
 {
     public const string AuthBase = "https://openapi.ctrader.com/apps";
@@ -317,7 +317,7 @@ public static class CTraderAuth
     public static string AuthorizeUrl(string clientId, string redirectUri) =>
         $"{AuthBase}/auth?client_id={Uri.EscapeDataString(clientId)}&redirect_uri={Uri.EscapeDataString(redirectUri)}&scope=trading";
 
-    /// <summary>Cambia el código de la redirección por los tokens (acceso y renovación).</summary>
+    /// <summary>Exchanges the redirect code for the tokens (access and refresh).</summary>
     public static async Task<(string Access, string Refresh, long ExpiresIn)> ExchangeAsync(string clientId, string clientSecret, string code, string redirectUri, CancellationToken ct, string authBase = AuthBase)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
@@ -327,7 +327,7 @@ public static class CTraderAuth
         var root = doc.RootElement;
         string access = CTraderSession.Str(root, "accessToken"), refresh = CTraderSession.Str(root, "refreshToken");
         if (access.Length == 0)
-            throw new InvalidOperationException("cTrader no devolvió el token: " + (CTraderSession.Str(root, "description") is { Length: > 0 } d ? d : CTraderSession.Str(root, "errorCode")));
+            throw new InvalidOperationException("cTrader did not return the token: " + (CTraderSession.Str(root, "description") is { Length: > 0 } d ? d : CTraderSession.Str(root, "errorCode")));
         return (access, refresh, CTraderSession.Long(root, "expiresIn"));
     }
 }

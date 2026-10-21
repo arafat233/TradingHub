@@ -4,15 +4,15 @@ using TradingHub.Market;
 
 namespace TradingHub.Data;
 
-/// <summary>Lo que dejó una importación.</summary>
+/// <summary>What an import left behind.</summary>
 public sealed record ImportResult(string Kind, long Rows, long Trades, int Days, DateTime? From, DateTime? To, int BadLines, decimal TickSize);
 
 /// <summary>
-/// Importa historia de archivos CSV/TXT bajados a mano (CFDs como el US100, forex, metales…): Dukascopy (ticks o velas,
-/// "Gmt time,Ask,Bid…"), HistData (ticks "20250901 140000123,bid,ask" y velas "20250901 140000;o;h;l;c;v"), MetaTrader
-/// (&lt;DATE&gt; &lt;TIME&gt; &lt;BID&gt; &lt;ASK&gt;… o velas) y cualquier CSV con fecha y precio u OHLC. El formato se
-/// reconoce solo. Los ticks se guardan tal cual (precio bid, una operación por cotización, lado por la regla del tick);
-/// las velas se convierten en operaciones sintéticas como la historia larga de los exchanges.
+/// Imports history from CSV/TXT files downloaded by hand (CFDs like the US100, forex, metals…): Dukascopy (ticks or candles,
+/// "Gmt time,Ask,Bid…"), HistData (ticks "20250901 140000123,bid,ask" and candles "20250901 140000;o;h;l;c;v"), MetaTrader
+/// (&lt;DATE&gt; &lt;TIME&gt; &lt;BID&gt; &lt;ASK&gt;… or candles) and any CSV with a date and a price or OHLC. The format is
+/// recognized automatically. The ticks are stored as they are (bid price, one trade per quote, side by the tick rule);
+/// the candles are turned into synthetic trades like the exchanges' long history.
 /// </summary>
 public static class CsvImport
 {
@@ -53,7 +53,7 @@ public static class CsvImport
         return tabs >= semis && tabs >= commas && tabs > 0 ? '\t' : semis >= commas && semis > 0 ? ';' : ',';
     }
 
-    /// <summary>Hora en UTC de un texto de fecha ("… GMT+0200" al final corrige la zona).</summary>
+    /// <summary>Time in UTC from a date text ("… GMT+0200" at the end corrects the zone).</summary>
     private static bool TryTime(string text, Layout l, TimeSpan offset, out DateTime utc)
     {
         utc = default;
@@ -98,7 +98,7 @@ public static class CsvImport
         return null;
     }
 
-    /// <summary>Reconoce columnas por el encabezado o, si no hay, por la forma de la primera fila.</summary>
+    /// <summary>Recognizes columns by the header or, if there is none, by the shape of the first row.</summary>
     private static Layout? Recognize(string first, string? second)
     {
         var l = new Layout { Delimiter = Delimiter(first) };
@@ -118,13 +118,13 @@ public static class CsvImport
                 else if (c is "ask") l.Ask = i;
                 else if (c is "last" or "price" or "precio") l.Last = i;
                 else if (c is "open" or "apertura") l.Open = i;
-                else if (c is "high" or "máximo" or "maximo") l.High = i;
-                else if (c is "low" or "mínimo" or "minimo") l.Low = i;
+                else if (c is "high" or "high" or "maximo") l.High = i;
+                else if (c is "low" or "low" or "minimo") l.Low = i;
                 else if (c is "close" or "cierre") l.Close = i;
                 else if (c is "volume" or "vol" or "tickvol" or "tickvolume" or "volumen" && l.Volume < 0) l.Volume = i;
             }
 
-            // MetaTrader separa fecha y hora; si solo hay "date" con la hora adentro, va como tiempo
+            // MetaTrader separates date and time; if there is only "date" with the time inside, it goes as the time
             if (l.Time < 0 && l.Date >= 0)
             {
                 l.Time = l.Date;
@@ -139,7 +139,7 @@ public static class CsvImport
             return l.IsBars || l.Price >= 0 ? l : null;
         }
 
-        // sin encabezado: fecha (y hora) al principio y después precios
+        // no header: date (and time) at the start and prices afterwards
         int t = 0;
         string time = cols[0];
         string? fmt = Detect(time, out l.Unix, out l.UnixMs);
@@ -159,7 +159,7 @@ public static class CsvImport
         int rest = cols.Length - t - 1;
         if (rest >= 4)
         {
-            // fecha;apertura;máximo;mínimo;cierre[;volumen]
+            // date;open;high;low;close[;volume]
             l.Open = t + 1;
             l.High = t + 2;
             l.Low = t + 3;
@@ -168,7 +168,7 @@ public static class CsvImport
         }
         else if (rest >= 2)
         {
-            // HistData ticks: fecha,bid,ask[,volumen]
+            // HistData ticks: date,bid,ask[,volume]
             l.Bid = t + 1;
             l.Ask = t + 2;
         }
@@ -189,9 +189,9 @@ public static class CsvImport
         return s.Length - dot - 1 - (s.Length - s.TrimEnd('0').Length);
     }
 
-    /// <summary>Lee el archivo y guarda cada día (UTC) en la historia de Trading Hub.</summary>
-    /// <param name="offset">Zona horaria del archivo (UTC = cero; HistData es Nueva York fija, −5).</param>
-    /// <param name="tickSize">Paso de precio; null = el que se deduce de los decimales del archivo.</param>
+    /// <summary>Reads the file and stores each day (UTC) in Trading Hub's history.</summary>
+    /// <param name="offset">Time zone of the file (UTC = zero; HistData is fixed New York, -5).</param>
+    /// <param name="tickSize">Price step; null = the one deduced from the file's decimals.</param>
     public static ImportResult Import(string path, string symbol, string root, TimeSpan offset, decimal? tickSize, IProgress<double>? progress, CancellationToken ct)
     {
         using var stream = File.OpenRead(path);
@@ -199,10 +199,10 @@ public static class CsvImport
         string? first = reader.ReadLine();
         while (first != null && first.Trim().Length == 0) first = reader.ReadLine();
         string? second = reader.ReadLine();
-        if (first == null) throw new InvalidDataException("El archivo está vacío");
-        var l = Recognize(first, second) ?? throw new InvalidDataException("No reconozco el formato: hace falta una columna de fecha y precios (bid/ask, último u OHLC)");
+        if (first == null) throw new InvalidDataException("The file is empty");
+        var l = Recognize(first, second) ?? throw new InvalidDataException("The format is not recognized: a date column and prices (bid/ask, last or OHLC) are needed");
 
-        // paso de precio: los decimales de las primeras filas
+        // price step: the decimals of the first rows
         decimal tick = tickSize ?? 0;
         var pending = new List<string>();
         if (!l.Header) pending.Add(first);
@@ -306,7 +306,7 @@ public static class CsvImport
                     continue;
                 }
 
-                decimal vol = l.Volume >= 0 && l.Volume < c.Length && TryNumber(c[l.Volume], out var v) && v > 0 ? v : 4; // sin volumen: 1 por punto
+                decimal vol = l.Volume >= 0 && l.Volume < c.Length && TryNumber(c[l.Volume], out var v) && v > 0 ? v : 4; // no volume: 1 per point
                 long ms = new DateTimeOffset(utc).ToUnixTimeMilliseconds();
                 if (prevBarMs > 0 && ms > prevBarMs && (barMs == 0 || ms - prevBarMs < barMs)) barMs = ms - prevBarMs;
                 prevBarMs = ms;
@@ -314,7 +314,7 @@ public static class CsvImport
             }
             else
             {
-                // MetaTrader deja vacío el bid cuando solo cambió el ask: no es un error, no hay cotización nueva
+                // MetaTrader leaves the bid empty when only the ask changed: it is not an error, there is no new quote
                 if (c[l.Price].Trim().Length == 0) continue;
                 if (!TryNumber(c[l.Price], out var price) || price <= 0)
                 {
@@ -323,7 +323,7 @@ public static class CsvImport
                 }
 
                 price = inst.RoundPrice(price);
-                // una operación por cotización; el lado sale de si el precio subió o bajó (regla del tick)
+                // one trade per quote; the side comes from whether the price went up or down (the tick rule)
                 var side = price > lastPrice ? TradeSide.Buy : price < lastPrice ? TradeSide.Sell : lastSide;
                 lastPrice = price;
                 lastSide = side;
@@ -337,6 +337,6 @@ public static class CsvImport
 
         Flush();
         progress?.Report(1);
-        return new ImportResult(l.IsBars ? $"velas de {Math.Max(1, barMs / 60_000)} min" : "ticks", rows, trades, days, from, to, bad, tick);
+        return new ImportResult(l.IsBars ? $"{Math.Max(1, barMs / 60_000)} min candles" : "ticks", rows, trades, days, from, to, bad, tick);
     }
 }

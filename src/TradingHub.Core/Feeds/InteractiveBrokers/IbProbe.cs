@@ -4,8 +4,8 @@ using System.Text;
 namespace TradingHub.Feeds.InteractiveBrokers;
 
 /// <summary>
-/// Prueba de conexión con TWS / IB Gateway usando el protocolo de la TWS API
-/// (saludo "API" + rango de versiones; el servidor responde su versión y hora).
+/// Connection test with TWS / IB Gateway using the TWS API protocol
+/// ("API" greeting + version range; the server answers with its version and time).
 /// </summary>
 public static class IbProbe
 {
@@ -39,11 +39,11 @@ public static class IbProbe
             var body = new byte[n];
             await stream.ReadExactlyAsync(body, rt.Token).ConfigureAwait(false);
             var fields = Encoding.ASCII.GetString(body).Split('\0');
-            return (true, $"TWS respondió: versión del servidor {fields.ElementAtOrDefault(0)}, hora {fields.ElementAtOrDefault(1)}");
+            return (true, $"TWS replied: server version {fields.ElementAtOrDefault(0)}, time {fields.ElementAtOrDefault(1)}");
         }
         catch (Exception ex)
         {
-            return (false, $"No se pudo conectar a {host}:{port} ({ex.Message}). ¿Está abierta la TWS o el IB Gateway con la API habilitada?");
+            return (false, $"Could not connect to {host}:{port} ({ex.Message}). Is TWS or IB Gateway open with the API enabled?");
         }
     }
 }

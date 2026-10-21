@@ -1,4 +1,4 @@
-// Escena "footprint": escaleras de bid, ask, delta y volumen con colores de texto propios, y el editor de footprint.
+// "footprint" scene: bid, ask, delta and volume ladders with their own text colors, and the footprint editor.
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.VisualTree;
@@ -11,7 +11,7 @@ internal static class FootprintScene
 
     private static void Check(bool ok, string what)
     {
-        Console.WriteLine($"{(ok ? "OK " : "FALLA")}  {what}");
+        Console.WriteLine($"{(ok ? "OK " : "FAIL")}  {what}");
         if (!ok) Failures.Add(what);
     }
 
@@ -23,7 +23,7 @@ internal static class FootprintScene
         var model = tv.ActiveTab?.Model;
         if (model == null)
         {
-            Check(false, "hay un gráfico abierto");
+            Check(false, "there is an open chart");
             return 1;
         }
 
@@ -31,7 +31,7 @@ internal static class FootprintScene
         model.Settings.Style = ChartStyle.Footprint;
         model.Settings.Layout = new FootprintLayout
         {
-            Name = "Colores de texto",
+            Name = "Text colors",
             Columns =
             {
                 new() { Kind = FootprintColumnKind.Candle },
@@ -48,7 +48,7 @@ internal static class FootprintScene
         var frame = window.CaptureRenderedFrame();
         frame?.Save(Path.Combine(outDir, "footprint_colores.png"));
 
-        // los colores elegidos aparecen en el gráfico (se buscan píxeles de cada uno)
+        // the chosen colors show up on the chart (pixels of each one are searched for)
         if (frame != null)
         {
             var path = Path.Combine(outDir, "footprint_colores.png");
@@ -66,13 +66,13 @@ internal static class FootprintScene
                 return false;
             }
 
-            Check(Has(Yellow), "texto del bid en amarillo");
-            Check(Has(Cyan), "texto del ask en celeste");
-            Check(Has(Green) || Has(Pink), "texto del delta en verde / rosa");
-            Check(Has(Orange), "texto del volumen en naranja");
+            Check(Has(Yellow), "bid text in yellow");
+            Check(Has(Cyan), "ask text in cyan");
+            Check(Has(Green) || Has(Pink), "delta text in green / pink");
+            Check(Has(Orange), "volume text in orange");
         }
 
-        // el editor: la escalera de delta muestra sus colores de texto (y no los que no le tocan)
+        // the editor: the delta ladder shows its text colors (and not the ones it should not)
         var editor = new FootprintEditorWindow(model, tv) { Width = 1000, Height = 900 };
         editor.Show(window);
         pump(1);
@@ -80,31 +80,31 @@ internal static class FootprintScene
         list.SelectedIndex = 3;
         pump(1);
         var labels = editor.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();
-        Check(labels.Contains("Texto del delta positivo") && labels.Contains("Texto del delta negativo") && labels.Contains("Color del texto"), "la escalera de delta tiene color del texto, delta positivo y negativo");
-        Check(!labels.Contains("Texto del bid") && !labels.Contains("Dirección de las barras"), "no muestra opciones que no le tocan");
+        Check(labels.Contains("Positive delta text") && labels.Contains("Negative delta text") && labels.Contains("Text color"), "the delta ladder has a text color, positive delta and negative delta");
+        Check(!labels.Contains("Bid text") && !labels.Contains("Bar direction"), "it does not show options that do not apply to it");
         editor.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "footprint_editor_delta.png"));
         list.SelectedIndex = 1;
         pump(1);
         labels = editor.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();
-        Check(labels.Contains("Texto del bid") && !labels.Contains("Texto del ask"), "la escalera de bid tiene su color de texto");
+        Check(labels.Contains("Bid text") && !labels.Contains("Ask text"), "the bid ladder has its own text color");
         editor.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "footprint_editor_bid.png"));
         editor.Close();
 
-        // los colores se guardan en la plantilla (JSON) y vuelven
+        // the colors are stored in the template (JSON) and come back
         var json = System.Text.Json.JsonSerializer.Serialize(model.Settings.Layout);
         var back = System.Text.Json.JsonSerializer.Deserialize<FootprintLayout>(json)!;
-        Check(back.Columns[3].PositiveTextColor == Green && back.Columns[4].TextColor == Orange, "los colores de texto se guardan con la plantilla");
+        Check(back.Columns[3].PositiveTextColor == Green && back.Columns[4].TextColor == Orange, "the text colors are stored with the template");
 
-        // la biblioteca de indicadores: sin etiquetas de origen en los de la biblioteca
+        // the indicator library: no source labels on the library ones
         var iw = new IndicatorsWindow(TradingHub.App.App.Services, model) { Width = 1100, Height = 760 };
         iw.Show(window);
         pump(1);
         var pills = iw.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is "ATAS" or "extra" or "Trading Hub" && t.IsEffectivelyVisible).Select(t => t.Text).ToList();
-        Check(!pills.Contains("ATAS"), $"la biblioteca de indicadores no muestra «ATAS» ({string.Join(", ", pills)})");
-        iw.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "indicadores.png"));
+        Check(!pills.Contains("ATAS"), $"the indicator library does not show “ATAS” ({string.Join(", ", pills)})");
+        iw.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "indicators.png"));
         iw.Close();
 
-        Console.WriteLine(Failures.Count == 0 ? "FOOTPRINT: todo OK" : $"FOOTPRINT: {Failures.Count} falla(s)");
+        Console.WriteLine(Failures.Count == 0 ? "FOOTPRINT: all OK" : $"FOOTPRINT: {Failures.Count} failure(s)");
         return Failures.Count;
     }
 }

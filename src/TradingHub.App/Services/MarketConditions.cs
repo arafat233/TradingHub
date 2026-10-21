@@ -7,17 +7,17 @@ using TradingHub.Strategies;
 
 namespace TradingHub.App.Services;
 
-/// <summary>Una hora del contexto de un mercado (para la tira de las últimas horas del panel).</summary>
+/// <summary>One hour of a market's context (for the recent-hours strip of the panel).</summary>
 internal readonly record struct MarketHour(DateTime Hour, MarketRegime Regime, int? Direction, double? VolatilityRank);
 
-/// <summary>Cómo está un mercado ahora: rango o tendencia (alcista o bajista), volatilidad y las últimas horas.</summary>
+/// <summary>How a market is right now: range or trend (up or down), volatility and the recent hours.</summary>
 internal sealed class MarketCondition
 {
     public required string FeedId { get; init; }
     public required string Symbol { get; init; }
     public string Market => $"{FeedId}:{Symbol}";
 
-    /// <summary>Hasta cuándo llegan los datos (si el mercado está cerrado o no se graba, puede ser de antes).</summary>
+    /// <summary>How far the data reaches (if the market is closed or is not recorded, it can be from earlier).</summary>
     public DateTime DataUntilUtc { get; init; }
 
     public decimal LastPrice { get; init; }
@@ -28,25 +28,25 @@ internal sealed class MarketCondition
     public double? VolatilityRank { get; init; }
     public MarketRegime Regime { get; init; }
 
-    /// <summary>Días de historia por hora con que se calculó.</summary>
+    /// <summary>Days of hourly history it was computed with.</summary>
     public int Days { get; init; }
 
-    /// <summary>Horas seguidas en el régimen de ahora (dentro de las últimas 48).</summary>
+    /// <summary>Consecutive hours in the current regime (within the last 48).</summary>
     public int RegimeHours { get; init; }
 
     public List<MarketHour> Recent { get; init; } = new();
     public string RegimeLabel => MarketContextTracker.Label(Regime, Direction);
     public string VolatilityLabel => MarketContextTracker.VolatilityLabel(VolatilityRank);
 
-    /// <summary>El contexto de ahora, para preguntarle a un filtro si deja entrar.</summary>
+    /// <summary>The current context, to ask a filter whether it allows entering.</summary>
     public MarketContextTracker? Tracker { get; init; }
 }
 
 /// <summary>
-/// Condición del mercado con la misma medida que usan las estrategias y sus filtros de contexto (tendencia de las últimas
-/// 24 horas y percentil de volatilidad del último mes), armada con los cierres por hora de los últimos 32 días: de la
-/// historia guardada (con caché por día), de las velas del exchange para los días que faltan (si el mercado ya está
-/// abierto) y de los datos en vivo de hoy. La usan el panel «Mercado» de En vivo y las estrategias en vivo al arrancar.
+/// Market condition using the same measure the strategies and their context filters use (trend of the last
+/// 24 hours and last month's volatility percentile), built from the hourly closes of the last 32 days: from the
+/// stored history (cached per day), from the exchange's candles for the missing days (if the market is already
+/// open) and from today's live data. It is used by Live's "Market" panel and by the live strategies on startup.
 /// </summary>
 internal sealed class MarketConditions
 {
@@ -59,7 +59,7 @@ internal sealed class MarketConditions
 
     private sealed class DayCloses
     {
-        /// <summary>Largo del archivo del día cuando se calculó (-1 = salió de las velas del exchange).</summary>
+        /// <summary>Length of the day's file when it was computed (-1 = it came from the exchange's candles).</summary>
         public long Length { get; set; }
 
         public decimal?[] Closes { get; set; } = new decimal?[24];
@@ -73,7 +73,7 @@ internal sealed class MarketConditions
         return Path.Combine(CacheDir, $"{Clean(feed)}_{Clean(symbol)}.json");
     }
 
-    /// <summary>Cierres por hora (UTC, inicio de cada hora) de los últimos 32 días hasta ahora, en orden.</summary>
+    /// <summary>Hourly closes (UTC, start of each hour) of the last 32 days up to now, in order.</summary>
     public async Task<List<(DateTime Time, decimal Close)>> HourlyAsync(string feed, string symbol, CancellationToken ct = default)
     {
         SortedDictionary<DateTime, decimal> hours;
@@ -88,7 +88,7 @@ internal sealed class MarketConditions
             _gate.Release();
         }
 
-        // hoy, con lo que trae el mercado abierto (en el hilo de la interfaz, donde se le suman operaciones)
+        // today, with whatever the open market brings (on the UI thread, where trades are added to it)
         var live = _svc.Hub.Items.FirstOrDefault(x => Same(x.Instrument, feed, symbol));
         if (live is { Trades.Count: > 0 })
         {
@@ -107,7 +107,7 @@ internal sealed class MarketConditions
         return hours.Select(kv => (kv.Key, kv.Value)).ToList();
     }
 
-    /// <summary>Cómo está el mercado ahora (null si no hay ningún dato).</summary>
+    /// <summary>How the market is right now (null if there is no data at all).</summary>
     public async Task<MarketCondition?> ConditionAsync(string feed, string symbol, CancellationToken ct = default)
     {
         var hourly = await HourlyAsync(feed, symbol, ct);
@@ -143,7 +143,7 @@ internal sealed class MarketConditions
         };
     }
 
-    /// <summary>A una estrategia que arrancó en vivo le arma el contexto con el mes completo (en segundo plano).</summary>
+    /// <summary>For a strategy that started live, it builds the context with the full month (in the background).</summary>
     public async Task SeedAsync(LiveStrategyRunner runner)
     {
         try
@@ -154,18 +154,18 @@ internal sealed class MarketConditions
         }
         catch (Exception ex)
         {
-            this.LogWarn($"No se pudo armar el contexto del mercado de {runner.StrategyName}: {ex.Message}");
+            this.LogWarn($"Could not build the market context for {runner.StrategyName}: {ex.Message}");
         }
     }
 
     private static bool Same(Instrument i, string feed, string symbol) =>
         i.FeedId.Equals(feed, StringComparison.OrdinalIgnoreCase) && i.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Lo guardado: los archivos de cada día (con caché) y, para los días sin archivo, velas del exchange.</summary>
+    /// <summary>What is stored: each day's files (cached) and, for the days with no file, exchange candles.</summary>
     /// <summary>
-    /// Cierres por hora de los 32 días anteriores a un instante, de la historia guardada (con la misma caché por día): para
-    /// que un backtest, una optimización o un walk-forward arranquen su contexto de mercado como en vivo. Solo horas ya
-    /// cerradas antes de <paramref name="untilUtc"/>.
+    /// Hourly closes of the 32 days before an instant, from the stored history (with the same per-day cache): so
+    /// a backtest, an optimization or a walk-forward start their market context as it is live. Only hours already
+    /// closed before <paramref name="untilUtc"/>.
     /// </summary>
     public static List<(DateTime Time, decimal Close)> HourlyBefore(string feed, string symbol, DateTime untilUtc)
     {
@@ -183,7 +183,7 @@ internal sealed class MarketConditions
         }
     }
 
-    /// <summary>Se guardan los días del último año y pico (alcanza para los backtests de siempre).</summary>
+    /// <summary>The days of the last year or so are stored (enough for the usual backtests).</summary>
     private static Dictionary<DateOnly, DayCloses> Prune(Dictionary<DateOnly, DayCloses> cache)
     {
         var oldest = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-400);
@@ -191,7 +191,7 @@ internal sealed class MarketConditions
         return cache;
     }
 
-    /// <summary>Los días guardados entre dos fechas: de la caché o de los archivos de cada día (sin red).</summary>
+    /// <summary>The days stored between two dates: from the cache or from each day's files (no network).</summary>
     private static (SortedDictionary<DateTime, decimal> Hours, List<DateOnly> Missing, Dictionary<DateOnly, DayCloses> Cache, bool Changed) ReadStored(
         string feed, string symbol, DateOnly first, DateOnly last, CancellationToken ct)
     {
@@ -202,10 +202,10 @@ internal sealed class MarketConditions
         for (var d = first; d <= last; d = d.AddDays(1))
         {
             ct.ThrowIfCancellationRequested();
-            // de cada fuente del día (la combinada de Rithmic y Databento lee las dos): la primera manda
+            // from each of the day's sources (Rithmic and Databento's combined one reads both): the first one wins
             var files = HistorySources.DayFiles(AppPaths.Ticks, feed, symbol, d);
             long len = files.Count == 0 ? -1 : files.Sum(f => new FileInfo(f).Length);
-            // un día ya no cambia media hora después de terminar (antes, puede seguir grabándose)
+            // a day no longer changes half an hour after it ends (before that, it may still be recording)
             bool final = DateTime.UtcNow - d.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) > TimeSpan.FromMinutes(30);
             decimal?[]? closes = null;
             if (stored.TryGetValue(d, out var dc) && dc.Length == len) closes = dc.Closes;
@@ -244,8 +244,8 @@ internal sealed class MarketConditions
         var path = CachePath(feed, symbol);
         var (hours, missing, cache, changed) = await Task.Run(() => ReadStored(feed, symbol, first, today, ct), ct);
 
-        // días sin archivo: velas de 15 minutos del exchange, si ese mercado ya está abierto en la app o es cripto (velas
-        // públicas); de a tramos seguidos, y un día ya cerrado queda en la caché aunque no haya tenido velas (un sábado de futuros)
+        // days with no file: 15-minute candles from the exchange, if that market is already open in the app or it is crypto (public
+        // candles); in consecutive stretches, and a day already closed stays in the cache even if it had no candles (a futures Saturday)
         if (missing.Count > 0 && await KlineSourceAsync(feed, symbol, ct) is var (klines, instrument))
         {
             foreach (var run in Runs(missing))
@@ -276,7 +276,7 @@ internal sealed class MarketConditions
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    this.LogInfo($"Sin velas del exchange para el contexto de {symbol}: {ex.Message}");
+                    this.LogInfo($"No exchange candles for the context of {symbol}: {ex.Message}");
                 }
             }
         }
@@ -289,8 +289,8 @@ internal sealed class MarketConditions
     private readonly Dictionary<string, Instrument> _instruments = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// De dónde sacar velas: del mercado abierto en la app o, en cripto, de la conexión configurada de ese exchange (las
-    /// velas son públicas: no abre ninguna sesión). null si no hay.
+    /// Where to get candles from: from the market open in the app or, for crypto, from that exchange's configured connection (the
+    /// candles are public: it opens no session). null if there is none.
     /// </summary>
     private async Task<(IKlineHistory Source, Instrument Instrument)?> KlineSourceAsync(string feed, string symbol, CancellationToken ct)
     {
@@ -313,12 +313,12 @@ internal sealed class MarketConditions
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            this.LogInfo($"Sin velas públicas para el contexto de {symbol}: {ex.Message}");
+            this.LogInfo($"No public candles for the context of {symbol}: {ex.Message}");
             return null;
         }
     }
 
-    /// <summary>Días seguidos, en tramos.</summary>
+    /// <summary>Consecutive days, in stretches.</summary>
     private static IEnumerable<List<DateOnly>> Runs(IEnumerable<DateOnly> days)
     {
         var run = new List<DateOnly>();
@@ -343,7 +343,7 @@ internal sealed class MarketConditions
                 hours[day.ToDateTime(new TimeOnly(h, 0), DateTimeKind.Utc)] = c;
     }
 
-    /// <summary>El último precio de cada hora de un día guardado (las horas que no tiene el primer archivo, de los siguientes).</summary>
+    /// <summary>The last price of each hour of a stored day (the hours the first file does not have, from the following ones).</summary>
     private static decimal?[] FromTicks(IReadOnlyList<string> files)
     {
         var closes = new decimal?[24];
@@ -376,7 +376,7 @@ internal sealed class MarketConditions
         }
         catch
         {
-            return new(); // caché dañada: se vuelve a calcular
+            return new(); // corrupt cache: it is recomputed
         }
     }
 

@@ -2,7 +2,7 @@ using TradingHub.Trading;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Un evento de mercado: operación, o cambio de un nivel del libro.</summary>
+    /// <summary>A market event: a trade, or a change of a book level.</summary>
     public class MarketDataArg
     {
         public DateTime Time { get; set; }
@@ -16,7 +16,7 @@ namespace TradingHub.Indicators
         public long Id { get; set; }
         public decimal OpenInterest { get; set; }
 
-        /// <summary>Precio original (antes de agrupar por filas).</summary>
+        /// <summary>Original price (before grouping into rows).</summary>
         public decimal OriginPrice { get; set; }
 
         public bool IsBid => DataType == MarketDataType.Bid;
@@ -29,8 +29,8 @@ namespace TradingHub.Indicators
     }
 
     /// <summary>
-    /// Operación acumulada: todas las ejecuciones de una misma orden agresiva
-    /// (mismo instante y mismo lado), aunque haya barrido varios niveles.
+    /// Accumulated trade: every fill of the same aggressive order
+    /// (same instant and same side), even if it swept several levels.
     /// </summary>
     public class CumulativeTrade
     {
@@ -50,7 +50,7 @@ namespace TradingHub.Indicators
         public decimal MaxPrice => Ticks.Count > 0 ? Ticks.Max(t => t.Price) : Math.Max(FirstPrice, Lastprice);
         public decimal MinPrice => Ticks.Count > 0 ? Ticks.Min(t => t.Price) : Math.Min(FirstPrice, Lastprice);
 
-        /// <summary>Si es la misma operación acumulada (se actualiza mientras la orden sigue barriendo).</summary>
+        /// <summary>Whether it is the same accumulated trade (it is updated while the order keeps sweeping).</summary>
         public bool IsEqual(CumulativeTrade other) =>
             other != null && other.Time == Time && other.Direction == Direction && other.FirstPrice == FirstPrice;
 
@@ -59,7 +59,7 @@ namespace TradingHub.Indicators
         public override string ToString() => $"{Direction} {Volume} {FirstPrice}->{Lastprice} {Time:HH:mm:ss.fff}";
     }
 
-    /// <summary>Pedido de operaciones acumuladas históricas.</summary>
+    /// <summary>Request for historical accumulated trades.</summary>
     public class CumulativeTradesRequest
     {
         public CumulativeTradesRequest(DateTime beginTime)
@@ -85,7 +85,7 @@ namespace TradingHub.Indicators
         public decimal MaxVolume { get; }
     }
 
-    /// <summary>Información del libro de órdenes para los indicadores.</summary>
+    /// <summary>Order book information for the indicators.</summary>
     public class MarketDepthInfo
     {
         private readonly Func<IEnumerable<MarketDataArg>> _snapshot;
@@ -107,7 +107,7 @@ namespace TradingHub.Indicators
         public IEnumerable<MarketDataArg> GetMarketDepthSnapshot() => _snapshot();
     }
 
-    /// <summary>Información del instrumento para los indicadores.</summary>
+    /// <summary>Instrument information for the indicators.</summary>
     public class InstrumentInfo
     {
         public string Instrument { get; set; } = "";

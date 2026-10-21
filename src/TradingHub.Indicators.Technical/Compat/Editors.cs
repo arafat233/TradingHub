@@ -1,5 +1,5 @@
-// Editores de propiedades que ATAS dibuja con XAML. En Trading Hub la ventana de configuración arma sus
-// propios controles, así que alcanza con que los tipos existan para los atributos [Editor].
+// Property editors that ATAS draws with XAML. In Trading Hub the settings window builds its
+// own controls, so it is enough for the types to exist for the [Editor] attributes.
 namespace TradingHub.Indicators.Technical.Editors
 {
     public class RangeEditor

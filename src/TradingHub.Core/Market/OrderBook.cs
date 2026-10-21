@@ -6,15 +6,15 @@ public enum BookSide : byte
     Ask = 1,
 }
 
-/// <summary>Un nivel del libro: precio (en ticks) y tamaño.</summary>
+/// <summary>A book level: price (in ticks) and size.</summary>
 public readonly record struct BookLevel(long PriceTicks, decimal Size);
 
-/// <summary>Cambio de un nivel del libro (tamaño absoluto; 0 = nivel eliminado).</summary>
+/// <summary>Change of a book level (absolute size; 0 = level removed).</summary>
 public readonly record struct BookChange(BookSide Side, long PriceTicks, decimal Size);
 
 /// <summary>
-/// Foto inmutable del libro de órdenes. Los feeds la generan en su hilo y la UI la consume
-/// sin locks. Bids ordenados de mayor a menor precio, asks de menor a mayor.
+/// Immutable snapshot of the order book. The feeds generate it on their own thread and the UI consumes it
+/// without locks. Bids sorted from the highest price to the lowest, asks from the lowest to the highest.
 /// </summary>
 public sealed class DepthSnapshot
 {
@@ -38,7 +38,7 @@ public sealed class DepthSnapshot
     public decimal BestBidSize => Bids.Length > 0 ? Bids[0].Size : 0;
     public decimal BestAskSize => Asks.Length > 0 ? Asks[0].Size : 0;
 
-    /// <summary>Tamaño en un precio exacto (búsqueda binaria).</summary>
+    /// <summary>Size at an exact price (binary search).</summary>
     public decimal GetSize(BookSide side, long priceTicks)
     {
         var arr = side == BookSide.Bid ? Bids : Asks;
@@ -55,7 +55,7 @@ public sealed class DepthSnapshot
         return 0;
     }
 
-    /// <summary>Suma de tamaños en el rango [fromTicks, toTicks] (inclusive) de un lado.</summary>
+    /// <summary>Sum of sizes in the range [fromTicks, toTicks] (inclusive) on one side.</summary>
     public decimal SumRange(BookSide side, long fromTicks, long toTicks)
     {
         if (fromTicks > toTicks) (fromTicks, toTicks) = (toTicks, fromTicks);
@@ -69,7 +69,7 @@ public sealed class DepthSnapshot
     }
 }
 
-/// <summary>Una actualización de profundidad: la foto completa más los cambios que la produjeron.</summary>
+/// <summary>A depth update: the full snapshot plus the changes that produced it.</summary>
 public sealed class DepthUpdate
 {
     public required DepthSnapshot Snapshot { get; init; }
@@ -78,7 +78,7 @@ public sealed class DepthUpdate
 }
 
 /// <summary>
-/// Libro mutable que mantienen los feeds (un solo hilo). Genera <see cref="DepthSnapshot"/>.
+/// Mutable book maintained by the feeds (a single thread). It generates <see cref="DepthSnapshot"/>.
 /// </summary>
 public sealed class OrderBookBuilder
 {
@@ -113,7 +113,7 @@ public sealed class OrderBookBuilder
         }
     }
 
-    /// <summary>Elimina niveles cruzados (puede pasar con feeds que mandan bid/ask por separado).</summary>
+    /// <summary>Removes crossed levels (it can happen with feeds that send bid/ask separately).</summary>
     public void Uncross(BookSide aggressorSideUpdated)
     {
         if (_bids.Count == 0 || _asks.Count == 0) return;

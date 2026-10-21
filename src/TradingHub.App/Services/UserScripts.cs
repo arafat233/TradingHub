@@ -5,12 +5,12 @@ using TradingHub.Scripting;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Indicadores propios del usuario: compila los .cs de ~/Documents/Trading Hub/Indicadores al arrancar y
-/// cada vez que cambian (recarga en caliente), y los suma al catálogo.
+/// The user's own indicators: it compiles the .cs files in ~/Documents/Trading Hub/Indicadores on startup and
+/// every time they change (hot reload), and adds them to the catalog.
 /// </summary>
 public sealed class UserScripts : IDisposable
 {
-    public const string Source = "Mis indicadores";
+    public const string Source = "My indicators";
     private readonly IndicatorCatalog _catalog;
     private readonly ScriptCompiler _compiler = new();
     private readonly FileSystemWatcher? _watcher;
@@ -39,14 +39,14 @@ public sealed class UserScripts : IDisposable
         }
         catch (Exception ex)
         {
-            this.LogWarn("No se pudo vigilar la carpeta de indicadores: " + ex.Message);
+            this.LogWarn("Could not watch the indicators folder: " + ex.Message);
         }
     }
 
     public string Folder { get; }
     public ScriptCompileResult? LastResult { get; private set; }
 
-    /// <summary>Se dispara después de cada compilación (con éxito o con errores).</summary>
+    /// <summary>Fires after every compilation (successful or with errors).</summary>
     public event Action<ScriptCompileResult>? Compiled;
 
     private void Restart()
@@ -74,8 +74,8 @@ public sealed class UserScripts : IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // un archivo a medio guardar o que se movió: se reintenta con el próximo cambio de la carpeta
-            this.LogWarn("No se pudieron leer los indicadores propios: " + ex.Message);
+            // a half-saved or moved file: it is retried on the folder's next change
+            this.LogWarn("Could not read your own indicators: " + ex.Message);
             Restart();
             return LastResult;
         }
@@ -85,7 +85,7 @@ public sealed class UserScripts : IDisposable
         {
             _catalog.RemoveSource(Source);
             _catalog.Scan(res.Assembly, Source);
-            this.LogInfo($"Indicadores propios compilados ({files.Count} archivos, {res.Elapsed.TotalMilliseconds:0} ms)");
+            this.LogInfo($"Own indicators compiled ({files.Count} files, {res.Elapsed.TotalMilliseconds:0} ms)");
         }
         else
         {
@@ -103,37 +103,37 @@ public sealed class UserScripts : IDisposable
     }
 
     public const string ExampleSource = """
-        // Ejemplo de indicador propio. Guardá cambios y Trading Hub lo recompila solo.
-        // La API es la misma que la de ATAS: podés pegar indicadores escritos para ATAS.
+        // Example of a custom indicator. Save your changes and Trading Hub recompiles it on its own.
+        // The API is the same as ATAS's: you can paste indicators written for ATAS.
         using System.ComponentModel;
         using System.ComponentModel.DataAnnotations;
         using System.Drawing;
         using TradingHub.Indicators;
 
-        [DisplayName("Ejemplo: delta % por vela")]
-        [Category("Mis indicadores")]
-        public class EjemploDeltaPorcentual : Indicator
+        [DisplayName("Example: delta % per candle")]
+        [Category("My indicators")]
+        public class ExampleDeltaPercent : Indicator
         {
-            private readonly ValueDataSeries _serie = new("DeltaPct", "Delta %")
+            private readonly ValueDataSeries _series = new("DeltaPct", "Delta %")
             {
                 VisualType = VisualMode.Histogram,
             };
 
-            [Display(Name = "Umbral para resaltar (%)", GroupName = "Configuración")]
-            public decimal Umbral { get; set; } = 30;
+            [Display(Name = "Highlight threshold (%)", GroupName = "Settings")]
+            public decimal Threshold { get; set; } = 30;
 
-            public EjemploDeltaPorcentual()
+            public ExampleDeltaPercent()
             {
                 Panel = IndicatorDataProvider.NewPanel;
-                DataSeries[0] = _serie;
+                DataSeries[0] = _series;
             }
 
             protected override void OnCalculate(int bar, decimal value)
             {
-                var vela = GetCandle(bar);
-                var pct = vela.Volume > 0 ? vela.Delta / vela.Volume * 100 : 0;
-                _serie[bar] = pct;
-                _serie.Colors[bar] = Math.Abs(pct) >= Umbral
+                var candle = GetCandle(bar);
+                var pct = candle.Volume > 0 ? candle.Delta / candle.Volume * 100 : 0;
+                _series[bar] = pct;
+                _series.Colors[bar] = Math.Abs(pct) >= Threshold
                     ? (pct > 0 ? Color.FromArgb(255, 73, 209, 73) : Color.FromArgb(255, 232, 69, 72))
                     : Color.FromArgb(255, 110, 120, 140);
             }

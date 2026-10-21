@@ -5,8 +5,8 @@ using TradingHub.Strategies;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Lo que dibuja una estrategia (su lienzo) y sus operaciones, traducido a lo que pinta el gráfico. Lo usan los gráficos
-/// de la app y las capturas del laboratorio (las que mira Claude).
+/// What a strategy draws (its canvas) and its trades, translated into what the chart paints. The app's charts
+/// and the lab's snapshots (the ones Claude looks at) use it.
 /// </summary>
 internal static class StrategyDrawingMap
 {
@@ -25,7 +25,7 @@ internal static class StrategyDrawingMap
         ["negro"] = new(15, 23, 42), ["black"] = new(15, 23, 42),
     };
 
-    /// <summary>"#RRGGBB", "#AARRGGBB" o un nombre ("verde", "rojo"…); sin color, el de la estrategia.</summary>
+    /// <summary>"#RRGGBB", "#AARRGGBB" or a name ("green", "red"…); with no color, the strategy's own.</summary>
     public static SKColor ParseColor(string? text, SKColor fallback)
     {
         if (string.IsNullOrWhiteSpace(text)) return fallback;
@@ -40,7 +40,7 @@ internal static class StrategyDrawingMap
     public static StrategyLine ToLine(string name, string? color, int width, LineStyle style, IReadOnlyList<(DateTime Time, decimal? Value)> points, SKColor fallback) =>
         new(name, ParseColor(color, fallback), width, (int)style, points);
 
-    /// <summary>Entradas (flecha) y salidas (cruz con el resultado) de las operaciones, y la línea que las une.</summary>
+    /// <summary>Entries (an arrow) and exits (a cross with the result) of the trades, and the line joining them.</summary>
     public static (List<StrategySignal> Signals, List<TradeLink> Links) Trades(IEnumerable<ClosedTrade> trades, OpenPosition? open = null)
     {
         var signals = new List<StrategySignal>();

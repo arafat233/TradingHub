@@ -13,21 +13,21 @@ using TradingHub.Strategies;
 namespace TradingHub.App.Views;
 
 /// <summary>
-/// Portafolios en vivo: el automático (todas las que corren sin un portafolio tuyo) y los que armás. Para cada uno:
-/// resultado conjunto y de cada estrategia, curva, correlación entre estrategias y su agente de riesgo.
+/// Live portfolios: the automatic one (every strategy running with no portfolio of yours) and the ones you build. For each one:
+/// joint result and each strategy's, curve, correlation between strategies and its risk agent.
 /// </summary>
 internal sealed partial class LiveView
 {
     private readonly WrapPanel _portfolioChips = new() { ItemSpacing = 8, LineSpacing = 8 };
     private readonly StackPanel _portfolioDetail = new() { Spacing = 16 };
-    private readonly EquityChart _portfolioChart = new() { Height = 230, EmptyText = "Cuando las estrategias del portafolio cierren operaciones vas a ver acá su curva conjunta" };
+    private readonly EquityChart _portfolioChart = new() { Height = 230, EmptyText = "Once the portfolio's strategies close trades you will see their joint curve here" };
     private string? _portfolioId;
     private string _portfolioKey = "";
 
-    // agente de riesgo (controles del portafolio elegido)
-    private readonly ToggleSwitch _agentOn = new() { OnContent = "Activo", OffContent = "Apagado" };
+    // risk agent (controls of the chosen portfolio)
+    private readonly ToggleSwitch _agentOn = new() { OnContent = "On", OffContent = "Off" };
     private readonly ComboBox _agentMode = new() { MinWidth = 280 };
-    private readonly TextBox _agentInstructions = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 64, Watermark = "Indicaciones para el agente (opcional): «priorizá las de NQ», «nunca más de ×2 en cripto»…" };
+    private readonly TextBox _agentInstructions = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 64, Watermark = "Instructions for the agent (optional): “prioritize the NQ ones”, “never above ×2 in crypto”…" };
     private readonly NumericUpDown _agentDailyRisk = AgentNum(0.25m, 0.1m, 50, "0.##");
     private readonly NumericUpDown _agentMaxDd = AgentNum(0.5m, 0.5m, 90, "0.##");
     private readonly NumericUpDown _agentMinSize = AgentNum(0.05m, 0, 10, "0.##");
@@ -41,7 +41,7 @@ internal sealed partial class LiveView
     private int _agentVersion = -1;
     private Border? _agentCard;
     private Border? _chartCard;
-    private readonly TextBlock _agentRealNote = new() { Text = "Este portafolio tiene cuentas reales: el agente solo propone y cada cambio lo aprobás vos.", FontSize = 12, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _agentRealNote = new() { Text = "This portfolio has real accounts: the agent only proposes and you approve each change.", FontSize = 12, TextWrapping = TextWrapping.Wrap };
 
     private static NumericUpDown AgentNum(decimal increment, decimal min, decimal max, string format) => new()
     {
@@ -55,21 +55,21 @@ internal sealed partial class LiveView
 
     private Control BuildPortfoliosPage()
     {
-        var create = Ui.Button("Nuevo portafolio", MaterialIconKind.FolderPlusOutline, () => _ = EditPortfolioAsync(null));
+        var create = Ui.Button("New portfolio", MaterialIconKind.FolderPlusOutline, () => _ = EditPortfolioAsync(null));
         var bar = new DockPanel();
         DockPanel.SetDock(create, Dock.Right);
         bar.Children.Add(create);
         bar.Children.Add(_portfolioChips);
 
-        _agentMode.Items.Add(new ComboBoxItem { Content = "Propone: cada cambio lo aprobás vos", Tag = "propose" });
-        _agentMode.Items.Add(new ComboBoxItem { Content = "Automático: aplica solo (solo cuentas simuladas)", Tag = "auto" });
+        _agentMode.Items.Add(new ComboBoxItem { Content = "Proposes: you approve each change", Tag = "propose" });
+        _agentMode.Items.Add(new ComboBoxItem { Content = "Automatic: it applies on its own (simulated accounts only)", Tag = "auto" });
         _agentOn.IsCheckedChanged += (_, _) => SaveAgent();
         _agentMode.SelectionChanged += (_, _) => SaveAgent();
         foreach (var n in new[] { _agentDailyRisk, _agentMaxDd, _agentMinSize, _agentMaxSize, _agentEvery }) n.ValueChanged += (_, _) => SaveAgent();
         _agentInstructions.LostFocus += (_, _) => SaveAgent();
-        _agentRun = Ui.Button("Revisar ahora", MaterialIconKind.ShieldHalfFull, () => _ = RunAgentAsync(), "primary");
+        _agentRun = Ui.Button("Review now", MaterialIconKind.ShieldHalfFull, () => _ = RunAgentAsync(), "primary");
 
-        var intro = Ui.Faint("Estrategias que corren juntas. Si no armaste ninguno, el automático junta todas las que corren en vivo. Cada portafolio puede tener un agente de riesgo (Claude) que reparte el riesgo entre sus estrategias.");
+        var intro = Ui.Faint("Strategies that run together. If you have not built any, the automatic one gathers everything running live. Each portfolio can have a risk agent (Claude) that allocates the risk across its strategies.");
         intro.TextWrapping = TextWrapping.Wrap;
         var root = Ui.V(16, intro, bar, _portfolioDetail);
         root.Margin = new Thickness(24, 18, 24, 28);
@@ -113,8 +113,8 @@ internal sealed partial class LiveView
         if (current == null)
         {
             _portfolioDetail.Children.Add(Ui.Card(Ui.V(8,
-                new TextBlock { Text = "Todavía no hay portafolios.", Classes = { "muted" } },
-                Ui.Faint("Cuando corran estrategias en vivo aparece solo el automático (todas juntas). También podés armar los tuyos con «Nuevo portafolio».").Also(t => t.TextWrapping = TextWrapping.Wrap)), 16));
+                new TextBlock { Text = "There are no portfolios yet.", Classes = { "muted" } },
+                Ui.Faint("Once strategies are running live only the automatic one appears (all of them together). You can also build your own with “New portfolio”.").Also(t => t.TextWrapping = TextWrapping.Wrap)), 16));
             return;
         }
 
@@ -128,57 +128,57 @@ internal sealed partial class LiveView
         var m = analysis.Metrics;
         decimal open = p.Members.Sum(x => x.OpenPnL);
 
-        // encabezado y acciones
+        // header and actions
         var actions = new WrapPanel { ItemSpacing = 8, LineSpacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
-        if (!def.Auto) actions.Children.Add(Ui.Button("Agregar estrategia nueva", MaterialIconKind.Play, () => OpenLaunch(portfolioId: def.Id)));
-        if (p.Members.Any(x => !x.Running && !x.Locked)) actions.Children.Add(Ui.Button("Iniciar todas", MaterialIconKind.PlayCircleOutline, () => _ = StartAllAsync(p), "primary"));
-        if (p.Members.Any(x => x.Running && !x.Locked)) actions.Children.Add(Ui.Button("Detener todas", MaterialIconKind.StopCircleOutline, () => _ = StopAllAsync(p)));
-        actions.Children.Add(Ui.Button("Editar", MaterialIconKind.PencilOutline, () => _ = EditPortfolioAsync(def)));
-        if (!def.Auto) actions.Children.Add(Ui.Button("Borrar", MaterialIconKind.DeleteOutline, () => _ = DeletePortfolioAsync(def), "danger"));
+        if (!def.Auto) actions.Children.Add(Ui.Button("Add a new strategy", MaterialIconKind.Play, () => OpenLaunch(portfolioId: def.Id)));
+        if (p.Members.Any(x => !x.Running && !x.Locked)) actions.Children.Add(Ui.Button("Start all", MaterialIconKind.PlayCircleOutline, () => _ = StartAllAsync(p), "primary"));
+        if (p.Members.Any(x => x.Running && !x.Locked)) actions.Children.Add(Ui.Button("Stop all", MaterialIconKind.StopCircleOutline, () => _ = StopAllAsync(p)));
+        actions.Children.Add(Ui.Button("Edit", MaterialIconKind.PencilOutline, () => _ = EditPortfolioAsync(def)));
+        if (!def.Auto) actions.Children.Add(Ui.Button("Delete", MaterialIconKind.DeleteOutline, () => _ = DeletePortfolioAsync(def), "danger"));
         var head = new DockPanel();
         DockPanel.SetDock(actions, Dock.Right);
         head.Children.Add(actions);
         head.Children.Add(Ui.V(3, Ui.H2(def.Name),
-            Ui.Faint($"{(def.Auto ? "Automático: todas las que corren en vivo sin un portafolio tuyo · " : "")}{p.Members.Count} estrategia(s) · capital de referencia {def.Capital.ToString("#,##0", Es)}" +
+            Ui.Faint($"{(def.Auto ? "Automatic: every strategy running live with no portfolio of yours · " : "")}{p.Members.Count} strategy(ies) · reference capital {def.Capital.ToString("#,##0", Fmt)}" +
                      $"{(p.HasReal ? " · incluye cuentas REALES" : "")}").Also(t => t.TextWrapping = TextWrapping.Wrap)));
         _portfolioDetail.Children.Add(head);
 
-        // números del portafolio
+        // portfolio numbers
         var kpis = new WrapPanel { ItemSpacing = 10, LineSpacing = 10 };
-        kpis.Children.Add(Kpi("Resultado", Money(m.NetProfit + open), $"cerrado {Money(m.NetProfit)} · abierto {Money(open)}", m.NetProfit + open >= 0 ? Ui.Up : Ui.Down));
-        kpis.Children.Add(Kpi("Operaciones", m.TotalTrades.ToString(Inv), m.TotalTrades > 0 ? $"{m.WinRate:0} % ganadoras" : "todavía ninguna", null,
+        kpis.Children.Add(Kpi("Result", Money(m.NetProfit + open), $"closed {Money(m.NetProfit)} · open {Money(open)}", m.NetProfit + open >= 0 ? Ui.Up : Ui.Down));
+        kpis.Children.Add(Kpi("Trades", m.TotalTrades.ToString(Inv), m.TotalTrades > 0 ? $"{m.WinRate:0} % winners" : "none yet", null,
             m.TotalTrades > 0 ? () => OpenTradesOf(p) : null));
-        kpis.Children.Add(Kpi("Profit factor", m.TotalTrades > 0 ? (m.ProfitFactor >= 999 ? "∞" : m.ProfitFactor.ToString("0.00", Es)) : "—", m.TotalTrades > 0 ? $"media {Money(m.AverageTrade)} por operación" : ""));
-        kpis.Children.Add(Kpi("Drawdown máx.", (-m.MaxDrawdown).ToString("#,##0.00", Es), def.Capital > 0 ? $"{(m.MaxDrawdown / def.Capital * 100):0.#} % del capital" : ""));
-        kpis.Children.Add(Kpi("Sharpe", analysis.Days.Count >= 5 ? m.SharpeRatio.ToString("0.00", Es) : "—", analysis.Days.Count >= 5 ? "anualizado, por día" : "hace falta más de una semana"));
+        kpis.Children.Add(Kpi("Profit factor", m.TotalTrades > 0 ? (m.ProfitFactor >= 999 ? "∞" : m.ProfitFactor.ToString("0.00", Fmt)) : "—", m.TotalTrades > 0 ? $"average {Money(m.AverageTrade)} per trade" : ""));
+        kpis.Children.Add(Kpi("Max drawdown", (-m.MaxDrawdown).ToString("#,##0.00", Fmt), def.Capital > 0 ? $"{(m.MaxDrawdown / def.Capital * 100):0.#} % of the capital" : ""));
+        kpis.Children.Add(Kpi("Sharpe", analysis.Days.Count >= 5 ? m.SharpeRatio.ToString("0.00", Fmt) : "—", analysis.Days.Count >= 5 ? "annualized, per day" : "more than a week is needed"));
         if (p.Members.Count > 1)
-            kpis.Children.Add(Kpi("Correlación media", analysis.Days.Count >= 3 ? analysis.AverageCorrelation.ToString("0.00", Es) : "—",
-                analysis.Days.Count >= 3 ? $"máxima {analysis.MaxCorrelation.ToString("0.00", Es)} · DD {analysis.DrawdownReductionPercent:0} % menor que la suma" : "hace falta más de un par de días",
-                analysis.AverageCorrelation > 0.6 ? Ui.Warn : null, null, "Correlación de Pearson del resultado diario entre las estrategias: cerca de 1 = se mueven juntas (diversifica poco)"));
+            kpis.Children.Add(Kpi("Average correlation", analysis.Days.Count >= 3 ? analysis.AverageCorrelation.ToString("0.00", Fmt) : "—",
+                analysis.Days.Count >= 3 ? $"maximum {analysis.MaxCorrelation.ToString("0.00", Fmt)} · DD {analysis.DrawdownReductionPercent:0} % lower than the sum" : "more than a couple of days are needed",
+                analysis.AverageCorrelation > 0.6 ? Ui.Warn : null, null, "Pearson correlation of the daily result between the strategies: close to 1 = they move together (little diversification)"));
         _portfolioDetail.Children.Add(kpis);
 
         _portfolioChart.SetData(analysis.Equity, def.Capital > 0 ? def.Capital : 25_000m);
         _chartCard ??= Ui.Card(_portfolioChart, 8);
         _portfolioDetail.Children.Add(_chartCard);
 
-        // cada estrategia
-        _portfolioDetail.Children.Add(Ui.H3("Estrategias"));
+        // each strategy
+        _portfolioDetail.Children.Add(Ui.H3("Strategies"));
         _portfolioDetail.Children.Add(Ui.Card(MembersTable(p, analysis), 10));
 
-        // correlación
+        // correlation
         if (p.Members.Count > 1)
         {
-            _portfolioDetail.Children.Add(Ui.H3("Correlación entre estrategias"));
+            _portfolioDetail.Children.Add(Ui.H3("Correlation between strategies"));
             _portfolioDetail.Children.Add(Ui.Card(CorrelationMatrix(p, analysis), 12));
         }
 
-        // agente de riesgo
-        _portfolioDetail.Children.Add(Ui.H3("Agente de riesgo"));
+        // risk agent
+        _portfolioDetail.Children.Add(Ui.H3("Risk agent"));
         _portfolioDetail.Children.Add(AgentCard(p));
         var mine = LiveStore.LoadProposals().Where(x => x.PortfolioId == def.Id).OrderByDescending(x => x.CreatedUtc).Take(6).ToList();
         if (mine.Count > 0)
         {
-            _portfolioDetail.Children.Add(Ui.H3("Propuestas del agente"));
+            _portfolioDetail.Children.Add(Ui.H3("Agent proposals"));
             foreach (var prop in mine) _portfolioDetail.Children.Add(ProposalCard(prop, () => RefreshPortfolios(force: true)));
         }
     }
@@ -188,7 +188,7 @@ internal sealed partial class LiveView
         const string cols = "2.4*,1*,0.8*,1*,0.6*,0.7*,1*,0.9*,0.9*";
         var table = new StackPanel();
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions(cols), Margin = new Thickness(6, 2, 6, 8) };
-        string[] titles = { "Estrategia", "Estado", "Tamaño", "Neto", "Ops", "PF", "DD máx.", "% del total", "Corr. media" };
+        string[] titles = { "Strategy", "Status", "Size", "Net", "Ops", "PF", "Max DD", "% of the total", "Avg. corr." };
         for (int i = 0; i < titles.Length; i++)
         {
             var t = new TextBlock { Text = titles[i], Classes = { "h3" }, HorizontalAlignment = i >= 2 ? HorizontalAlignment.Right : HorizontalAlignment.Left, Margin = new Thickness(6, 0) };
@@ -199,7 +199,7 @@ internal sealed partial class LiveView
         table.Children.Add(head);
         if (p.Members.Count == 0)
         {
-            table.Children.Add(new TextBlock { Text = "Sin estrategias: usá «Editar» para sumar las que ya corren, o «Agregar estrategia nueva».", Classes = { "muted", "small" }, Margin = new Thickness(12, 4), TextWrapping = TextWrapping.Wrap });
+            table.Children.Add(new TextBlock { Text = "No strategies: use “Edit” to add the ones already running, or “Add a new strategy”.", Classes = { "muted", "small" }, Margin = new Thickness(12, 4), TextWrapping = TextWrapping.Wrap });
             return table;
         }
 
@@ -224,13 +224,13 @@ internal sealed partial class LiveView
                 Ui.V(1, new TextBlock { Text = e.Info.Strategy, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
                     new TextBlock { Text = $"{e.Info.Symbol} {e.Info.Period} · {e.Info.Account}{(e.Locked ? $" · {e.SourceLabel} 🔒" : "")}", Classes = { "faint", "small" }, TextTrimming = TextTrimming.CharacterEllipsis }),
                 new TextBlock { Text = e.StateLabel, FontSize = 12, Foreground = e.Running ? Ui.Up : Ui.Text2 },
-                Num("×" + size.ToString("0.##", Es)),
+                Num("×" + size.ToString("0.##", Fmt)),
                 Num(Money(e.Net), e.Net >= 0 ? Ui.Up : Ui.Down),
                 Num(e.Ledger.Trades.Count.ToString(Inv)),
-                Num(cm.TotalTrades > 0 ? (cm.ProfitFactor >= 999 ? "∞" : cm.ProfitFactor.ToString("0.00", Es)) : "—"),
-                Num((-cm.MaxDrawdown).ToString("#,##0.00", Es)),
+                Num(cm.TotalTrades > 0 ? (cm.ProfitFactor >= 999 ? "∞" : cm.ProfitFactor.ToString("0.00", Fmt)) : "—"),
+                Num((-cm.MaxDrawdown).ToString("#,##0.00", Fmt)),
                 Num(total != 0 ? $"{e.Ledger.Realized / Math.Abs(total) * 100:0} %" : "—"),
-                Num(n > 1 && analysis.Days.Count >= 3 ? corr.ToString("0.00", Es) : "—", corr > 0.6 ? Ui.Warn : null),
+                Num(n > 1 && analysis.Days.Count >= 3 ? corr.ToString("0.00", Fmt) : "—", corr > 0.6 ? Ui.Warn : null),
             };
             for (int c = 0; c < cells.Length; c++)
             {
@@ -252,12 +252,12 @@ internal sealed partial class LiveView
         return table;
     }
 
-    /// <summary>Matriz de correlación del resultado diario (rojo = se mueven juntas, verde = se compensan).</summary>
+    /// <summary>Correlation matrix of the daily result (red = they move together, green = they offset each other).</summary>
     private static Control CorrelationMatrix(LivePortfolioView p, PortfolioResult analysis)
     {
         int n = p.Members.Count;
         if (analysis.Correlation.GetLength(0) != n || analysis.Days.Count < 3)
-            return new TextBlock { Text = "Hace falta al menos un par de días con operaciones para medir la correlación.", Classes = { "muted", "small" } };
+            return new TextBlock { Text = "At least a couple of days with trades are needed to measure the correlation.", Classes = { "muted", "small" } };
         var g = new Grid();
         g.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(220)));
         for (int j = 0; j < n; j++) g.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(74)));
@@ -288,16 +288,16 @@ internal sealed partial class LiveView
                     Margin = new Thickness(2),
                     CornerRadius = new CornerRadius(5),
                     Height = 30,
-                    Child = new TextBlock { Text = i == j ? "—" : c.ToString("0.00", Es), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, FontWeight = FontWeight.SemiBold },
+                    Child = new TextBlock { Text = i == j ? "—" : c.ToString("0.00", Fmt), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, FontWeight = FontWeight.SemiBold },
                 };
-                if (i != j) ToolTip.SetTip(cell, $"{Short(p.Members[i])} ↔ {Short(p.Members[j])}: {c.ToString("0.00", Es)}");
+                if (i != j) ToolTip.SetTip(cell, $"{Short(p.Members[i])} ↔ {Short(p.Members[j])}: {c.ToString("0.00", Fmt)}");
                 Grid.SetRow(cell, i + 1);
                 Grid.SetColumn(cell, j + 1);
                 g.Children.Add(cell);
             }
         }
 
-        var note = Ui.Faint("Correlación de Pearson del resultado diario. Rojo: ganan y pierden los mismos días (es casi la misma apuesta). Verde: se compensan (diversifica).");
+        var note = Ui.Faint("Pearson correlation of the daily result. Red: they win and lose on the same days (it is almost the same bet). Green: they offset each other (diversification).");
         note.TextWrapping = TextWrapping.Wrap;
         return Ui.V(10, new ScrollViewer { Content = g, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, note);
     }
@@ -324,11 +324,11 @@ internal sealed partial class LiveView
         bool busy = agent.IsRunning(p.Def.Id);
         _agentRun.IsEnabled = !busy && p.Members.Any(m => !m.Locked && (m.Running || m.WaitingResume));
         var lines = new List<string>();
-        if (busy) lines.Add(agent.Activity(p.Def.Id) ?? "Trabajando…");
-        if (a.LastRunUtc is { } last) lines.Add($"Última revisión {Ui.Ago(last)} · {LiveRiskAgent.RunsToday(a)}/{a.MaxRunsPerDay} hoy · US$ {a.CostTotal.ToString("0.00", Es)} estimado en total");
+        if (busy) lines.Add(agent.Activity(p.Def.Id) ?? "Working…");
+        if (a.LastRunUtc is { } last) lines.Add($"Last review {Ui.Ago(last)} · {LiveRiskAgent.RunsToday(a)}/{a.MaxRunsPerDay} today · US$ {a.CostTotal.ToString("0.00", Fmt)} estimated in total");
         if (a.LastError is { Length: > 0 } err) lines.Add("⚠ " + err);
         else if (a.LastSummary.Length > 0) lines.Add(a.LastSummary);
-        if (lines.Count == 0) lines.Add(a.Enabled ? "Revisa cada vez que hay operaciones nuevas (como mucho cada tantos minutos) y deja sus propuestas acá." : "Apagado. Activalo para que reparta el riesgo entre las estrategias de este portafolio.");
+        if (lines.Count == 0) lines.Add(a.Enabled ? "It reviews every time there are new trades (at most every few minutes) and leaves its proposals here." : "Off. Turn it on so it allocates the risk across this portfolio's strategies.");
         _agentState.Text = string.Join("\n", lines);
         _agentState.Foreground = a.LastError != null ? Ui.Warn : null;
         bool real = p.HasReal;
@@ -351,8 +351,8 @@ internal sealed partial class LiveView
             return g;
         }
 
-        var explain = Ui.Faint("Claude (Opus, esfuerzo extra) mira el resultado, la racha, el drawdown contra su historia, la volatilidad y la correlación de cada estrategia, y reparte el riesgo: " +
-                               "tamaño y límites de cada una dentro de tus topes. Con cuentas reales siempre propone y aprobás vos.");
+        var explain = Ui.Faint("Claude (Opus, extra effort) looks at the result, the streak, the drawdown against its history, the volatility and the correlation of each strategy, and allocates the risk: " +
+                               "each one's size and limits within your caps. With real accounts it always proposes and you approve.");
         explain.TextWrapping = TextWrapping.Wrap;
         var top = new DockPanel();
         var run = Ui.H(10, _agentRun);
@@ -363,9 +363,9 @@ internal sealed partial class LiveView
             top,
             explain,
             _agentRealNote,
-            Row(Ui.Field("Riesgo diario (% del capital)", _agentDailyRisk), Ui.Field("Drawdown máx. del portafolio (%)", _agentMaxDd), Ui.Field("Revisar cada (min)", _agentEvery)),
-            Row(Ui.Field("Tamaño mínimo (×)", _agentMinSize), Ui.Field("Tamaño máximo (×)", _agentMaxSize), Ui.Field("Modelo y esfuerzo", Ui.H(8, _agentModel!, _agentEffort!))),
-            Ui.Field("Indicaciones", _agentInstructions),
+            Row(Ui.Field("Daily risk (% of capital)", _agentDailyRisk), Ui.Field("Portfolio max drawdown (%)", _agentMaxDd), Ui.Field("Review every (min)", _agentEvery)),
+            Row(Ui.Field("Minimum size (×)", _agentMinSize), Ui.Field("Maximum size (×)", _agentMaxSize), Ui.Field("Model and effort", Ui.H(8, _agentModel!, _agentEffort!))),
+            Ui.Field("Instructions", _agentInstructions),
             _agentState);
         _agentCard = Ui.Card(body, 16);
         return _agentCard;
@@ -392,7 +392,7 @@ internal sealed partial class LiveView
         if (_agentModel?.SelectedItem is ComboBoxItem { Tag: string m }) a.Model = m;
         if (_agentEffort?.SelectedItem is ComboBoxItem { Tag: string ef }) a.Effort = ef;
         LiveStore.SavePortfolios(defs);
-        if (a.Enabled && !wasOn) _status($"Agente de riesgo activo en «{def.Name}»: revisa cuando haya operaciones nuevas (o tocá «Revisar ahora»)");
+        if (a.Enabled && !wasOn) _status($"Risk agent active on “{def.Name}”: it reviews when there are new trades (or click “Review now”)");
     }
 
     private async Task RunAgentAsync()
@@ -400,12 +400,12 @@ internal sealed partial class LiveView
         if (_portfolioId == null) return;
         SaveAgent();
         _agentRun.IsEnabled = false;
-        _status("El agente de riesgo está revisando el portafolio…");
+        _status("The risk agent is reviewing the portfolio…");
         var id = _portfolioId;
         var task = _svc.Live.RiskAgent.RunAsync(id, manual: true);
         RefreshPortfolios(force: true);
         var err = await task;
-        _status(err ?? "El agente de riesgo terminó: mirá sus propuestas");
+        _status(err ?? "The risk agent finished: look at its proposals");
         RefreshPortfolios(force: true);
     }
 
@@ -420,7 +420,7 @@ internal sealed partial class LiveView
 
     private async Task DeletePortfolioAsync(LivePortfolioDef def)
     {
-        if (!await ConfirmDialog.ShowAsync(_window, "Borrar portafolio", $"Se borra «{def.Name}». Sus estrategias siguen corriendo y pasan al automático.", "Borrar", danger: true)) return;
+        if (!await ConfirmDialog.ShowAsync(_window, "Delete portfolio", $"“{def.Name}” is deleted. Its strategies keep running and move to the automatic one.", "Delete", danger: true)) return;
         _svc.Live.DeletePortfolio(def.Id);
         _portfolioId = null;
         RefreshPortfolios(force: true);
@@ -430,24 +430,24 @@ internal sealed partial class LiveView
     {
         var pending = p.Members.Where(m => !m.Running && !m.Locked).ToList();
         if (pending.Any(m => m.Info.IsReal) &&
-            !await ConfirmDialog.ShowAsync(_window, "Ejecutar en cuentas REALES", $"Alguna de las {pending.Count} estrategias opera una cuenta real: van a mandar órdenes con dinero de verdad sin confirmar cada una.", "Iniciar todas", danger: true))
+            !await ConfirmDialog.ShowAsync(_window, "Run on REAL accounts", $"At least one of the {pending.Count} strategies trades a real account: they will send orders with real money without confirming each one.", "Start all", danger: true))
             return;
         var errors = await _svc.Live.StartAllAsync(p);
-        _status(errors.Count == 0 ? $"«{p.Def.Name}»: {pending.Count} estrategia(s) corriendo" : "No arrancaron todas: " + string.Join(" · ", errors));
+        _status(errors.Count == 0 ? $"“{p.Def.Name}”: {pending.Count} strategy(ies) running" : "Not all of them started: " + string.Join(" · ", errors));
         RefreshPortfolios(force: true);
     }
 
     private async Task StopAllAsync(LivePortfolioView p)
     {
-        if (!await ConfirmDialog.ShowAsync(_window, "Detener todas", $"Se detienen las estrategias de «{p.Def.Name}». Las posiciones abiertas quedan como están.", "Detener todas")) return;
+        if (!await ConfirmDialog.ShowAsync(_window, "Stop all", $"The strategies in “{p.Def.Name}” are halted. Open positions are left as they are.", "Stop all")) return;
         await _svc.Live.StopAllAsync(p, close: false);
-        _status($"«{p.Def.Name}»: estrategias detenidas");
+        _status($"“{p.Def.Name}”: strategies halted");
         RefreshPortfolios(force: true);
     }
 
     private void OpenTradesOf(LivePortfolioView p)
     {
-        if (p.Members.Count == 1) OpenTrades(p.Members[0].Key, $"Operaciones · {p.Members[0].Info.Strategy}");
-        else OpenTrades(null, $"Operaciones en vivo · {p.Def.Name}", p.Members.Select(m => m.Key).ToList());
+        if (p.Members.Count == 1) OpenTrades(p.Members[0].Key, $"Trades · {p.Members[0].Info.Strategy}");
+        else OpenTrades(null, $"Live trades · {p.Def.Name}", p.Members.Select(m => m.Key).ToList());
     }
 }

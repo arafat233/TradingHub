@@ -5,8 +5,8 @@ using TradingHub.Market;
 namespace TradingHub.Feeds;
 
 /// <summary>
-/// Reproduce operaciones grabadas o descargadas como si fueran en vivo, con velocidad ajustable,
-/// pausa y salto hacia adelante. La historia previa al inicio se carga de los mismos archivos.
+/// Replays recorded or downloaded trades as if they were live, with adjustable speed,
+/// pause and jump forward. The history before the start is loaded from the same files.
 /// </summary>
 public sealed class ReplayFeed : IMarketDataFeed
 {
@@ -48,20 +48,20 @@ public sealed class ReplayFeed : IMarketDataFeed
     public DateTime Start { get; }
     public DateTime End { get; }
 
-    /// <summary>Multiplicador del tiempo real (1 = tiempo real).</summary>
+    /// <summary>Multiplier of real time (1 = real time).</summary>
     public double Speed { get; set; } = 1;
 
     public bool Paused { get; set; }
     public bool IsFinished { get; private set; }
 
-    /// <summary>Instante del mercado que se está reproduciendo.</summary>
+    /// <summary>Market instant being replayed.</summary>
     public DateTime Clock => new(Interlocked.Read(ref _clockTicks), DateTimeKind.Utc);
 
     public DateTime Now => Start;
 
     public double Progress => End > Start ? Math.Clamp((Clock - Start).TotalSeconds / (End - Start).TotalSeconds, 0, 1) : 1;
 
-    /// <summary>Salta hacia adelante (las operaciones intermedias se entregan de una).</summary>
+    /// <summary>Jumps forward (the trades in between are delivered all at once).</summary>
     public void SeekForward(DateTime target)
     {
         if (target > Clock) Interlocked.Exchange(ref _seekTicks, Math.Min(target.Ticks, End.Ticks));
@@ -102,7 +102,7 @@ public sealed class ReplayFeed : IMarketDataFeed
 
     private void Run(IMarketDataSink sink)
     {
-        sink.OnStatus(Instrument, FeedStatus.Connected, $"Replay desde {Start:dd/MM HH:mm} UTC");
+        sink.OnStatus(Instrument, FeedStatus.Connected, $"Replay from {Start:dd/MM HH:mm} UTC");
         using var e = HistoricalData.Read(_root, _source.FeedId, _source.Symbol, Start, End).GetEnumerator();
         bool has = e.MoveNext();
         var sw = Stopwatch.StartNew();
@@ -134,7 +134,7 @@ public sealed class ReplayFeed : IMarketDataFeed
         {
             IsFinished = true;
             Interlocked.Exchange(ref _clockTicks, End.Ticks);
-            sink.OnStatus(Instrument, FeedStatus.Disconnected, "Replay terminado");
+            sink.OnStatus(Instrument, FeedStatus.Disconnected, "Replay finished");
         }
     }
 

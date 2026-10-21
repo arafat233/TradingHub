@@ -3,7 +3,7 @@ using TradingHub.Strategies;
 
 namespace TradingHub.App.Services;
 
-/// <summary>Una estrategia en disco (un archivo .cs) y su última compilación.</summary>
+/// <summary>A strategy on disk (a .cs file) and its last compilation.</summary>
 public sealed class StrategyFile
 {
     public required string Path { get; init; }
@@ -13,27 +13,27 @@ public sealed class StrategyFile
     public DateTime CompiledFileTime { get; set; }
     public string DisplayName => Type != null ? Strategy.DisplayName(Type) : FileName;
 
-    /// <summary>Id estable para el historial (el nombre de la clase).</summary>
+    /// <summary>Stable id for the history (the class name).</summary>
     public string Id => Type?.FullName ?? FileName;
 
-    public Strategy Create() => (Strategy)Activator.CreateInstance(Type ?? throw new InvalidOperationException("La estrategia no está compilada."))!;
+    public Strategy Create() => (Strategy)Activator.CreateInstance(Type ?? throw new InvalidOperationException("The strategy is not compiled."))!;
 }
 
-/// <summary>Estrategias del usuario: archivos en ~/Documents/Trading Hub/Estrategias, compilados con Roslyn.</summary>
+/// <summary>The user's strategies: files in ~/Documents/Trading Hub/Estrategias, compiled with Roslyn.</summary>
 public sealed class StrategyCatalog
 {
     private readonly ScriptCompiler _compiler = new();
 
     public StrategyCatalog()
     {
-        _ = typeof(Strategy); // asegura que TradingHub.Strategies esté cargado para referenciarlo al compilar
-        // TRADINGHUB_BACKTESTS_DIR: historial alternativo (pruebas)
+        _ = typeof(Strategy); // makes sure TradingHub.Strategies is loaded so it can be referenced when compiling
+        // TRADINGHUB_BACKTESTS_DIR: alternative history folder (tests)
         StrategyStore.Root = Environment.GetEnvironmentVariable("TRADINGHUB_BACKTESTS_DIR") is { Length: > 0 } dir ? dir : AppPaths.Backtests;
         Directory.CreateDirectory(AppPaths.Strategies);
         if (!Directory.EnumerateFiles(AppPaths.Strategies, "*.cs").Any())
         {
             foreach (var t in StrategyTemplates.All.Where(t => t.Example))
-                File.WriteAllText(System.IO.Path.Combine(AppPaths.Strategies, t.FileName + ".cs"), t.Code(t.FileName).Replace("__NOMBRE__", t.Name));
+                File.WriteAllText(System.IO.Path.Combine(AppPaths.Strategies, t.FileName + ".cs"), t.Code(t.FileName).Replace("__NAME__", t.Name));
         }
 
         Refresh();
@@ -53,12 +53,12 @@ public sealed class StrategyCatalog
         Changed?.Invoke();
     }
 
-    /// <summary>Compila un archivo (si cambió desde la última vez o si se fuerza).</summary>
+    /// <summary>Compiles a file (if it changed since last time or if it is forced).</summary>
     public ScriptCompileResult Compile(StrategyFile file, bool force = false)
     {
         var stamp = File.GetLastWriteTimeUtc(file.Path);
         if (!force && file.LastCompile != null && stamp == file.CompiledFileTime) return file.LastCompile;
-        var res = _compiler.Compile(new[] { file.Path }, "Estrategia_" + file.FileName);
+        var res = _compiler.Compile(new[] { file.Path }, "Strategy_" + file.FileName);
         file.LastCompile = res;
         file.CompiledFileTime = stamp;
         if (res.Success && res.Assembly != null)
@@ -67,7 +67,7 @@ public sealed class StrategyCatalog
             file.Type = types.FirstOrDefault();
             if (file.Type == null)
             {
-                var diag = new ScriptDiagnostic(file.Path, 1, 1, "error", "TH01", "El archivo no tiene ninguna clase pública que herede de Strategy con un constructor sin parámetros.");
+                var diag = new ScriptDiagnostic(file.Path, 1, 1, "error", "TH01", "The file has no public class inheriting from Strategy with a parameterless constructor.");
                 file.LastCompile = new ScriptCompileResult { Success = false, Diagnostics = res.Diagnostics.Append(diag).ToList(), Elapsed = res.Elapsed };
             }
         }
@@ -80,15 +80,15 @@ public sealed class StrategyCatalog
         return file.LastCompile;
     }
 
-    /// <summary>Crea un archivo nuevo desde una plantilla y devuelve su ruta.</summary>
+    /// <summary>Creates a new file from a template and returns its path.</summary>
     public StrategyFile Create(string name, StrategyTemplate template)
     {
         string className = new string(name.Where(char.IsLetterOrDigit).ToArray());
-        if (className.Length == 0 || char.IsDigit(className[0])) className = "Estrategia" + className;
+        if (className.Length == 0 || char.IsDigit(className[0])) className = "Strategy" + className;
         var path = System.IO.Path.Combine(AppPaths.Strategies, className + ".cs");
         for (int i = 2; File.Exists(path); i++) path = System.IO.Path.Combine(AppPaths.Strategies, $"{className}{i}.cs");
         className = System.IO.Path.GetFileNameWithoutExtension(path);
-        File.WriteAllText(path, template.Code(className).Replace("__NOMBRE__", name.Replace("\"", "'")));
+        File.WriteAllText(path, template.Code(className).Replace("__NAME__", name.Replace("\"", "'")));
         Refresh();
         return Files.First(f => f.Path == path);
     }
@@ -100,113 +100,113 @@ public sealed class StrategyCatalog
     }
 }
 
-/// <summary>Plantilla de estrategia.</summary>
+/// <summary>Strategy template.</summary>
 public sealed record StrategyTemplate(string Name, string Description, string FileName, bool Example, Func<string, string> Code);
 
-/// <summary>Plantillas incluidas (también se usan como ejemplos la primera vez).</summary>
+/// <summary>Bundled templates (they double as examples the first time).</summary>
 public static class StrategyTemplates
 {
     public static readonly StrategyTemplate[] All =
     {
-        new("Cruce de medias", "Largo cuando la media rápida cruza arriba de la lenta y corto al revés. Ideal para empezar.", "CruceDeMedias", true, c => $$"""
+        new("Moving average cross", "Long when the fast average crosses above the slow one and short the other way round. Ideal to get started.", "MovingAverageCross", true, c => $$"""
             using TradingHub.Strategies;
 
-            [Strategy("__NOMBRE__", Description = "Cruce de dos medias exponenciales con stop y objetivo en ticks.")]
+            [Strategy("__NAME__", Description = "A cross of two exponential averages with a stop and a target in ticks.")]
             public class {{c}} : Strategy
             {
-                [Parameter("Media rápida"), Optimize(5, 30, 5)]
-                public int Rapida { get; set; } = 10;
+                [Parameter("Fast average"), Optimize(5, 30, 5)]
+                public int Fast { get; set; } = 10;
 
-                [Parameter("Media lenta"), Optimize(20, 100, 10)]
-                public int Lenta { get; set; } = 40;
+                [Parameter("Slow average"), Optimize(20, 100, 10)]
+                public int Slow { get; set; } = 40;
 
-                private Ema _rapida = null!, _lenta = null!;
+                private Ema _fast = null!, _slow = null!;
 
                 protected override void OnInit()
                 {
-                    _rapida = Ema(Rapida);
-                    _lenta = Ema(Lenta);
+                    _fast = Ema(Fast);
+                    _slow = Ema(Slow);
                 }
 
                 protected override void OnBar(Bar bar)
                 {
-                    if (!_lenta.IsReady) return;
+                    if (!_slow.IsReady) return;
 
-                    if (CrossAbove(_rapida, _lenta)) EnterLong();
-                    else if (CrossBelow(_rapida, _lenta)) EnterShort();
+                    if (CrossAbove(_fast, _slow)) EnterLong();
+                    else if (CrossBelow(_fast, _slow)) EnterShort();
                 }
             }
             """),
 
-        new("Ruptura de rango", "Compra la ruptura del máximo de N velas y vende la del mínimo, con stop por ATR.", "RupturaDeRango", true, c => $$"""
+        new("Range breakout", "It buys the breakout of the N-candle high and sells the break of the low, with an ATR stop.", "RangeBreakout", true, c => $$"""
             using TradingHub.Strategies;
 
-            [Strategy("__NOMBRE__", Description = "Ruptura de canal (Donchian) con salida por ATR.")]
+            [Strategy("__NAME__", Description = "A channel (Donchian) breakout with an ATR exit.")]
             public class {{c}} : Strategy
             {
-                [Parameter("Velas del canal"), Optimize(10, 60, 10)]
-                public int Canal { get; set; } = 20;
+                [Parameter("Channel candles"), Optimize(10, 60, 10)]
+                public int Channel { get; set; } = 20;
 
-                [Parameter("Múltiplo de ATR para el stop"), Optimize(1, 4, 0.5)]
-                public double MultiploAtr { get; set; } = 2;
+                [Parameter("ATR multiple for the stop"), Optimize(1, 4, 0.5)]
+                public double AtrMultiple { get; set; } = 2;
 
-                private Highest _maximo = null!;
-                private Lowest _minimo = null!;
+                private Highest _highest = null!;
+                private Lowest _lowest = null!;
                 private Atr _atr = null!;
                 private decimal _stop;
 
                 protected override void OnInit()
                 {
-                    _maximo = Highest(Canal);
-                    _minimo = Lowest(Canal);
+                    _highest = Highest(Channel);
+                    _lowest = Lowest(Channel);
                     _atr = Atr(14);
                 }
 
                 protected override void OnBar(Bar bar)
                 {
-                    if (Bars.Count <= Canal || !_atr.IsReady) return;
-                    decimal techo = _maximo[1], piso = _minimo[1];
-                    decimal distancia = _atr.Value * (decimal)MultiploAtr;
+                    if (Bars.Count <= Channel || !_atr.IsReady) return;
+                    decimal ceiling = _highest[1], floor = _lowest[1];
+                    decimal distance = _atr.Value * (decimal)AtrMultiple;
 
                     if (IsFlat)
                     {
-                        if (bar.Close > techo) { EnterLong(); _stop = bar.Close - distancia; }
-                        else if (bar.Close < piso) { EnterShort(); _stop = bar.Close + distancia; }
+                        if (bar.Close > ceiling) { EnterLong(); _stop = bar.Close - distance; }
+                        else if (bar.Close < floor) { EnterShort(); _stop = bar.Close + distance; }
                     }
                     else if (IsLong)
                     {
-                        _stop = Math.Max(_stop, bar.Close - distancia);
+                        _stop = Math.Max(_stop, bar.Close - distance);
                         if (bar.Close < _stop) ClosePosition("Stop ATR");
                     }
                     else
                     {
-                        _stop = Math.Min(_stop, bar.Close + distancia);
+                        _stop = Math.Min(_stop, bar.Close + distance);
                         if (bar.Close > _stop) ClosePosition("Stop ATR");
                     }
                 }
             }
             """),
 
-        new("Absorción con delta", "Order flow: vela con delta muy negativo que igual cierra arriba (absorción de ventas) → compra, y al revés.", "AbsorcionConDelta", true, c => $$"""
+        new("Delta absorption", "Order flow: a candle with a very negative delta that still closes up (sell absorption) → buy, and the other way round.", "DeltaAbsorption", true, c => $$"""
             using TradingHub.Strategies;
 
-            [Strategy("__NOMBRE__", Description = "Busca absorción: mucho volumen agresivo en contra que no logra mover el precio.")]
+            [Strategy("__NAME__", Description = "It looks for absorption: a lot of aggressive volume against price that fails to move it.")]
             public class {{c}} : Strategy
             {
-                [Parameter("Velas para el promedio de volumen")]
-                public int Promedio { get; set; } = 20;
+                [Parameter("Candles for the volume average")]
+                public int AveragePeriod { get; set; } = 20;
 
-                [Parameter("Volumen mínimo (x promedio)"), Optimize(1.0, 3.0, 0.5)]
-                public double VolumenMinimo { get; set; } = 1.5;
+                [Parameter("Minimum volume (x average)"), Optimize(1.0, 3.0, 0.5)]
+                public double MinVolume { get; set; } = 1.5;
 
-                [Parameter("Delta mínimo (% del volumen)"), Optimize(10, 40, 10)]
-                public int DeltaMinimo { get; set; } = 20;
+                [Parameter("Minimum delta (% of volume)"), Optimize(10, 40, 10)]
+                public int MinDelta { get; set; } = 20;
 
-                [Parameter("Velas máximas en la operación")]
-                public int VelasMaximas { get; set; } = 6;
+                [Parameter("Maximum candles in the trade")]
+                public int MaxCandles { get; set; } = 6;
 
-                private Sma _volumen = null!;
-                private int _barEntrada;
+                private Sma _volume = null!;
+                private int _entryBar;
 
                 public {{c}}()
                 {
@@ -216,52 +216,52 @@ public static class StrategyTemplates
 
                 protected override void OnInit()
                 {
-                    UseFootprint = true; // volumen por precio en cada vela (bar.Levels, bar.PocPrice)
-                    _volumen = Sma(Promedio, PriceSource.Volume);
+                    UseFootprint = true; // volume by price on each candle (bar.Levels, bar.PocPrice)
+                    _volume = Sma(AveragePeriod, PriceSource.Volume);
                 }
 
                 protected override void OnBar(Bar bar)
                 {
-                    if (!_volumen.IsReady) return;
+                    if (!_volume.IsReady) return;
 
-                    if (!IsFlat && CurrentBar - _barEntrada >= VelasMaximas)
+                    if (!IsFlat && CurrentBar - _entryBar >= MaxCandles)
                     {
-                        ClosePosition("Tiempo");
+                        ClosePosition("Time");
                         return;
                     }
 
-                    bool volumenAlto = bar.Volume >= _volumen[1] * (decimal)VolumenMinimo;
+                    bool highVolume = bar.Volume >= _volume[1] * (decimal)MinVolume;
                     decimal deltaPct = bar.Volume > 0 ? 100 * bar.Delta / bar.Volume : 0;
 
-                    // ventas agresivas fuertes pero la vela cierra arriba de su POC: alguien absorbió
-                    if (IsFlat && volumenAlto && deltaPct <= -DeltaMinimo && bar.Close > bar.PocPrice && bar.IsBullish)
+                    // strong aggressive selling but the candle closes above its POC: somebody absorbed it
+                    if (IsFlat && highVolume && deltaPct <= -MinDelta && bar.Close > bar.PocPrice && bar.IsBullish)
                     {
                         EnterLong();
-                        _barEntrada = CurrentBar;
+                        _entryBar = CurrentBar;
                     }
-                    else if (IsFlat && volumenAlto && deltaPct >= DeltaMinimo && bar.Close < bar.PocPrice && bar.IsBearish)
+                    else if (IsFlat && highVolume && deltaPct >= MinDelta && bar.Close < bar.PocPrice && bar.IsBearish)
                     {
                         EnterShort();
-                        _barEntrada = CurrentBar;
+                        _entryBar = CurrentBar;
                     }
                 }
             }
             """),
 
-        new("Reversión a la VWAP", "Opera el regreso a la VWAP de la sesión cuando el precio se aleja demasiado, solo en un horario.", "ReversionVwap", true, c => $$"""
+        new("VWAP reversion", "It trades the return to the session VWAP when price strays too far, inside a time window only.", "VwapReversion", true, c => $$"""
             using TradingHub.Strategies;
 
-            [Strategy("__NOMBRE__", Description = "Vende extensiones por encima de la VWAP y compra por debajo; sale en la VWAP.")]
+            [Strategy("__NAME__", Description = "It sells extensions above the VWAP and buys below it; it exits at the VWAP.")]
             public class {{c}} : Strategy
             {
-                [Parameter("Distancia (x ATR)"), Optimize(1.0, 3.0, 0.5)]
-                public double Distancia { get; set; } = 2;
+                [Parameter("Distance (x ATR)"), Optimize(1.0, 3.0, 0.5)]
+                public double Distance { get; set; } = 2;
 
-                [Parameter("Desde (hora local)")]
-                public int HoraDesde { get; set; } = 10;
+                [Parameter("From (local hour)")]
+                public int FromHour { get; set; } = 10;
 
-                [Parameter("Hasta (hora local)")]
-                public int HoraHasta { get; set; } = 20;
+                [Parameter("To (local hour)")]
+                public int ToHour { get; set; } = 20;
 
                 private Vwap _vwap = null!;
                 private Atr _atr = null!;
@@ -280,46 +280,46 @@ public static class StrategyTemplates
                 protected override void OnBar(Bar bar)
                 {
                     if (!_atr.IsReady) return;
-                    bool horario = TimeBetween(TimeSpan.FromHours(HoraDesde), TimeSpan.FromHours(HoraHasta));
-                    decimal banda = _atr.Value * (decimal)Distancia;
+                    bool inHours = TimeBetween(TimeSpan.FromHours(FromHour), TimeSpan.FromHours(ToHour));
+                    decimal band = _atr.Value * (decimal)Distance;
 
                     if (IsLong && bar.Close >= _vwap.Value) ClosePosition("VWAP");
                     else if (IsShort && bar.Close <= _vwap.Value) ClosePosition("VWAP");
-                    else if (IsFlat && horario)
+                    else if (IsFlat && inHours)
                     {
-                        if (bar.Close < _vwap.Value - banda) EnterLong();
-                        else if (bar.Close > _vwap.Value + banda) EnterShort();
+                        if (bar.Close < _vwap.Value - band) EnterLong();
+                        else if (bar.Close > _vwap.Value + band) EnterShort();
                     }
 
-                    // fuera de horario no se queda posicionado
-                    if (!horario && !IsFlat) ClosePosition("Fin del horario");
+                    // outside session hours it does not stay positioned
+                    if (!inHours && !IsFlat) ClosePosition("End of session hours");
                 }
             }
             """),
 
-        new("Vacía", "Esqueleto mínimo con los métodos disponibles.", "MiEstrategia", false, c => $$"""
+        new("Empty", "A minimal skeleton with the available methods.", "MyStrategy", false, c => $$"""
             using TradingHub.Strategies;
 
-            [Strategy("__NOMBRE__", Description = "")]
+            [Strategy("__NAME__", Description = "")]
             public class {{c}} : Strategy
             {
-                // [Parameter("Nombre"), Optimize(mín, máx, paso)] para que aparezca en la optimización
-                [Parameter("Período"), Optimize(10, 50, 10)]
-                public int Periodo { get; set; } = 20;
+                // [Parameter("Name"), Optimize(min, max, step)] so it shows up in the optimization
+                [Parameter("Period"), Optimize(10, 50, 10)]
+                public int Period { get; set; } = 20;
 
-                private Sma _media = null!;
+                private Sma _average = null!;
 
                 protected override void OnInit()
                 {
-                    // indicadores: Sma, Ema, Rsi, Atr, Vwap, Bollinger, Macd, Highest, Lowest, CumulativeDelta…
-                    _media = Sma(Periodo);
+                    // indicators: Sma, Ema, Rsi, Atr, Vwap, Bollinger, Macd, Highest, Lowest, CumulativeDelta…
+                    _average = Sma(Period);
                 }
 
                 protected override void OnBar(Bar bar)
                 {
-                    // bar = vela recién cerrada (Open, High, Low, Close, Volume, BuyVolume, SellVolume, Delta…)
-                    // órdenes: EnterLong(), EnterShort(), Buy(), Sell(), BuyLimit(precio), SellStop(precio), ClosePosition()
-                    // stops automáticos: StopLossTicks, TakeProfitTicks, TrailingStopTicks
+                    // bar = the candle that just closed (Open, High, Low, Close, Volume, BuyVolume, SellVolume, Delta…)
+                    // orders: EnterLong(), EnterShort(), Buy(), Sell(), BuyLimit(price), SellStop(price), ClosePosition()
+                    // automatic stops: StopLossTicks, TakeProfitTicks, TrailingStopTicks
                 }
             }
             """),

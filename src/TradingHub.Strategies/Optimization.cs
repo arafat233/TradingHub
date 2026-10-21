@@ -6,12 +6,12 @@ using TradingHub.Data;
 namespace TradingHub.Strategies;
 
 /// <summary>
-/// Rango de un parámetro a optimizar. Además de los de la estrategia, puede ser el período de las velas
-/// (<see cref="PeriodName"/>): no cambia la estrategia sino cómo se arman sus velas, y se recorre como uno más.
+/// Range of a parameter to optimize. Besides the strategy's own, it can be the candle period
+/// (<see cref="PeriodName"/>): it does not change the strategy but how its candles are built, and it is swept like one more.
 /// </summary>
 public sealed class ParameterRange
 {
-    /// <summary>Nombre del «parámetro» del período de las velas.</summary>
+    /// <summary>Name of the candle period "parameter".</summary>
     public const string PeriodName = "__Periodo";
 
     public string Name { get; set; } = "";
@@ -22,7 +22,7 @@ public sealed class ParameterRange
     public double Step { get; set; } = 1;
     public bool IsInteger { get; set; }
 
-    /// <summary>Para el período de las velas: los períodos a probar (códigos como M15 o H1), del más corto al más largo.</summary>
+    /// <summary>For the candle period: the periods to try (codes like M15 or H1), from the shortest to the longest.</summary>
     public List<string> Choices { get; set; } = new();
 
     public bool IsPeriod => Name == PeriodName;
@@ -30,15 +30,15 @@ public sealed class ParameterRange
     public ParameterRange Clone() =>
         new() { Name = Name, Label = Label, Enabled = Enabled, Min = Min, Max = Max, Step = Step, IsInteger = IsInteger, Choices = Choices.ToList() };
 
-    /// <summary>El período de las velas como un parámetro más: se prueba cada uno de <paramref name="periods"/>.</summary>
+    /// <summary>The candle period as one more parameter: each of <paramref name="periods"/> is tried.</summary>
     public static ParameterRange Periods(IEnumerable<string> periods, bool enabled = true)
     {
-        var r = new ParameterRange { Name = PeriodName, Label = "Período", Enabled = enabled, IsInteger = true };
+        var r = new ParameterRange { Name = PeriodName, Label = "Period", Enabled = enabled, IsInteger = true };
         r.SetChoices(periods);
         return r;
     }
 
-    /// <summary>Los períodos a probar: solo los válidos, sin repetir y del más corto al más largo (vecinos para la meseta).</summary>
+    /// <summary>The periods to try: only the valid ones, without repeats and from the shortest to the longest (neighbours for the plateau).</summary>
     public void SetChoices(IEnumerable<string> periods)
     {
         Choices = periods.Select(p => ChartPeriod.TryParse(p, out var cp) ? cp : (ChartPeriod?)null).OfType<ChartPeriod>().Distinct()
@@ -49,7 +49,7 @@ public sealed class ParameterRange
         Step = 1;
     }
 
-    /// <summary>El valor de una combinación como número (un período, por su lugar en la lista).</summary>
+    /// <summary>The value of a combination as a number (a period, by its slot in the list).</summary>
     public double? Numeric(object? value)
     {
         if (Choices.Count == 0) return Robustness.ToDouble(value);
@@ -71,7 +71,7 @@ public sealed class ParameterRange
 
     public int Count => !Enabled || Step <= 0 || Max < Min ? 1 : (int)Math.Floor((Max - Min) / Step + 1e-9) + 1;
 
-    /// <summary>Rangos sugeridos a partir de [Optimize] (o alrededor del valor actual).</summary>
+    /// <summary>Ranges suggested from [Optimize] (or around the current value).</summary>
     public static List<ParameterRange> FromStrategy(Type t, Strategy current)
     {
         var list = new List<ParameterRange>();
@@ -99,10 +99,10 @@ public sealed class ParameterRange
     }
 }
 
-/// <summary>Una combinación probada en la optimización.</summary>
+/// <summary>A combination tested in the optimization.</summary>
 public sealed class OptimizationRow
 {
-    /// <summary>Su lugar en la grilla (para medir la meseta).</summary>
+    /// <summary>Its slot in the grid (to measure the plateau).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public int[]? Index { get; set; }
 
@@ -111,7 +111,7 @@ public sealed class OptimizationRow
     public double Fitness { get; set; }
 }
 
-/// <summary>Resultado de una optimización.</summary>
+/// <summary>Result of an optimization.</summary>
 public sealed class OptimizationResult
 {
     public FitnessMetric Metric { get; set; }
@@ -121,14 +121,14 @@ public sealed class OptimizationResult
     public double Seconds { get; set; }
     public OptimizationRow? Best => Rows.Count > 0 ? Rows[0] : null;
 
-    /// <summary>La recomendada: la mejor meseta (promedio con sus vecinas), no el mejor pico. Índice en <see cref="Rows"/>.</summary>
+    /// <summary>The recommended one: the best plateau (average with its neighbours), not the best peak. Index into <see cref="Rows"/>.</summary>
     public int RecommendedIndex { get; set; } = -1;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public OptimizationRow? Recommended => RecommendedIndex >= 0 && RecommendedIndex < Rows.Count ? Rows[RecommendedIndex] : Best;
 }
 
-/// <summary>Una ventana del walk-forward.</summary>
+/// <summary>A walk-forward window.</summary>
 public sealed class WalkForwardWindow
 {
     public int Number { get; set; }
@@ -140,11 +140,11 @@ public sealed class WalkForwardWindow
     public PerformanceMetrics InSample { get; set; } = new();
     public PerformanceMetrics OutSample { get; set; } = new();
 
-    /// <summary>Rendimiento fuera de muestra / dentro de muestra (anualizado por días).</summary>
+    /// <summary>Out-of-sample / in-sample performance (annualized by days).</summary>
     public double Efficiency { get; set; }
 }
 
-/// <summary>Resultado del walk-forward.</summary>
+/// <summary>Result of the walk-forward.</summary>
 public sealed class WalkForwardResult
 {
     public int InSampleDays { get; set; }
@@ -152,11 +152,11 @@ public sealed class WalkForwardResult
     public bool Anchored { get; set; }
     public FitnessMetric Metric { get; set; }
 
-    /// <summary>Rangos que se optimizaron en cada ventana (para medir la estabilidad de los parámetros elegidos).</summary>
+    /// <summary>Ranges optimized in each window (to measure the stability of the chosen parameters).</summary>
     public List<ParameterRange> Ranges { get; set; } = new();
     public List<WalkForwardWindow> Windows { get; set; } = new();
 
-    /// <summary>Todas las operaciones fuera de muestra, encadenadas.</summary>
+    /// <summary>Every out-of-sample trade, chained together.</summary>
     public List<ClosedTrade> OutSampleTrades { get; set; } = new();
     public List<EquityPoint> OutSampleEquity { get; set; } = new();
     public PerformanceMetrics OutSampleMetrics { get; set; } = new();
@@ -164,32 +164,32 @@ public sealed class WalkForwardResult
     public double ProfitableWindowsPercent { get; set; }
     public double Seconds { get; set; }
 
-    /// <summary>Cómo se buscaron los parámetros en cada ventana: "grilla" o "bayesiana".</summary>
-    public string Search { get; set; } = "grilla";
+    /// <summary>How the parameters were searched for in each window: "grid" or "bayesian".</summary>
+    public string Search { get; set; } = "grid";
 
-    /// <summary>Combinaciones distintas que se corrieron (cada una una sola vez, sobre toda la historia) y cuántas había.</summary>
+    /// <summary>Distinct combinations that were run (each one just once, over the whole history) and how many there were.</summary>
     public int Evaluated { get; set; }
     public long SpaceSize { get; set; }
 
-    /// <summary>Eventos después de juntar los ticks repetidos sobre los ticks originales (1 = sin comprimir).</summary>
+    /// <summary>Events after merging the repeated ticks, over the original ticks (1 = not compressed).</summary>
     public double Compression { get; set; } = 1;
 
     /// <summary>
-    /// Probabilidad de sobreoptimización (PBO, validación cruzada combinatoriamente simétrica): en qué proporción de las
-    /// particiones la mejor combinación de una mitad de la historia quedó por debajo de la mediana en la otra mitad. Loss:
-    /// en qué proporción perdió plata en la otra mitad. null si no se pudo medir (menos de 4 combinaciones).
+    /// Probability of overoptimization (PBO, combinatorially symmetric cross-validation): in what share of the
+    /// partitions the best combination of one half of the history landed below the median on the other half. Loss:
+    /// in what share it lost money on the other half. null if it could not be measured (fewer than 4 combinations).
     /// </summary>
     public double? Pbo { get; set; }
     public double? PboLoss { get; set; }
     public int PboSplits { get; set; }
 
-    /// <summary>Caminos fuera de muestra de la validación cruzada combinatoria purgada (vacío si no se pudo medir).</summary>
+    /// <summary>Out-of-sample paths of the purged combinatorial cross-validation (empty if it could not be measured).</summary>
     public List<CpcvPath> CpcvPaths { get; set; } = new();
     public int CpcvGroups { get; set; }
     public int EmbargoDays { get; set; }
 }
 
-/// <summary>Resultado de Monte Carlo (reordenar operaciones al azar).</summary>
+/// <summary>Monte Carlo result (reshuffling the trades at random).</summary>
 public sealed class MonteCarloResult
 {
     public int Runs { get; set; }
@@ -202,30 +202,30 @@ public sealed class MonteCarloResult
     public List<List<decimal>> SampleCurves { get; set; } = new();
 }
 
-/// <summary>Optimización, walk-forward y Monte Carlo.</summary>
+/// <summary>Optimization, walk-forward and Monte Carlo.</summary>
 public static class Optimizer
 {
-    /// <summary>Total de combinaciones de una grilla.</summary>
+    /// <summary>Total combinations of a grid.</summary>
     public static long Combinations(IEnumerable<ParameterRange> ranges) => ranges.Aggregate(1L, (acc, r) => acc * Math.Max(1, r.Count));
 
-    /// <summary>Hasta cuántas combinaciones se recorre la grilla entera en el walk-forward (con más, búsqueda bayesiana).</summary>
+    /// <summary>Up to how many combinations the whole grid is swept in the walk-forward (above that, Bayesian search).</summary>
     public const int GridLimit = 300;
 
-    /// <summary>Combinaciones que mide la búsqueda bayesiana en cada ventana (si no se pide otra cosa).</summary>
+    /// <summary>Combinations the Bayesian search measures in each window (unless something else is asked for).</summary>
     public const int DefaultBudget = 80;
 
     /// <summary>
-    /// Se pueden juntar los ticks repetidos (<see cref="TickData.Compress"/>) sin cambiar el resultado: velas de tiempo o de
-    /// rango y una estrategia que decide con las velas (no con cada tick).
+    /// Repeated ticks can be merged (<see cref="TickData.Compress"/>) without changing the result: time or range candles
+    /// and a strategy that decides on candles (not on every tick).
     /// </summary>
     public static bool CanCompress(Type strategyType, string period) =>
         ChartPeriod.TryParse(period, out var p) && (p.IsTimeBased || p.Type == PeriodType.Range) && !Strategy.UsesTicks(strategyType);
 
-    /// <summary>Se pueden juntar los ticks si se puede con todos los períodos que se prueban.</summary>
+    /// <summary>Ticks can be merged if it works with every period being tried.</summary>
     private static bool CanCompress(Type strategyType, ParameterSpace space, BacktestSettings settings) =>
         (space.Periods.Count > 0 ? space.Periods : new[] { settings.Period }).All(p => CanCompress(strategyType, p));
 
-    /// <summary>Los ajustes de una combinación: con su período si el período se optimiza (si no, los mismos).</summary>
+    /// <summary>The settings of a combination: with its period if the period is optimized (otherwise, the same ones).</summary>
     public static BacktestSettings SettingsFor(BacktestSettings settings, IReadOnlyDictionary<string, object?> combo)
     {
         if (!combo.TryGetValue(ParameterRange.PeriodName, out var p) || p is not string period) return settings;
@@ -234,7 +234,7 @@ public static class Optimizer
         return s;
     }
 
-    /// <summary>Prueba todas las combinaciones en paralelo, ordena por la métrica elegida y recomienda la mejor meseta.</summary>
+    /// <summary>Tests every combination in parallel, sorts by the chosen metric and recommends the best plateau.</summary>
     public static OptimizationResult Optimize(Func<Strategy> factory, Dictionary<string, object?> baseParameters, IReadOnlyList<ParameterRange> ranges,
         TickData data, BacktestSettings settings, FitnessMetric metric, int minTrades, IProgress<double>? progress, CancellationToken ct, int maxParallel = 0,
         IReadOnlyList<(DateTime Time, decimal Close)>? contextHistory = null)
@@ -276,15 +276,15 @@ public static class Optimizer
     }
 
     /// <summary>
-    /// Walk-forward: en cada ventana elige parámetros mirando solo lo de adentro (dentro de muestra) y los prueba en los días
-    /// siguientes (fuera de muestra); lo que importa es el resultado encadenado fuera de muestra. Cómo trabaja:
+    /// Walk-forward: in each window it picks parameters looking only at what is inside (in sample) and tests them on the following
+    /// days (out of sample); what matters is the chained out-of-sample result. How it works:
     /// <list type="bullet">
-    /// <item>Cada combinación se corre una sola vez sobre toda la historia (ticks repetidos juntados, indicadores calientes
-    /// y contexto como en vivo) y las ventanas recortan ese resultado: no se repiten backtests.</item>
-    /// <item>Busca con la grilla entera si es chica (<see cref="GridLimit"/>) o con optimización bayesiana (TPE) si es
-    /// grande, en cada ventana con lo de esa ventana solamente.</item>
-    /// <item>Elige la mejor meseta (promedio con las vecinas), no el mejor pico.</item>
-    /// <item>Al final mide el sobreajuste con todas las combinaciones corridas: PBO y caminos de la CPCV.</item>
+    /// <item>Each combination is run just once over the whole history (repeated ticks merged, indicators warm
+    /// and context as it is live) and the windows trim that result: backtests are not repeated.</item>
+    /// <item>It searches the whole grid if it is small (<see cref="GridLimit"/>) or with Bayesian optimization (TPE) if it is
+    /// large, in each window using that window's data only.</item>
+    /// <item>It picks the best plateau (average with the neighbours), not the best peak.</item>
+    /// <item>At the end it measures overfitting with every combination that was run: PBO and CPCV paths.</item>
     /// </list>
     /// </summary>
     public static WalkForwardResult WalkForward(Func<Strategy> factory, Dictionary<string, object?> baseParameters, IReadOnlyList<ParameterRange> ranges,
@@ -292,8 +292,8 @@ public static class Optimizer
         IProgress<double>? progress, CancellationToken ct, IReadOnlyList<(DateTime Time, decimal Close)>? contextHistory = null,
         SearchMode search = SearchMode.Auto, int budget = 0, int maxParallel = 0)
     {
-        // cada ventana arranca su contexto de mercado con lo anterior a ella (de antes del rango y de las ventanas previas),
-        // como en vivo: sin esto, cada ventana fuera de muestra empezaba sin saber si había rango o tendencia
+        // each window starts its market context with whatever came before it (from before the range and from the previous windows),
+        // as it is live: without this, each out-of-sample window used to start without knowing whether it was a range or a trend
         contextHistory = MarketContextTracker.Merge(contextHistory, MarketContextTracker.HourlyCloses(data));
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var type = factory().GetType();
@@ -306,10 +306,10 @@ public static class Optimizer
         var res = new WalkForwardResult
         {
             InSampleDays = inSampleDays, OutSampleDays = outSampleDays, Anchored = anchored, Metric = metric, Ranges = ranges.Where(r => r.Enabled).ToList(),
-            Search = grid ? "grilla" : "bayesiana", SpaceSize = space.Size, Compression = raw > 0 ? Math.Round((double)data.Count / raw, 4) : 1,
+            Search = grid ? "grid" : "bayesian", SpaceSize = space.Size, Compression = raw > 0 ? Math.Round((double)data.Count / raw, 4) : 1,
         };
         var windows = Windows(settings, inSampleDays, outSampleDays, anchored);
-        if (windows.Count == 0) throw new InvalidOperationException("El rango es muy corto para esas ventanas: alargá el período o achicá las ventanas.");
+        if (windows.Count == 0) throw new InvalidOperationException("The range is too short for those windows: lengthen the period or shrink the windows.");
 
         var cache = new ConfigCache(factory, baseParameters, data, settings.Clone(), contextHistory, space, ct);
         long expected = grid ? space.Size : Math.Min(space.Size, (long)budget * windows.Count / 2 + budget);
@@ -367,7 +367,7 @@ public static class Optimizer
             });
         }
 
-        // la curva fuera de muestra encadenada, con su drawdown
+        // the chained out-of-sample curve, with its drawdown
         decimal peak = settings.InitialCapital;
         foreach (var e in chained)
         {
@@ -376,7 +376,7 @@ public static class Optimizer
         }
 
         res.OutSampleMetrics = PerformanceMetrics.Compute(res.OutSampleTrades, res.OutSampleEquity, settings.InitialCapital, cache.Crypto, 0, 0);
-        // eficiencia global: ganancia diaria fuera de muestra / ganancia diaria dentro de muestra
+        // overall efficiency: out-of-sample daily profit / in-sample daily profit
         double isDaily = isDaysTotal > 0 ? isProfit / isDaysTotal : 0, osDaily = osDaysTotal > 0 ? osProfit / osDaysTotal : 0;
         res.WalkForwardEfficiency = isDaily > 0 ? osDaily / isDaily : 0;
         res.ProfitableWindowsPercent = res.Windows.Count > 0 ? 100.0 * res.Windows.Count(x => x.OutSample.NetProfit > 0) / res.Windows.Count : 0;
@@ -387,7 +387,7 @@ public static class Optimizer
         return res;
     }
 
-    /// <summary>Las ventanas: (desde, hasta dentro de muestra, hasta fuera de muestra).</summary>
+    /// <summary>The windows: (from, in-sample to, out-of-sample to).</summary>
     private static List<(DateTime IsFrom, DateTime IsTo, DateTime OsTo)> Windows(BacktestSettings settings, int inSampleDays, int outSampleDays, bool anchored)
     {
         var start = settings.FromUtc.Date;
@@ -406,7 +406,7 @@ public static class Optimizer
         return windows;
     }
 
-    /// <summary>PBO y CPCV con el resultado diario de todas las combinaciones que se corrieron (hacen falta 4 o más).</summary>
+    /// <summary>PBO and CPCV with the daily result of every combination that was run (4 or more are needed).</summary>
     private static void Overfit(WalkForwardResult res, ConfigCache cache, BacktestSettings settings, int minTrades)
     {
         var runs = cache.Done.Where(r => r.Ok && r.HourTimes.Length > 0).OrderBy(r => ParameterSpace.Key(r.Index), StringComparer.Ordinal).ToList();
@@ -422,7 +422,7 @@ public static class Optimizer
             res.PboSplits = pbo.Splits;
         }
 
-        // embargo: lo que suele durar una operación (al menos un día), para que lo elegido no vea la prueba por la ventana de al lado
+        // embargo: how long a trade usually lasts (at least a day), so the chosen one does not see the test through the adjacent window
         var holds = runs.SelectMany(r => r.Trades.Take(200)).Select(t => (t.ExitTime - t.EntryTime).TotalDays).OrderBy(d => d).ToList();
         int embargo = holds.Count > 0 ? Math.Clamp((int)Math.Ceiling(holds[holds.Count / 2]), 1, 5) : 1;
         var perDay = runs.Select(r => ConfigCache.TradesPerDay(r, days)).ToList();
@@ -431,7 +431,7 @@ public static class Optimizer
         res.EmbargoDays = embargo;
     }
 
-    /// <summary>Reordena las operaciones al azar muchas veces para ver qué drawdowns son posibles.</summary>
+    /// <summary>Reshuffles the trades many times to see which drawdowns are possible.</summary>
     public static MonteCarloResult MonteCarlo(IReadOnlyList<ClosedTrade> trades, decimal capital, int runs = 1000, decimal ruinDrawdownPercent = 50, int seed = 7)
     {
         var res = new MonteCarloResult { Runs = runs, NetProfit = trades.Sum(t => t.NetPnl) };

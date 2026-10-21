@@ -25,8 +25,8 @@ public enum InputModifiers
 }
 
 /// <summary>
-/// Interacción con el gráfico (independiente de la UI): desplazar, hacer zoom, escalar ejes,
-/// dibujar y mover objetos, y reenviar el mouse a los indicadores.
+/// Interaction with the chart (independent of the UI): panning, zooming, scaling axes,
+/// draw and move objects, and forward the mouse to the indicators.
 /// </summary>
 public sealed class ChartController
 {
@@ -60,42 +60,42 @@ public sealed class ChartController
         _state = state;
     }
 
-    /// <summary>Herramienta de dibujo activa (null = cursor normal).</summary>
+    /// <summary>Active drawing tool (null = normal cursor).</summary>
     public DrawingKind? ActiveTool { get; set; }
 
-    /// <summary>Si la herramienta queda activa después de dibujar (si no, vuelve al cursor).</summary>
+    /// <summary>Whether the tool stays active after drawing (if not, it goes back to the cursor).</summary>
     public bool StickyTool { get; set; }
 
     public ChartDrawing? Selected => _model.Drawings.FirstOrDefault(d => d.Selected);
 
-    /// <summary>Cursor sugerido para la posición actual.</summary>
+    /// <summary>Suggested cursor for the current position.</summary>
     public StdCursor Cursor { get; private set; } = StdCursor.Cross;
 
-    /// <summary>Estilo por defecto de cada tipo de dibujo (lo que el usuario guardó como predeterminado).</summary>
+    /// <summary>Default style of each kind of drawing (what the user saved as the default).</summary>
     public Func<DrawingKind, ChartDrawing?>? DrawingDefaults { get; set; }
 
     public event Action? ToolFinished;
     public event Action<ChartDrawing>? DrawingDoubleClicked;
     public event Action? DrawingsChanged;
 
-    /// <summary>Se ocultó, mostró o quitó un indicador desde la leyenda del gráfico.</summary>
+    /// <summary>An indicator was hidden, shown or removed from the chart's legend.</summary>
     public event Action? IndicatorsChanged;
 
-    /// <summary>Pidieron los ajustes de un indicador desde la leyenda (engranaje o doble clic en el nombre).</summary>
+    /// <summary>An indicator's settings were requested from the legend (gear or double click on the name).</summary>
     public event Action<IndicatorSlot>? IndicatorSettingsRequested;
 
-    /// <summary>Configurar o quitar una estrategia del gráfico desde la leyenda.</summary>
+    /// <summary>Configure or remove a strategy from the chart, from the legend.</summary>
     public event Action<StrategyOverlay>? StrategySettingsRequested;
 
     public event Action<StrategyOverlay>? StrategyRemoveRequested;
 
-    /// <summary>Una orden propia arrastrada a un nuevo precio (la vista decide si confirma).</summary>
+    /// <summary>One of your own orders dragged to a new price (the view decides whether to confirm).</summary>
     public event Action<Order, decimal>? OrderDragged;
 
-    /// <summary>Se soltó un stop/objetivo arrastrado desde la posición o una orden pendiente.</summary>
+    /// <summary>A stop/target dragged from the position or a pending order was dropped.</summary>
     public event Action<BracketDrag, decimal>? BracketDropped;
 
-    /// <summary>Zona de arrastre de stop/objetivo bajo el mouse (botones primero, después las líneas).</summary>
+    /// <summary>Stop/target drag zone under the mouse (buttons first, then the lines).</summary>
     public BracketHandle? HandleAt(float x, float y, bool buttonsOnly)
     {
         foreach (var h in _state.Handles)
@@ -106,7 +106,7 @@ public sealed class ChartController
         return null;
     }
 
-    /// <summary>Orden propia cuya línea está bajo el mouse (a menos de 5 px).</summary>
+    /// <summary>One of your own orders whose line is under the mouse (within 5 px).</summary>
     public Order? OrderAt(float x, float y)
     {
         var l = L;
@@ -141,7 +141,7 @@ public sealed class ChartController
         _state.MouseX = x;
         _state.MouseY = y;
 
-        // eje de precios
+        // price axis
         if (l.PriceAxis.Contains(x, y))
         {
             if (clicks >= 2)
@@ -157,7 +157,7 @@ public sealed class ChartController
             return;
         }
 
-        // eje de tiempo
+        // time axis
         if (l.TimeAxis.Contains(x, y))
         {
             if (clicks >= 2)
@@ -175,7 +175,7 @@ public sealed class ChartController
 
         if (!l.Plot.Contains(x, y)) return;
 
-        // botón para volver a lo último y leyenda de indicadores (ojo, ajustes, quitar, plegar)
+        // button to jump back to the latest bars and indicator legend (eye, settings, remove, collapse)
         if (button == PointerButton.Left)
         {
             if (_state.GoLatestButton is { } gl && gl.Contains(x, y))
@@ -186,7 +186,7 @@ public sealed class ChartController
                 return;
             }
 
-            // la ✕ de la operación resaltada
+            // the X of the highlighted trade
             if (_state.FocusTradeClose is { } fc && fc.Contains(x, y) && _model.FocusTrade != null)
             {
                 _model.FocusTrade = null;
@@ -197,13 +197,13 @@ public sealed class ChartController
             foreach (var h in _state.Legend)
             {
                 if (!h.Rect.Contains(x, y)) continue;
-                if (h.Action == LegendAction.Name && clicks < 2) break; // clic simple en el nombre: se mueve el gráfico como siempre
+                if (h.Action == LegendAction.Name && clicks < 2) break; // a single click on the name: the chart is panned as usual
                 LegendClicked(h);
                 return;
             }
         }
 
-        // separadores de paneles
+        // panel separators
         foreach (var p in l.Panels.Skip(1))
         {
             if (Math.Abs(y - p.Rect.Top) <= 3 && p.SubPanel != null)
@@ -214,17 +214,17 @@ public sealed class ChartController
             }
         }
 
-        // indicadores (por si quieren el clic)
+        // indicators (in case they want the click)
         if (button == PointerButton.Left && ForwardToIndicators(x, y, button, clicks, mods, MouseKind.Down)) return;
 
-        // botones SL/TP de la posición o de una orden pendiente
+        // SL/TP buttons of the position or of a pending order
         if (button == PointerButton.Left && ActiveTool == null && HandleAt(x, y, buttonsOnly: true) is { } button1)
         {
             StartBracketDrag(button1, y);
             return;
         }
 
-        // arrastrar una orden propia a otro precio
+        // drag one of your own orders to another price
         if (button == PointerButton.Left && ActiveTool == null && OrderAt(x, y) is { } order)
         {
             _dragOrder = order;
@@ -235,7 +235,7 @@ public sealed class ChartController
             return;
         }
 
-        // línea de la posición o de un stop/objetivo adjunto a una orden pendiente
+        // line of the position or of a stop/target attached to a pending order
         if (button == PointerButton.Left && ActiveTool == null && HandleAt(x, y, buttonsOnly: false) is { } band)
         {
             StartBracketDrag(band, y);
@@ -249,7 +249,7 @@ public sealed class ChartController
             if (DrawingDefaults?.Invoke(tool) is { } template) _active.CopyStyleFrom(template);
             if (_active.IsPosition)
             {
-                // posición con stop y objetivo 1:2 de entrada; después se ajusta con los manejadores
+                // position with a 1:2 stop and target to start with; it is adjusted afterwards with the handlers
                 double tick = (double)_model.Instrument.TickSize;
                 double risk = Math.Max(Math.Abs(l.Main.Top - l.Main.Bottom) * 0.06, tick * 4);
                 if (tick > 0) risk = Math.Round(risk / tick) * tick;
@@ -278,14 +278,14 @@ public sealed class ChartController
 
         if (button == PointerButton.Left)
         {
-            // ¿tocó un objeto dibujado?
+            // did it touch a drawn object?
             for (int i = _model.Drawings.Count - 1; i >= 0; i--)
             {
                 var d = _model.Drawings[i];
                 if (!d.HitTest(l, _model.Series, x, y, out int handle)) continue;
                 foreach (var o in _model.Drawings) o.Selected = false;
                 d.Selected = true;
-                if (clicks == 2) // un triple clic no abre dos paneles
+                if (clicks == 2) // a triple click does not open two panels
                 {
                     DrawingDoubleClicked?.Invoke(d);
                     _model.Invalidate();
@@ -344,7 +344,7 @@ public sealed class ChartController
                 }
                 else if (Math.Abs(y - _downY) > 40 && Math.Abs(y - _downY) > Math.Abs(x - _downX) * 1.5)
                 {
-                    // arrastre vertical fuerte: pasa a escala manual para poder mover el precio
+                    // strong vertical drag: it switches to manual scale so the price can be moved
                     vp.AutoScale = false;
                     vp.PriceTop = _startTop;
                     vp.PriceBottom = _startBottom;
@@ -396,7 +396,7 @@ public sealed class ChartController
                 }
                 else
                 {
-                    // mueve todo el objeto
+                    // moves the whole object
                     double dPrice = l.Main.ValueAt(y) - l.Main.ValueAt(_downY);
                     for (int i = 0; i < _active.Points.Count; i++)
                     {
@@ -427,7 +427,7 @@ public sealed class ChartController
 
         if (_drag == DragMode.CreateDrawing && _active != null)
         {
-            // si casi no se movió, se interpreta como "clic, clic": espera el segundo clic
+            // if it barely moved, it is read as "click, click": it waits for the second click
             if (Math.Abs(x - _downX) < 3 && Math.Abs(y - _downY) < 3)
             {
                 _drag = DragMode.None;
@@ -455,7 +455,7 @@ public sealed class ChartController
         {
             decimal to = _state.DragPrice;
             _state.BracketDrag = null;
-            // un clic sin arrastrar no crea órdenes
+            // a click without dragging does not create orders
             if (to > 0 && Math.Abs(y - _downY) >= 4) BracketDropped?.Invoke(bd, to);
         }
 
@@ -477,7 +477,7 @@ public sealed class ChartController
         _model.Invalidate();
     }
 
-    /// <summary>Segundo clic de una herramienta de dos puntos (modo clic-clic).</summary>
+    /// <summary>Second click of a two-point tool (click-click mode).</summary>
     public bool TryCompletePending(float x, float y, InputModifiers mods)
     {
         if (!_pendingSecondClick || _active == null) return false;
@@ -531,7 +531,7 @@ public sealed class ChartController
             return;
         }
 
-        // zoom horizontal alrededor del mouse
+        // horizontal zoom around the mouse
         double before = l.BarAtExact(x);
         double newWidth = Math.Clamp(vp.BarWidth * Math.Pow(1.12, dy), ChartViewport.MinBarWidth, ChartViewport.MaxBarWidth);
         if (Math.Abs(newWidth - vp.BarWidth) < 1e-9) return;
@@ -539,7 +539,7 @@ public sealed class ChartController
         vp.BarWidth = newWidth;
         if (!followingLive)
         {
-            // mantiene fija la barra bajo el mouse: x = R - (N-1-b+M-S+0.5)*W  =>  S = N-1-b+M+0.5-(R-x)/W
+            // keeps the bar under the mouse fixed: x = R - (N-1-b+M-S+0.5)*W  =>  S = N-1-b+M+0.5-(R-x)/W
             vp.ScrollBars = (l.Count - 1 - before + vp.RightMarginBars + 0.5) - (l.Plot.Right - x) / newWidth;
         }
 
@@ -571,7 +571,7 @@ public sealed class ChartController
                 return true;
             }
             case "Escape":
-                // cancela un arrastre de orden o de stop/objetivo
+                // cancels an order or stop/target drag
                 if (_drag is DragMode.MoveOrder or DragMode.Bracket)
                 {
                     _dragOrder = null;
@@ -619,7 +619,7 @@ public sealed class ChartController
         return false;
     }
 
-    // ======================================================================= ayudas
+    // ======================================================================= helpers
 
     private ChartPoint PointAt(float x, float y, InputModifiers mods)
     {
@@ -627,7 +627,7 @@ public sealed class ChartController
         var series = _model.Series;
         var time = ChartDrawing.TimeAt(l, series, x);
         double price = l.Main.ValueAt(y);
-        // imán: con Shift se pega al máximo/mínimo/cierre más cercano de la vela
+        // magnet: with Shift it snaps to the nearest high/low/close of the candle
         if ((mods & InputModifiers.Shift) != 0)
         {
             int bar = Math.Clamp(l.BarAt(x), 0, Math.Max(0, series.Count - 1));
@@ -756,7 +756,7 @@ public sealed class ChartController
             }
             catch (Exception ex)
             {
-                this.LogError($"Error en el mouse de {ind.Name}", ex);
+                this.LogError($"Mouse error in {ind.Name}", ex);
             }
         }
 
@@ -775,14 +775,14 @@ public sealed class ChartController
             }
             catch
             {
-                // ignorar
+                // ignore
             }
         }
 
         return StdCursor.None;
     }
 
-    /// <summary>Reenvía una tecla a los indicadores.</summary>
+    /// <summary>Forwards a key to the indicators.</summary>
     public bool ForwardKey(Avalonia.Input.KeyEventArgs e)
     {
         foreach (var s in _model.Indicators)
@@ -797,7 +797,7 @@ public sealed class ChartController
             }
             catch (Exception ex)
             {
-                this.LogError($"Error de teclado en {s.Indicator.Name}", ex);
+                this.LogError($"Keyboard error in {s.Indicator.Name}", ex);
             }
         }
 

@@ -6,7 +6,7 @@ using TradingHub.Strategies;
 
 namespace TradingHub.App.Controls;
 
-/// <summary>Curva de capital con el drawdown debajo (y curvas extra, por ejemplo de Monte Carlo).</summary>
+/// <summary>Equity curve with the drawdown below it (and extra curves, for example from Monte Carlo).</summary>
 public sealed class EquityChart : SkiaView
 {
     private IReadOnlyList<EquityPoint> _points = Array.Empty<EquityPoint>();
@@ -15,7 +15,7 @@ public sealed class EquityChart : SkiaView
     private decimal _capital;
     private float? _mouseX;
 
-    // colores del tema (claro u oscuro): se leen en cada dibujo
+    // theme colors (light or dark): they are read on every draw
     private SKColor Bg, Grid, Text, Up, Down, Accent, Strong, Box;
 
     public EquityChart()
@@ -46,7 +46,7 @@ public sealed class EquityChart : SkiaView
         Box = light ? new SKColor(0x11, 0x11, 0x11, 235) : new SKColor(0x1F, 0x28, 0x38);
     }
 
-    public string EmptyText { get; set; } = "Corré un backtest para ver la curva de capital";
+    public string EmptyText { get; set; } = "Run a backtest to see the equity curve";
 
     public void SetData(IReadOnlyList<EquityPoint> points, decimal capital, IReadOnlyList<IReadOnlyList<decimal>>? extra = null, IReadOnlyList<(DateTime, string)>? marks = null)
     {
@@ -89,7 +89,7 @@ public sealed class EquityChart : SkiaView
         float eqH = (height - top - bottom) * 0.72f;
         float ddTop = top + eqH + 10, ddH = height - bottom - ddTop;
 
-        // escalas
+        // scales
         decimal min = _capital, max = _capital, maxDd = 0;
         foreach (var p in _points)
         {
@@ -118,17 +118,17 @@ public sealed class EquityChart : SkiaView
             decimal v = min + (max - min) * i / 4;
             float y = MathF.Floor(Y(v)) + 0.5f;
             canvas.DrawLine(left, y, left + plotW, y, grid);
-            canvas.DrawText(fine ? v.ToString("#,##0.##", CultureInfo.GetCultureInfo("es-AR")) : Format(v), left + plotW + 8, y + 4, font, text);
+            canvas.DrawText(fine ? v.ToString("#,##0.##", CultureInfo.GetCultureInfo("en-US")) : Format(v), left + plotW + 8, y + 4, font, text);
         }
 
-        // capital inicial
+        // initial capital
         using (var cap = new SKPaint { Color = Text.WithAlpha(140), StrokeWidth = 1, PathEffect = SKPathEffect.CreateDash(new[] { 4f, 4f }, 0) })
         {
             float y = MathF.Floor(Y(_capital)) + 0.5f;
             canvas.DrawLine(left, y, left + plotW, y, cap);
         }
 
-        // curvas extra (Monte Carlo)
+        // extra curves (Monte Carlo)
         using (var ex = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1, Color = new SKColor(0x3D, 0x8B, 0xFD, 50) })
         {
             foreach (var c in _extra)
@@ -152,7 +152,7 @@ public sealed class EquityChart : SkiaView
             if (t1 == t0) t1 = t0 + 1;
             float X(DateTime t) => left + plotW * (float)((t.Ticks - t0) / (double)(t1 - t0));
 
-            // área bajo la curva
+            // the area under the curve
             using var line = new SKPath();
             using var area = new SKPath();
             area.MoveTo(X(_points[0].Time), Y(min));
@@ -177,7 +177,7 @@ public sealed class EquityChart : SkiaView
             using (var stroke = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.6f, Color = color })
                 canvas.DrawPath(line, stroke);
 
-            // separadores de ventanas (walk-forward)
+            // window separators (walk-forward)
             using (var mark = new SKPaint { Color = Accent.WithAlpha(110), StrokeWidth = 1, PathEffect = SKPathEffect.CreateDash(new[] { 3f, 3f }, 0) })
             {
                 foreach (var (t, label) in _marks)
@@ -202,7 +202,7 @@ public sealed class EquityChart : SkiaView
                 canvas.DrawLine(left, ddTop - 0.5f, left + plotW, ddTop - 0.5f, grid);
             }
 
-            // fechas
+            // dates
             for (int i = 0; i <= 4; i++)
             {
                 var t = new DateTime(t0 + (t1 - t0) * i / 4, DateTimeKind.Utc).ToLocalTime();

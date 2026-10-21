@@ -5,12 +5,12 @@ using TradingHub.Market;
 namespace TradingHub.Data;
 
 /// <summary>
-/// Formato binario compacto para guardar operaciones (≈6 bytes por tick).
-/// Un archivo por instrumento y día UTC: {raíz}/{feed}/{símbolo}/{yyyy-MM-dd}.vtk
+/// Compact binary format for storing trades (~6 bytes per tick).
+/// One file per instrument and UTC day: {root}/{feed}/{symbol}/{yyyy-MM-dd}.vtk
 ///
-/// Registro: byte de flags (bits 0-1 lado, bit 2 keyframe, bits 3-7 escala del volumen),
-/// luego varints: id, tiempo (ms Unix), precio (ticks, zigzag), mantisa del volumen.
-/// En los registros que no son keyframe, id/tiempo/precio van como diferencias con el anterior.
+/// Record: flags byte (bits 0-1 side, bit 2 keyframe, bits 3-7 volume scale),
+/// then varints: id, time (Unix ms), price (ticks, zigzag), volume mantissa.
+/// In the records that are not keyframes, id/time/price go as differences from the previous one.
 /// </summary>
 public static class TickFile
 {
@@ -36,7 +36,7 @@ public static class TickFile
         }
     }
 
-    /// <summary>Escritor en modo append (thread-safe por instancia con lock externo).</summary>
+    /// <summary>Writer in append mode (thread-safe per instance with an external lock).</summary>
     public sealed class Writer : IDisposable
     {
         private readonly FileStream _fs;
@@ -109,7 +109,7 @@ public static class TickFile
         }
     }
 
-    /// <summary>Tamaño del tick guardado en el encabezado del archivo (null si no se puede leer).</summary>
+    /// <summary>Tick size stored in the file's header (null if it cannot be read).</summary>
     public static decimal? ReadTickSize(string path)
     {
         try
@@ -129,15 +129,15 @@ public static class TickFile
         }
     }
 
-    /// <summary>Lee un archivo completo. Devuelve las operaciones en el orden guardado, sin los tramos dañados.</summary>
+    /// <summary>Reads a whole file. Returns the trades in the stored order, without the corrupt stretches.</summary>
     public static List<Trade> Read(string path) => Read(path, out _);
 
     /// <summary>
-    /// Lee un archivo completo y descarta los tramos dañados (por ejemplo si dos procesos grabaron a la vez el
-    /// mismo archivo y se mezclaron los registros): tiempos fuera del día del archivo, ids que retroceden dentro
-    /// de un tramo, precios que saltan de golpe. Se descarta desde el keyframe anterior al primer registro
-    /// imposible hasta el keyframe siguiente al último, así no queda basura "creíble" en el medio.
-    /// Lo que falte se vuelve a pedir al exchange al cargar (los huecos se rellenan solos).
+    /// Reads a whole file and discards the corrupt stretches (for example if two processes recorded the same
+    /// file at once and the records got mixed): times outside the file's day, ids that go backwards inside
+    /// a stretch, prices that jump suddenly. It discards from the keyframe before the first impossible record
+    /// to the keyframe after the last one, so no "plausible" junk is left in the middle.
+    /// Whatever is missing is requested from the exchange again on loading (the gaps fill themselves in).
     /// </summary>
     public static List<Trade> Read(string path, out int dropped)
     {
@@ -164,7 +164,7 @@ public static class TickFile
         var tickSize = decimal.Parse(Encoding.UTF8.GetString(data, pos, tsLen), CultureInfo.InvariantCulture);
         pos += tsLen;
 
-        // el archivo es de un día UTC: un tiempo fuera de ese día es basura
+        // the file belongs to one UTC day: a time outside that day is junk
         long minMs = long.MinValue, maxMs = long.MaxValue;
         if (DateOnly.TryParseExact(Path.GetFileNameWithoutExtension(path), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
         {
@@ -175,7 +175,7 @@ public static class TickFile
         var keys = new List<int>();
         List<int>? bad = null;
         long prevId = 0, prevMs = 0, prevPrice = 0;
-        long firstId = -1; // el primer registro del archivo siempre es un keyframe sano
+        long firstId = -1; // the file's first record is always a healthy keyframe
         try
         {
             while (pos < data.Length)
@@ -201,16 +201,16 @@ public static class TickFile
                 }
 
                 ulong mant = ReadVarint(data, ref pos);
-                if (pos > data.Length) break; // registro truncado (corte de luz, etc.)
+                if (pos > data.Length) break; // truncated record (power cut, etc.)
 
                 if (firstId < 0) firstId = id;
 
-                // un escritor solo nunca deja estos registros: si aparecen, el archivo está mezclado.
-                // Un keyframe con un id de otra escala es un registro leído desde la mitad (varint cortado).
+                // a lone writer never leaves these records: if they show up, the file is mixed.
+                // A keyframe with an id of another scale is a record read from the middle (a truncated varint).
                 bool ok = sideBits != 3 && scale <= 28 && price > 0 && ms >= minMs && ms < maxMs
                           && (!key || firstId < 1L << 28 || (id > firstId / 64 && id / 64 < firstId))
                           && (key || dId > 0 || (dId == 0 && dPrice == 0))
-                          && (key || prevPrice <= 0 || Math.Abs(dPrice) <= Math.Max(10, prevPrice / 33)); // salto > 3 % entre dos operaciones seguidas
+                          && (key || prevPrice <= 0 || Math.Abs(dPrice) <= Math.Max(10, prevPrice / 33)); // jump > 3 % between two consecutive trades
                 if (key) keys.Add(result.Count);
                 if (ok)
                 {
@@ -230,17 +230,17 @@ public static class TickFile
         }
         catch (IndexOutOfRangeException)
         {
-            // último registro incompleto: se ignora
+            // last record incomplete: it is ignored
         }
 
         if (bad == null && Increasing(result, null)) return result;
 
-        // fase 1: tramos alrededor de los registros imposibles
+        // phase 1: stretches around the impossible records
         var drop = Zones(bad, keys, result.Count);
 
-        // fase 2: mismo id con datos distintos fuera de esos tramos: la cadena de diferencias de un escritor quedó
-        // aplicada sobre la base de otro (los dos grababan el mismo vivo). De cada par se descarta la copia más
-        // cercana a un tramo dañado (la otra es la buena); si no se puede saber, las dos.
+        // phase 2: the same id with different data outside those stretches: one writer's chain of differences ended up
+        // applied on another's base (both were recording the same live feed). Of each pair the copy nearest
+        // a corrupt stretch is discarded (the other is the good one); if it cannot be told, both are.
         if (!Increasing(result, drop))
         {
             int n = result.Count;
@@ -272,7 +272,7 @@ public static class TickFile
                 }
 
                 var o = result[j];
-                if (o.Time == t.Time && o.Price == t.Price && o.Volume == t.Volume) continue; // la misma, grabada dos veces
+                if (o.Time == t.Time && o.Price == t.Price && o.Volume == t.Volume) continue; // the same one, recorded twice
                 if (dist[i] <= dist[j]) extra.Add(i);
                 if (dist[j] <= dist[i]) extra.Add(j);
                 if (dist[j] > dist[i]) seen[t.Id] = j; else seen[t.Id] = i;
@@ -297,7 +297,7 @@ public static class TickFile
         return clean;
     }
 
-    /// <summary>Si los ids (sin contar los descartados) vienen siempre en subida.</summary>
+    /// <summary>Whether the ids (not counting the discarded ones) always come in ascending order.</summary>
     private static bool Increasing(List<Trade> list, bool[]? drop)
     {
         long last = long.MinValue;
@@ -312,8 +312,8 @@ public static class TickFile
     }
 
     /// <summary>
-    /// Marca los tramos dañados: registros malos cercanos se juntan y se descarta desde el keyframe anterior
-    /// al primero hasta el keyframe siguiente al último (lo del medio depende de la misma cadena de diferencias).
+    /// Marks the corrupt stretches: nearby bad records are grouped and it discards from the keyframe before
+    /// the first one to the keyframe after the last one (what is in between depends on the same chain of differences).
     /// </summary>
     private static bool[] Zones(List<int>? bad, List<int> keys, int count)
     {
@@ -335,8 +335,8 @@ public static class TickFile
     }
 
     /// <summary>
-    /// Reescribe un archivo sin los tramos dañados (se guarda aparte y se reemplaza de una).
-    /// Solo llamar sin nadie grabando ese instrumento. Devuelve cuántos registros se sacaron.
+    /// Rewrites a file without the corrupt stretches (it is saved aside and replaced in one go).
+    /// Only call it with nobody recording that instrument. Returns how many records were removed.
     /// </summary>
     public static int Repair(string path, Instrument instrument)
     {
@@ -351,8 +351,8 @@ public static class TickFile
     }
 
     /// <summary>
-    /// Permiso exclusivo para grabar un instrumento: un solo proceso escribe sus archivos (dos escritores
-    /// mezclan los registros y dañan el archivo). Devuelve null si otro ya lo tiene; se libera al cerrar.
+    /// Exclusive permission to record an instrument: a single process writes its files (two writers
+    /// mix the records and corrupt the file). Returns null if another one already holds it; it is released on close.
     /// </summary>
     public static FileStream? TryLock(string root, string feedId, string symbol)
     {
@@ -372,7 +372,7 @@ public static class TickFile
         }
     }
 
-    /// <summary>Ordena por id y elimina duplicados si hace falta.</summary>
+    /// <summary>Sorts by id and removes duplicates if needed.</summary>
     public static List<Trade> SortAndDedupe(List<Trade> trades)
     {
         bool sorted = true;
@@ -401,12 +401,12 @@ public static class TickFile
 
     internal static (ulong Mantissa, int Scale) SplitDecimal(decimal d)
     {
-        d = Math.Abs(d) / 1.0000000000000000000000000000m; // normaliza (quita ceros)
+        d = Math.Abs(d) / 1.0000000000000000000000000000m; // normalizes (strips zeros)
         var bits = decimal.GetBits(d);
         int scale = (bits[3] >> 16) & 0xFF;
         if (bits[2] != 0 || scale > 28)
         {
-            // fuera de rango: se redondea a 8 decimales
+            // out of range: it is rounded to 8 decimals
             d = Math.Round(d, 8);
             bits = decimal.GetBits(d);
             scale = (bits[3] >> 16) & 0xFF;

@@ -5,9 +5,9 @@ using TradingHub.Market;
 namespace TradingHub.Strategies;
 
 /// <summary>
-/// Simula una estrategia operación por operación sobre datos reales: arma las velas, llama a la
-/// estrategia y llena las órdenes con reglas realistas (mercado con deslizamiento, límites solo si
-/// el precio los atraviesa, stops como mercado al dispararse, comisiones y stops/targets OCO).
+/// Simulates a strategy trade by trade over real data: it builds the candles, calls the
+/// strategy and fills the orders with realistic rules (market with slippage, limits only if
+/// the price goes through them, stops as market orders when triggered, commissions and OCO stops/targets).
 /// </summary>
 public sealed class BacktestEngine : IStrategyHost
 {
@@ -31,7 +31,7 @@ public sealed class BacktestEngine : IStrategyHost
     private long _submitIndex;
     private long _timeTicks, _priceTicks;
 
-    // posición
+    // position
     private decimal _pos, _avg, _realized, _commissionOpen, _commissionTotal;
     private DateTime _entryTime;
     private string _entryName = "";
@@ -42,7 +42,7 @@ public sealed class BacktestEngine : IStrategyHost
     private StrategyOrder? _sl, _tp;
     private long _barsInMarket;
     private DateOnly _sessionDay;
-    private long _nextSessionTicks = long.MinValue; // cuándo empieza la próxima sesión (hasta ahí no se recalcula la fecha)
+    private long _nextSessionTicks = long.MinValue; // when the next session starts (until then the date is not recomputed)
 
     public BacktestEngine(Strategy strategy, TickData data, BacktestSettings settings)
     {
@@ -59,13 +59,13 @@ public sealed class BacktestEngine : IStrategyHost
     }
 
     /// <summary>
-    /// Cierres por hora del mercado (de antes y durante el rango): el contexto de la estrategia arranca con los anteriores a
-    /// su primera vela, como en vivo (si no, las primeras horas no sabe si hay rango o tendencia y el filtro no bloquea, y el
-    /// percentil de volatilidad se calcula con pocos días). Nunca usa los de después de su primera vela.
+    /// Hourly market closes (from before and during the range): the strategy's context starts with the ones before
+    /// its first candle, as it is live (otherwise, in the first hours it does not know whether there is a range or a trend and the filter does not block, and the
+    /// volatility percentile is computed with few days). It never uses the ones after its first candle.
     /// </summary>
     public IReadOnlyList<(DateTime Time, decimal Close)>? ContextHistory { get; init; }
 
-    /// <summary>Corre la estrategia completa.</summary>
+    /// <summary>Runs the whole strategy.</summary>
     public BacktestResult Run(CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
@@ -90,11 +90,11 @@ public sealed class BacktestEngine : IStrategyHost
                 long t = _data.TimeTicks(i), p = _data.PriceTicks(i);
                 _timeTicks = t;
 
-                // 1) cierre de vela (la estrategia decide con lo que había hasta el cierre)
+                // 1) candle close (the strategy decides with whatever there was up to the close)
                 var closed = _builder.Roll(t, p);
                 if (closed != null) OnBarClosed(closed);
-                // la fecha de sesión solo cambia al empezar la sesión siguiente: convertir de zona horaria en cada tick
-                // costaba casi tanto como el resto del motor
+                // the session date only changes when the next session starts: converting time zones on every tick
+                // cost almost as much as the rest of the engine
                 if (t >= _nextSessionTicks)
                 {
                     var day = _session.SessionDate(new DateTime(t, DateTimeKind.Utc));
@@ -111,11 +111,11 @@ public sealed class BacktestEngine : IStrategyHost
                     }
                 }
 
-                // 2) ejecuciones con esta operación
+                // 2) fills with this trade
                 _priceTicks = p;
                 if (_orders.Count > 0) ProcessFills(i, p, t);
 
-                // 3) la operación entra en la vela en formación
+                // 3) the trade goes into the candle being formed
                 _builder.Append(t, p, _data.Volume(i), _data.Side(i));
                 if (_pos != 0) TrackExcursion(p);
                 if (ticks)
@@ -130,7 +130,7 @@ public sealed class BacktestEngine : IStrategyHost
             if (_s.CloseAtEnd && _pos != 0)
             {
                 foreach (var o in _orders.ToList()) Cancel(o);
-                var exit = new StrategyOrder { Id = _nextId++, Side = _pos > 0 ? OrderSide.Sell : OrderSide.Buy, Type = StrategyOrderType.Market, Quantity = Math.Abs(_pos), Name = "Fin del backtest", Time = Time };
+                var exit = new StrategyOrder { Id = _nextId++, Side = _pos > 0 ? OrderSide.Sell : OrderSide.Buy, Type = StrategyOrderType.Market, Quantity = Math.Abs(_pos), Name = "End of backtest", Time = Time };
                 ApplyFill(exit, _priceTicks, Time, notify: false);
             }
 
@@ -158,7 +158,7 @@ public sealed class BacktestEngine : IStrategyHost
         return result;
     }
 
-    /// <summary>Cuándo empieza la sesión siguiente (si la hora cae en un cambio de horario raro, se vuelve a mirar en un minuto).</summary>
+    /// <summary>When the next session starts (if the time falls on an odd daylight-saving change, it is checked again in a minute).</summary>
     private long NextSessionTicks(DateOnly day, long now)
     {
         try
@@ -189,7 +189,7 @@ public sealed class BacktestEngine : IStrategyHost
         _equity.Add(new EquityPoint(time, eq, _peak - eq));
     }
 
-    // ----------------------------------------------------------------- ejecuciones
+    // ----------------------------------------------------------------- fills
 
     private void ProcessFills(int i, long p, long t)
     {
@@ -210,7 +210,7 @@ public sealed class BacktestEngine : IStrategyHost
                 case StrategyOrderType.Limit:
                     if (o.Marketable)
                     {
-                        // límite que ya cruzaba el precio: se llena como mercado, sin pasar el límite
+                        // a limit the price was already crossing: it fills as a market order, without going past the limit
                         fill = buy ? Math.Min(level, p + slip) : Math.Max(level, p - slip);
                         break;
                     }
@@ -237,7 +237,7 @@ public sealed class BacktestEngine : IStrategyHost
         o.FillTime = time;
         _orders.Remove(o);
 
-        // OCO: se cancela el par del stop/target
+        // OCO: the stop/target's pair is cancelled
         if (o.OcoGroup != null)
         {
             foreach (var other in _orders.Where(x => x.OcoGroup == o.OcoGroup).ToList()) Cancel(other);
@@ -280,7 +280,7 @@ public sealed class BacktestEngine : IStrategyHost
 
             if (rest > 0)
             {
-                // da vuelta la posición
+                // it reverses the position
                 OpenTrade(o.Name, time, price);
                 _avg = price;
                 _pos = o.Side == OrderSide.Buy ? rest : -rest;
@@ -304,7 +304,7 @@ public sealed class BacktestEngine : IStrategyHost
         _entryBar = _bars.Count;
         _mae = _mfe = 0;
         _highWater = _lowWater = price;
-        // el contexto que vio la estrategia al entrar (el mismo que usa su filtro de contexto)
+        // the context the strategy saw on entry (the same one its context filter uses)
         var context = _strategy.Context;
         (_entryTrend, _entryVolatility, _entryVolatilityRank, _entryDirection) = (context.Trend, context.Volatility, context.VolatilityRank, context.Direction);
     }
@@ -317,7 +317,7 @@ public sealed class BacktestEngine : IStrategyHost
         if (exc < _mae) _mae = exc;
         if (_strategy.TrailingStopTicks <= 0) return;
 
-        // trailing stop: acompaña al precio a favor
+        // trailing stop: it follows the price in the favorable direction
         decimal dist = _strategy.TrailingStopTicks * _inst.TickSize;
         if (_pos > 0)
         {
@@ -335,7 +335,7 @@ public sealed class BacktestEngine : IStrategyHost
         }
     }
 
-    /// <summary>Rehace el stop loss y el take profit automáticos según la posición.</summary>
+    /// <summary>Rebuilds the automatic stop loss and take profit based on the position.</summary>
     private void UpdateProtection()
     {
         if (_sl is { IsActive: true }) Cancel(_sl);
@@ -400,8 +400,8 @@ public sealed class BacktestEngine : IStrategyHost
 
     public StrategyOrder Submit(OrderSide side, StrategyOrderType type, decimal quantity, decimal price, string name)
     {
-        if (quantity <= 0) throw new ArgumentException("La cantidad tiene que ser mayor a cero.");
-        if (type != StrategyOrderType.Market && price <= 0) throw new ArgumentException("El precio de la orden tiene que ser mayor a cero.");
+        if (quantity <= 0) throw new ArgumentException("The quantity has to be greater than zero.");
+        if (type != StrategyOrderType.Market && price <= 0) throw new ArgumentException("The order's price has to be greater than zero.");
         return NewOrder(side, type, quantity, price, name, null, protective: false);
     }
 

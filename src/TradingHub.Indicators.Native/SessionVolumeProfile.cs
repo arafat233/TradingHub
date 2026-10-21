@@ -7,22 +7,22 @@ using TradingHub.Rendering.Tools;
 namespace TradingHub.Indicators.Native;
 
 /// <summary>
-/// Perfil de volumen por sesión (o por semana) dibujado sobre las velas, con POC, VAH y VAL.
+/// Volume profile per session (or per week) drawn over the candles, with POC, VAH and VAL.
 /// </summary>
-[DisplayName("Perfil de volumen por sesión")]
+[DisplayName("Session volume profile")]
 [Category(IndicatorCategories.VolumeOrderFlow)]
 public class SessionVolumeProfile : Indicator
 {
     public enum ProfilePeriod
     {
-        [Display(Name = "Sesión (día)")] Session,
-        [Display(Name = "Semana")] Week,
-        [Display(Name = "Toda la historia visible")] Visible,
+        [Display(Name = "Session (day)")] Session,
+        [Display(Name = "Week")] Week,
+        [Display(Name = "All the visible history")] Visible,
     }
 
     public enum ProfileKind
     {
-        [Display(Name = "Volumen")] Volume,
+        [Display(Name = "Volume")] Volume,
         [Display(Name = "Delta")] Delta,
         [Display(Name = "Bid / Ask")] BidAsk,
     }
@@ -54,33 +54,33 @@ public class SessionVolumeProfile : Indicator
         DrawAbovePrice = false;
     }
 
-    [Display(Name = "Período", GroupName = "Cálculo", Order = 10)]
+    [Display(Name = "Period", GroupName = "Calculation", Order = 10)]
     public ProfilePeriod Period { get => _period; set { _period = value; RecalculateValues(); } }
 
-    [Display(Name = "Área de valor (%)", GroupName = "Cálculo", Order = 20)]
+    [Display(Name = "Value area (%)", GroupName = "Calculation", Order = 20)]
     [Range(10, 100)]
     public int ValueAreaPercent { get => _valueArea; set { _valueArea = Math.Clamp(value, 10, 100); RecalculateValues(); } }
 
-    [Display(Name = "Tipo", GroupName = "Visualización", Order = 30)]
+    [Display(Name = "Type", GroupName = "Display", Order = 30)]
     public ProfileKind Kind { get; set; } = ProfileKind.Volume;
 
-    [Display(Name = "Ancho máximo (% de la sesión)", GroupName = "Visualización", Order = 40)]
+    [Display(Name = "Maximum width (% of the session)", GroupName = "Display", Order = 40)]
     [Range(5, 100)]
     public int WidthPercent { get; set; } = 70;
 
-    [Display(Name = "Color del perfil", GroupName = "Visualización", Order = 50)]
+    [Display(Name = "Profile color", GroupName = "Display", Order = 50)]
     public Color ProfileColor { get; set; } = Color.FromArgb(70, 110, 140, 190);
 
-    [Display(Name = "Color del área de valor", GroupName = "Visualización", Order = 60)]
+    [Display(Name = "Value area color", GroupName = "Display", Order = 60)]
     public Color ValueAreaColor { get; set; } = Color.FromArgb(110, 120, 160, 220);
 
-    [Display(Name = "Color del POC", GroupName = "Visualización", Order = 70)]
+    [Display(Name = "POC color", GroupName = "Display", Order = 70)]
     public Color PocColor { get; set; } = Color.FromArgb(255, 255, 196, 0);
 
-    [Display(Name = "Extender POC hasta tocar", GroupName = "Visualización", Order = 80)]
+    [Display(Name = "Extend the POC until it is touched", GroupName = "Display", Order = 80)]
     public bool ExtendPoc { get; set; } = true;
 
-    [Display(Name = "Mostrar VAH / VAL", GroupName = "Visualización", Order = 90)]
+    [Display(Name = "Show VAH / VAL", GroupName = "Display", Order = 90)]
     public bool ShowValueAreaLines { get; set; } = true;
 
     protected override void OnRecalculate() => _profiles.Clear();
@@ -98,7 +98,7 @@ public class SessionVolumeProfile : Indicator
             _profiles.Add(new Profile { StartBar = bar, EndBar = bar, CommittedEnd = bar - 1 });
 
         var p = _profiles[^1];
-        // las barras cerradas se acumulan una sola vez; la barra actual se suma aparte en cada tick
+        // the closed bars are accumulated just once; the current bar is added separately on every tick
         while (p.CommittedEnd < bar - 1)
         {
             p.CommittedEnd++;
@@ -136,7 +136,7 @@ public class SessionVolumeProfile : Indicator
             }
         }
 
-        // área de valor expandiendo desde el POC
+        // value area expanding from the POC
         var prices = p.Levels.Keys.ToList();
         if (prices.Count == 0) return;
         int pocIdx = prices.IndexOf(p.Poc);
@@ -202,7 +202,7 @@ public class SessionVolumeProfile : Indicator
                 }
             }
 
-            // POC (se extiende hasta que el precio lo toca en sesiones posteriores)
+            // POC (it extends until the price touches it in later sessions)
             int yPoc = ChartInfo.GetYByPrice(p.Poc, false);
             int xEnd = x1;
             if (ExtendPoc)

@@ -7,9 +7,9 @@ using TradingHub.Market;
 namespace TradingHub.Feeds.Bybit;
 
 /// <summary>
-/// Datos públicos de Bybit (perpetuos USDT, API v5): tape y libro de 200 niveles en vivo.
-/// La API REST solo da las últimas 1000 operaciones, así que la historia se completa con lo que
-/// Trading Hub va grabando en disco.
+/// Public Bybit data (USDT perpetuals, v5 API): tape and 200-level book, live.
+/// The REST API only gives the last 1000 trades, so the history is filled in with whatever
+/// Trading Hub keeps recording to disk.
 /// </summary>
 public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHistory
 {
@@ -48,7 +48,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
                     VolumeStep = Dec(s.GetProperty("lotSizeFilter").GetProperty("qtyStep")) / 1.0000000000000000000000000000m,
                     BaseAsset = s.GetProperty("baseCoin").GetString() ?? "",
                     QuoteAsset = s.GetProperty("quoteCoin").GetString() ?? "",
-                    Description = $"{s.GetProperty("baseCoin").GetString()}/{s.GetProperty("quoteCoin").GetString()} perpetuo",
+                    Description = $"{s.GetProperty("baseCoin").GetString()}/{s.GetProperty("quoteCoin").GetString()} perpetual",
                 });
             }
 
@@ -82,19 +82,19 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
         foreach (var t in doc.RootElement.GetProperty("result").GetProperty("list").EnumerateArray())
         {
             var tr = Parse(t, instrument);
-            // si ya hay datos grabados (fromId), solo lo posterior a lo último grabado
+            // if there is already recorded data (fromId), only what comes after the last recorded one
             if ((fromId.HasValue ? tr.Time > fromUtc : tr.Time >= fromUtc) && tr.Time <= toUtc) list.Add(tr);
         }
 
-        // vienen de la más nueva a la más vieja
+        // they come from the newest to the oldest
         list.Reverse();
-        // ids locales crecientes
+        // increasing local ids
         var withIds = list.Select(t => new Trade(Interlocked.Increment(ref _nextId), t.Time, t.Price, t.Volume, t.Side)).ToList();
         if (withIds.Count > 0) onBatch(withIds);
         progress?.Report(1);
     }
 
-    // ======================================================================= velas (historia larga)
+    // ======================================================================= candles (long history)
 
     public async Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct)
     {
@@ -104,7 +104,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
         return long.TryParse(lt.GetString(), out var ms) ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime : null;
     }
 
-    /// <summary>Velas por REST de a 1000 (Bybit no informa el volumen comprador: el delta queda en cero).</summary>
+    /// <summary>Candles over REST, 1000 at a time (Bybit does not report the buy volume: the delta stays at zero).</summary>
     public async Task LoadKlinesAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc, int minutes, decimal endPrice,
         Func<IReadOnlyList<Kline>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
     {
@@ -125,7 +125,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
                 batch.Add(new Kline(t, Dec(k[1]), Dec(k[2]), Dec(k[3]), Dec(k[4]), Dec(k[5]), 0, false));
             }
 
-            // vienen de la más nueva a la más vieja
+            // they come from the newest to the oldest
             batch.Reverse();
             if (batch.Count > 0 && !onBatch(batch)) return;
             cur = pageEnd + 1;
@@ -159,7 +159,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
         int requested = 0;
         bool everConnected = false;
         DateTime lastTradeTime = DateTime.MinValue;
-        var stale = TimeSpan.FromSeconds(15); // el libro llega varias veces por segundo
+        var stale = TimeSpan.FromSeconds(15); // the book arrives several times per second
         while (!ct.IsCancellationRequested)
         {
             using var ws = new ClientWebSocket();
@@ -168,10 +168,10 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
             var conn = liveSub.BeginConnection();
             var book = new OrderBookBuilder();
             bool receivedAny = false;
-            string reason = "se cortó la conexión";
+            string reason = "the connection dropped";
             try
             {
-                if (!everConnected) liveSub.SetChannel("datos", FeedStatus.Connecting, "Conectando a Bybit…");
+                if (!everConnected) liveSub.SetChannel("data", FeedStatus.Connecting, "Connecting to Bybit…");
                 using (var connectCts = CancellationTokenSource.CreateLinkedTokenSource(conn.Token))
                 {
                     connectCts.CancelAfter(TimeSpan.FromSeconds(15));
@@ -181,7 +181,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
                 var sub = $"{{\"op\":\"subscribe\",\"args\":[\"publicTrade.{instrument.Symbol}\",\"orderbook.200.{instrument.Symbol}\"]}}";
                 await ws.SendAsync(Encoding.UTF8.GetBytes(sub), WebSocketMessageType.Text, true, conn.Token).ConfigureAwait(false);
 
-                // rellena lo que se perdió durante el corte (Bybit da las últimas 1000 operaciones)
+                // it backfills what was missed during the drop (Bybit gives the last 1000 trades)
                 if (lastTradeTime > DateTime.MinValue)
                 {
                     try
@@ -195,11 +195,11 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
                     }
                     catch (Exception) when (!ct.IsCancellationRequested)
                     {
-                        // el relleno es de mejor esfuerzo
+                        // the backfill is best effort
                     }
                 }
 
-                liveSub.SetChannel("datos", FeedStatus.Connected, null);
+                liveSub.SetChannel("data", FeedStatus.Connected, null);
                 everConnected = true;
                 conn.CancelAfter(stale);
 
@@ -229,7 +229,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
 
                     if (r.MessageType == WebSocketMessageType.Close)
                     {
-                        reason = "el servidor cerró la conexión";
+                        reason = "the server closed the connection";
                         break;
                     }
 
@@ -246,7 +246,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
                         foreach (var t in root.GetProperty("data").EnumerateArray())
                         {
                             var tr = Parse(t, instrument);
-                            if (tr.Time < lastTradeTime) continue; // ya vino en el relleno
+                            if (tr.Time < lastTradeTime) continue; // it already came in the backfill
                             trades.Add(new Trade(Interlocked.Increment(ref _nextId), tr.Time, tr.Price, tr.Volume, tr.Side));
                         }
 
@@ -283,7 +283,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
             }
             catch (OperationCanceledException)
             {
-                reason = liveSub.WasRequested(ref requested) ? "reconexión pedida" : receivedAny ? "no llegaban datos" : "no respondió a tiempo";
+                reason = liveSub.WasRequested(ref requested) ? "reconnection requested" : receivedAny ? "no data was arriving" : "it did not respond in time";
                 if (!receivedAny) failures++;
             }
             catch (Exception ex)
@@ -298,13 +298,13 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
 
             if (ct.IsCancellationRequested) break;
             var wait = LiveSubscription.Backoff(failures);
-            liveSub.SetChannel("datos", FeedStatus.Reconnecting, failures == 0
-                ? $"Reconectando ({reason})…"
-                : $"Reconectando en {wait.TotalSeconds:0} s · intento {failures} ({reason})");
+            liveSub.SetChannel("data", FeedStatus.Reconnecting, failures == 0
+                ? $"Reconnecting ({reason})…"
+                : $"Reconnecting in {wait.TotalSeconds:0} s · attempt {failures} ({reason})");
             await Task.Delay(wait, ct).ContinueWith(_ => { }).ConfigureAwait(false);
         }
 
-        liveSub.SetChannel("datos", FeedStatus.Disconnected, null);
+        liveSub.SetChannel("data", FeedStatus.Disconnected, null);
     }
 
     public void Dispose() => _http.Dispose();

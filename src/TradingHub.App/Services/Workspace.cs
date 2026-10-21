@@ -12,7 +12,7 @@ using TradingHub.Indicators;
 
 namespace TradingHub.App.Services;
 
-/// <summary>Guarda y restaura el espacio de trabajo (pestañas, indicadores con su configuración y dibujos).</summary>
+/// <summary>Stores and restores the workspace (tabs, indicators with their configuration and drawings).</summary>
 internal static partial class Workspace
 {
     private sealed class WorkspaceDto
@@ -22,7 +22,7 @@ internal static partial class Workspace
         public int ActivePage { get; set; }
         public List<FloatingDto> Floating { get; set; } = new();
 
-        // versión 1: una pestaña = un gráfico
+        // version 1: one tab = one chart
         public List<TabDto> Tabs { get; set; } = new();
         public int Active { get; set; }
     }
@@ -60,7 +60,7 @@ internal static partial class Workspace
         public List<StrategyDto> Strategies { get; set; } = new();
     }
 
-    /// <summary>Una estrategia puesta en un gráfico.</summary>
+    /// <summary>A strategy placed on a chart.</summary>
     private sealed class StrategyDto
     {
         public string Id { get; set; } = "";
@@ -90,7 +90,7 @@ internal static partial class Workspace
 
     private static readonly JsonSerializer Serializer = JsonSerializer.Create(Settings);
 
-    /// <summary>Solo serializa propiedades editables (públicas, con set, visibles en el editor).</summary>
+    /// <summary>It only serializes editable properties (public, with a setter, visible in the editor).</summary>
     private sealed class EditableContractResolver : DefaultContractResolver
     {
         protected override IList<JsonProperty> CreateProperties(Type type, MemberSerialization memberSerialization)
@@ -108,7 +108,7 @@ internal static partial class Workspace
         }
     }
 
-    // ===================================================================== indicadores
+    // ===================================================================== indicators
 
     public static JObject SaveIndicator(Indicator ind, out List<JObject> series)
     {
@@ -149,7 +149,7 @@ internal static partial class Workspace
         }
         catch (Exception ex)
         {
-            ind.LogWarn($"No se pudo restaurar toda la configuración de {ind.Name}: {ex.Message}");
+            ind.LogWarn($"Could not restore all the settings for {ind.Name}: {ex.Message}");
         }
 
         if (series == null) return;
@@ -177,7 +177,7 @@ internal static partial class Workspace
         }
     }
 
-    /// <summary>Crea una copia de un indicador con la misma configuración.</summary>
+    /// <summary>Creates a copy of an indicator with the same configuration.</summary>
     public static Indicator? CloneIndicator(AppServices svc, Indicator ind)
     {
         try
@@ -190,12 +190,12 @@ internal static partial class Workspace
         }
         catch (Exception ex)
         {
-            ind.LogWarn($"No se pudo copiar {ind.Name}: {ex.Message}");
+            ind.LogWarn($"Could not copy {ind.Name}: {ex.Message}");
             return null;
         }
     }
 
-    // ===================================================================== espacio de trabajo
+    // ===================================================================== workspace
 
     private static TabDto ToDto(ChartTab t)
     {
@@ -239,7 +239,7 @@ internal static partial class Workspace
         };
     }
 
-    /// <summary>Agrega al gráfico los indicadores guardados (del espacio de trabajo o de una plantilla).</summary>
+    /// <summary>Adds the stored indicators to the chart (from the workspace or from a template).</summary>
     private static void AddIndicators(TradingView w, ChartModel model, IEnumerable<IndicatorDto> list)
     {
         foreach (var idto in list)
@@ -247,7 +247,7 @@ internal static partial class Workspace
             var ind = w.Services.Catalog.Create(idto.Type);
             if (ind == null)
             {
-                w.SetStatus($"No encontré el indicador {idto.Type} (¿se borró o no compila?)");
+                w.SetStatus($"The indicator {idto.Type} was not found (was it deleted, or does it not compile?)");
                 continue;
             }
 
@@ -322,7 +322,7 @@ internal static partial class Workspace
         if (td.BarWidth > 0) tab.Model.Viewport.BarWidth = td.BarWidth;
         AddIndicators(w, tab.Model, td.Indicators);
 
-        // estrategias: las visuales vuelven a correr; las que ejecutaban quedan pausadas hasta que las reanudes
+        // strategies: the visual ones run again; the executing ones stay paused until you resume them
         foreach (var sd in td.Strategies)
         {
             var cs = new ChartStrategy
@@ -353,7 +353,7 @@ internal static partial class Workspace
         int activePage = dto.ActivePage;
         if (pages.Count == 0 && dto.Tabs.Count > 0)
         {
-            // espacio de trabajo viejo: cada pestaña tenía un solo gráfico
+            // old workspace: each tab had a single chart
             pages = dto.Tabs.Select(t => new PageDto { Charts = { t } }).ToList();
             activePage = dto.Active;
         }
@@ -395,14 +395,14 @@ internal static partial class Workspace
         return true;
     }
 
-    // ===================================================================== dibujos (por instrumento)
+    // ===================================================================== drawings (per instrument)
 
     private static string DrawingsFile(ChartTab t) =>
         Path.Combine(AppPaths.Drawings, string.Concat($"{t.FeedId}_{t.Symbol}".Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)) + ".json");
 
     /// <summary>
-    /// Una sola lista de dibujos por instrumento: todos los gráficos de ese instrumento (cualquier período,
-    /// pestaña o ventana) la comparten, así se sincronizan y nunca se pisan al guardar.
+    /// A single drawing list per instrument: every chart of that instrument (any period,
+    /// tab or window) shares it, so they stay in sync and never overwrite each other on save.
     /// </summary>
     private static readonly Dictionary<string, List<ChartDrawing>> Shared = new();
 

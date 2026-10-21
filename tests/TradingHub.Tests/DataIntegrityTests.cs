@@ -6,8 +6,8 @@ using TradingHub.Market;
 namespace TradingHub.Tests;
 
 /// <summary>
-/// Lo que pasó el 3/10: dos procesos grabando el mismo archivo de ticks lo mezclaron, la app cargó basura
-/// (velas gigantes falsas) y un id adelantado hizo que se descartara todo el vivo (el gráfico quedó congelado).
+/// What happened on 3 Oct: two processes recording the same tick file mixed it up, the app loaded junk
+/// (huge fake candles) and an id that ran ahead made the whole live feed get discarded (the chart froze).
 /// </summary>
 public class DataIntegrityTests
 {
@@ -29,6 +29,31 @@ public class DataIntegrityTests
         return list;
     }
 
+    /// <summary>
+    /// Removes the temp folder. On Windows a file that was just created or replaced can stay in use for a
+    /// moment, so the delete is retried; it never throws, because a teardown that fails would replace the
+    /// real failure of the test with its own exception.
+    /// </summary>
+    private static void Cleanup(string dir)
+    {
+        for (int i = 0; i < 20; i++)
+        {
+            try
+            {
+                Directory.Delete(dir, true);
+                return;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(50);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
+
     private static string TempDir()
     {
         var d = Path.Combine(Path.GetTempPath(), "tradinghub_integrity_" + Guid.NewGuid().ToString("N"));
@@ -37,7 +62,7 @@ public class DataIntegrityTests
     }
 
     [Fact]
-    public void Dos_escritores_mezclados_no_dejan_pasar_basura()
+    public void Two_mixed_writers_do_not_let_junk_through()
     {
         var dir = TempDir();
         try
@@ -46,9 +71,9 @@ public class DataIntegrityTests
             var trades = Stream(60_000);
             var byId = trades.ToDictionary(t => t.Id);
 
-            // como el 3/10: el Trading Hub del usuario (A) graba; arranca otro proceso (B) sobre el mismo archivo y cada
-            // uno escribe en su propia posición, pisándose a pedazos; después A se cierra y un Trading Hub nuevo (C)
-            // sigue grabando al final. El archivo queda con registros cortados y cadenas de diferencias mezcladas.
+            // as on 3 Oct: the user's Trading Hub (A) records; another process (B) starts on the same file and each
+            // one writes at its own position, overwriting the other in pieces; afterwards A closes and a fresh Trading Hub (C)
+            // carries on recording at the end. The file ends up with truncated records and mixed chains of differences.
             var a = new TickFile.Writer(path, Btc);
             for (int i = 0; i < 20_000; i++)
             {
@@ -57,10 +82,26 @@ public class DataIntegrityTests
             }
 
             a.Flush();
-            var b = new TickFile.Writer(path, Btc);
+            // Windows enforces the writer's FileShare.Read, so B cannot even open the file and the mix-up
+            // is impossible there: what A wrote on its own has to be intact and there is nothing to repair.
+            // On macOS the share mode is advisory, both writers get in, and the rest of this test checks
+            // that the damage is detected and repaired.
+            TickFile.Writer b;
+            try
+            {
+                b = new TickFile.Writer(path, Btc);
+            }
+            catch (IOException) when (OperatingSystem.IsWindows())
+            {
+                a.Dispose();
+                TickFile.Read(path, out int intact);
+                Assert.Equal(0, intact);
+                return;
+            }
+
             for (int i = 20_000; i < 21_000; i++) a.Write(trades[i]);
             a.Flush();
-            // B iba adelantado (como en el archivo real: 812 operaciones) y escribe en la misma posición
+            // B had run ahead (as in the real file: 812 trades) and writes at the same position
             for (int i = 20_812; i < 30_000; i++) b.Write(trades[i]);
             b.Flush();
             for (int i = 21_000; i < 22_000; i++)
@@ -75,17 +116,17 @@ public class DataIntegrityTests
                 for (int i = 30_000; i < trades.Count; i++) c.Write(trades[i]);
 
             var read = TickFile.Read(path, out int dropped);
-            Assert.True(dropped > 0, "tenía que encontrar el tramo dañado");
-            // todo lo que queda es real: mismo tiempo, precio y volumen que la operación original con ese id
+            Assert.True(dropped > 0, "it had to find the damaged stretch");
+            // everything left is real: same time, price and volume as the original trade with that id
             var fake = read.Where(t => !byId.TryGetValue(t.Id, out var o) || o.Time != t.Time || o.Price != t.Price || o.Volume != t.Volume).ToList();
-            Assert.True(fake.Count == 0, $"{fake.Count} operaciones falsas de {read.Count} (descartadas {dropped}); la primera: {fake.FirstOrDefault()}");
+            Assert.True(fake.Count == 0, $"{fake.Count} fake trades out of {read.Count} (dropped {dropped}); the first one: {fake.FirstOrDefault()}");
 
-            // lo de antes y lo de después de la mezcla se conserva (como mucho se pierde un tramo de 4096 al salir
-            // de la zona mezclada; ese hueco se vuelve a pedir al exchange al cargar)
+            // what came before and after the mix-up is kept (at most a 4096 stretch is lost on the way out
+            // of the mixed zone; that gap is requested from the exchange again on loading)
             int before = read.Count(t => t.Id < trades[15_000].Id), after = read.Count(t => t.Id >= trades[30_000].Id);
-            Assert.True(before >= 15_000 && after >= 30_000 - 4_097, $"antes {before}, después {after}, leídas {read.Count}, descartadas {dropped}");
+            Assert.True(before >= 15_000 && after >= 30_000 - 4_097, $"before {before}, after {after}, read {read.Count}, dropped {dropped}");
 
-            // reparar deja el archivo limpio y legible sin descartes
+            // repairing leaves the file clean and readable with nothing discarded
             Assert.True(TickFile.Repair(path, Btc) > 0);
             var again = TickFile.Read(path, out int dropped2);
             Assert.Equal(0, dropped2);
@@ -93,12 +134,12 @@ public class DataIntegrityTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            Cleanup(dir);
         }
     }
 
     [Fact]
-    public void Un_archivo_sano_se_lee_entero()
+    public void A_healthy_file_is_read_in_full()
     {
         var dir = TempDir();
         try
@@ -107,7 +148,7 @@ public class DataIntegrityTests
             var trades = Stream(10_000, seed: 3);
             using (var w = new TickFile.Writer(path, Btc))
                 foreach (var t in trades) w.Write(t);
-            // historia vieja agregada después (vuelve atrás: keyframe) también es válida
+            // old history appended afterwards (it goes back: a keyframe) is also valid
             using (var w = new TickFile.Writer(path, Btc))
                 foreach (var t in trades.Take(500)) w.Write(t);
 
@@ -117,12 +158,12 @@ public class DataIntegrityTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            Cleanup(dir);
         }
     }
 
     [Fact]
-    public void Solo_un_proceso_puede_grabar_cada_instrumento()
+    public void Only_one_process_can_record_each_instrument()
     {
         var dir = TempDir();
         try
@@ -130,33 +171,34 @@ public class DataIntegrityTests
             using var first = TickFile.TryLock(dir, "binance-futures", "BTCUSDT");
             Assert.NotNull(first);
             Assert.Null(TickFile.TryLock(dir, "binance-futures", "BTCUSDT"));
-            Assert.NotNull(TickFile.TryLock(dir, "binance-futures", "ETHUSDT")); // otro instrumento sí
+            using (var other = TickFile.TryLock(dir, "binance-futures", "ETHUSDT")) // another instrument, yes
+                Assert.NotNull(other);
             first!.Dispose();
             using var again = TickFile.TryLock(dir, "binance-futures", "BTCUSDT");
             Assert.NotNull(again);
 
-            // el grabador que no consigue el permiso no escribe nada
+            // the recorder that does not get the permission writes nothing
             using var rec = new TickRecorder(dir, new Instrument { Symbol = "BTCUSDT", FeedId = "binance-futures", TickSize = 0.1m, VolumeStep = 0.001m });
             Assert.False(rec.IsActive);
         }
         finally
         {
-            Directory.Delete(dir, true);
+            Cleanup(dir);
         }
     }
 
     [Fact]
-    public void Un_id_adelantado_no_congela_el_vivo()
+    public void An_id_that_runs_ahead_does_not_freeze_the_live_feed()
     {
         var data = new InstrumentData(Btc, new SimulatedFeed());
         data.Trades.Add(new Trade(100, Day, 84_700m, 1, TradeSide.Buy));
-        data.Trades.Add(new Trade(9_999_999, Day.AddSeconds(1), 84_701m, 1, TradeSide.Buy)); // basura con id del futuro
+        data.Trades.Add(new Trade(9_999_999, Day.AddSeconds(1), 84_701m, 1, TradeSide.Buy)); // junk with an id from the future
         typeof(InstrumentData).GetField("_historyMerged", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(data, true);
 
         IMarketDataSink sink = data;
         sink.OnTrades(Btc, new[]
         {
-            new Trade(100, Day, 84_700m, 1, TradeSide.Buy), // repetida: se ignora
+            new Trade(100, Day, 84_700m, 1, TradeSide.Buy), // repeated: it is ignored
             new Trade(101, Day.AddSeconds(2), 84_702m, 1, TradeSide.Buy),
             new Trade(102, Day.AddSeconds(3), 84_703m, 1, TradeSide.Sell),
         });
@@ -166,13 +208,13 @@ public class DataIntegrityTests
     }
 
     [Fact]
-    public void Una_operacion_fuera_de_orden_no_infla_la_vela_actual()
+    public void An_out_of_order_trade_does_not_inflate_the_current_candle()
     {
         var store = new TradeStore(Btc);
         store.Add(new Trade(1, Day, 84_700m, 1, TradeSide.Buy));
         store.Add(new Trade(2, Day.AddMinutes(1), 84_710m, 1, TradeSide.Buy));
         store.Add(new Trade(3, Day.AddMinutes(1).AddSeconds(5), 84_705m, 1, TradeSide.Sell));
-        store.Add(new Trade(4, Day.AddDays(-88), 166_543m, 25, TradeSide.Sell)); // tiempo de julio, precio absurdo
+        store.Add(new Trade(4, Day.AddDays(-88), 166_543m, 25, TradeSide.Sell)); // July time, absurd price
         var series = new CandleSeries(Btc, ChartPeriod.M1);
         series.Rebuild(store);
         Assert.Equal(2, series.Count);

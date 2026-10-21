@@ -10,36 +10,36 @@ using Rectangle = System.Drawing.Rectangle;
 
 namespace TradingHub.Charting.Rendering;
 
-/// <summary>Estado de interacción que afecta al dibujo (mouse, objeto en construcción, mensajes).</summary>
+/// <summary>Interaction state that affects drawing (mouse, object under construction, messages).</summary>
 public sealed class ChartRenderState
 {
     public float? MouseX { get; set; }
     public float? MouseY { get; set; }
     public bool Crosshair { get; set; } = true;
 
-    /// <summary>Cruz de otro gráfico vinculado: instante y (si es el mismo instrumento) precio.</summary>
+    /// <summary>Crosshair from another linked chart: instant and (if it is the same instrument) price.</summary>
     public DateTime? LinkedTime { get; set; }
     public double? LinkedPrice { get; set; }
     public ChartDrawing? Preview { get; set; }
     public string? Message { get; set; }
 
-    /// <summary>Orden que se está arrastrando y el precio donde quedaría.</summary>
+    /// <summary>Order being dragged and the price it would end up at.</summary>
     public Order? DragOrder { get; set; }
     public decimal DragPrice { get; set; }
 
-    /// <summary>Stop/objetivo que se está arrastrando desde la posición o una orden pendiente.</summary>
+    /// <summary>Stop/target being dragged from the position or a pending order.</summary>
     public BracketDrag? BracketDrag { get; set; }
 
-    /// <summary>Zonas que empiezan un arrastre de stop/objetivo (las arma el dibujo de cada cuadro).</summary>
+    /// <summary>Zones that start a stop/target drag (built by each frame's drawing pass).</summary>
     public List<BracketHandle> Handles { get; } = new();
 
-    /// <summary>Botón para volver a lo último (abajo a la derecha) si el gráfico está corrido hacia atrás.</summary>
+    /// <summary>Button to jump back to the latest bars (bottom right) if the chart is scrolled back.</summary>
     public SKRect? GoLatestButton { get; set; }
 
-    /// <summary>Zonas clicables de la leyenda: ocultar, configurar o quitar indicadores y plegar la lista.</summary>
+    /// <summary>Clickable legend zones: hide, configure or remove indicators and collapse the list.</summary>
     public List<LegendHit> Legend { get; } = new();
 
-    /// <summary>La ✕ de la etiqueta de la operación resaltada (saca el resaltado).</summary>
+    /// <summary>The X on the highlighted trade's label (clears the highlight).</summary>
     public SKRect? FocusTradeClose { get; set; }
 }
 
@@ -52,19 +52,19 @@ public enum LegendAction
     Collapse,
 }
 
-/// <summary>Zona clicable de la leyenda del gráfico.</summary>
+/// <summary>Clickable zone of the chart legend.</summary>
 public sealed record LegendHit(SKRect Rect, IndicatorSlot? Slot, LegendAction Action, StrategyOverlay? Strategy = null);
 
 /// <summary>
-/// Arrastre de stop/objetivo. Entry = null: desde la posición abierta. Pending + Index: mueve un stop
-/// (−1) u objetivo adjunto a una orden pendiente. Role = None: lo decide el lado donde se suelta.
+/// Stop/target drag. Entry = null: from the open position. Pending + Index: moves a stop
+/// (-1) or a target attached to a pending order. Role = None: decided by the side it is dropped on.
 /// </summary>
 public sealed record BracketDrag(Order? Entry, BracketRole Role, PendingBracket? Pending = null, int Index = -1);
 
-/// <summary>Zona del gráfico que inicia un arrastre (botones SL/TP o la línea de la posición).</summary>
+/// <summary>Chart zone that starts a drag (SL/TP buttons or the position line).</summary>
 public sealed record BracketHandle(SKRect Rect, BracketDrag Drag, bool IsButton);
 
-/// <summary>Dibuja un gráfico completo sobre un SKCanvas (sin depender de la UI).</summary>
+/// <summary>Draws a complete chart onto an SKCanvas (with no UI dependency).</summary>
 public sealed class ChartRenderer
 {
     private readonly FootprintRenderer _footprint = new();
@@ -85,7 +85,7 @@ public sealed class ChartRenderer
         model.LastLayout = layout;
         model.ChartInfo.Region = new Rectangle(0, 0, (int)width, (int)height);
 
-        // fondo
+        // background
         using (var bg = new SKPaint())
         {
             bg.Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(0, height), new[] { t.BackgroundTop, t.BackgroundBottom }, SKShaderTileMode.Clamp);
@@ -104,11 +104,11 @@ public sealed class ChartRenderer
             else DrawSubPanel(canvas, model, layout, panel, axisLabels);
             canvas.Restore();
 
-            // renders personalizados de indicadores (pueden pintar sobre el eje)
+            // custom indicator renders (they may paint over the axis)
             DrawCustomRenders(canvas, model, layout, panel, width, height, above: true);
         }
 
-        // separadores de paneles
+        // panel separators
         _stroke.Color = t.PanelSeparator;
         _stroke.StrokeWidth = 1;
         foreach (var p in layout.Panels.Skip(1))
@@ -129,7 +129,7 @@ public sealed class ChartRenderer
         return layout;
     }
 
-    // =================================================================== distribución
+    // =================================================================== layout
 
     public static ChartLayout ComputeLayout(ChartModel model, float width, float height)
     {
@@ -138,8 +138,8 @@ public sealed class ChartRenderer
         float axisW = ChartLayout.PriceAxisWidth, timeH = ChartLayout.TimeAxisHeight;
         var plot = new SKRect(0, 0, Math.Max(50, width - axisW), Math.Max(50, height - timeH));
 
-        // limita el desplazamiento
-        // (con barras muy anchas o un gráfico angosto entran menos de 3 y el mínimo pasaba al máximo)
+        // clamps the scroll
+        // (with very wide bars or a narrow chart fewer than 3 fit and the minimum used to become the maximum)
         double visibleBars = plot.Width / vp.BarWidth;
         double maxScroll = Math.Max(0, series.Count + vp.RightMarginBars - 3);
         vp.ScrollBars = Math.Clamp(vp.ScrollBars, Math.Min(-(visibleBars - 3), maxScroll), maxScroll);
@@ -161,7 +161,7 @@ public sealed class ChartRenderer
         layout.LastVisible = Math.Min(series.Count - 1, layout.BarAt(plot.Right));
         if (layout.LastVisible < layout.FirstVisible) layout.LastVisible = layout.FirstVisible - 1;
 
-        // alturas de paneles
+        // panel heights
         double totalRatio = model.SubPanels.Sum(p => p.HeightRatio);
         double scale = totalRatio > 0.65 ? 0.65 / totalRatio : 1;
         float y = plot.Top;
@@ -224,7 +224,7 @@ public sealed class ChartRenderer
         var (imin, imax) = SeriesRenderer.ValueRange(overlay, layout.FirstVisible, layout.LastVisible, true);
         if (min != double.MaxValue && imin != double.MaxValue)
         {
-            // los indicadores amplían la escala solo si no la deforman demasiado
+            // indicators widen the scale only if they do not distort it too much
             double span = Math.Max(max - min, row * 4);
             if (imin > min - span * 1.5) min = Math.Min(min, imin);
             if (imax < max + span * 1.5) max = Math.Max(max, imax);
@@ -241,7 +241,7 @@ public sealed class ChartRenderer
         double rangeV = Math.Max(max - min, row * 6);
         double mid = (max + min) / 2;
         double margin = rangeV * 0.08;
-        // el modo combinado escribe el delta arriba y el volumen abajo de cada vela: deja lugar
+        // combined mode writes the delta above and the volume below each candle: leave room
         if (footprint && model.Settings.Layout.ShowTotals && main.Rect.Height > 100)
             margin += rangeV * 26 / main.Rect.Height;
         main.Top = mid + rangeV / 2 + margin;
@@ -272,7 +272,7 @@ public sealed class ChartRenderer
         panel.Bottom = min - margin;
     }
 
-    // =================================================================== paneles
+    // =================================================================== panels
 
     private void DrawMainPanel(SKCanvas canvas, ChartModel model, ChartLayout layout, PanelLayout main, List<AxisLabel> axisLabels)
     {
@@ -285,7 +285,7 @@ public sealed class ChartRenderer
         var paint = _series.CollectPaintBars(model, layout);
         var style = model.Settings.Style;
 
-        // si un indicador dibuja sus propias velas (Heikin Ashi…), reemplazan a las del gráfico
+        // if an indicator draws its own candles (Heikin Ashi…), they replace the chart's
         if (!SeriesRenderer.ChartReplacedByIndicator(model, layout))
         {
             var hidden = new HashSet<int>(paint.Where(kv => kv.Value.Alpha == 0).Select(kv => kv.Key));
@@ -335,7 +335,7 @@ public sealed class ChartRenderer
         {
             var ind = slot.Indicator;
             if (!slot.Visible || !ind.EnableCustomDrawing || ind.SubscribedLayouts == DrawingLayouts.None) continue;
-            // en el panel de precio, los que no piden "encima del precio" van antes de las velas
+            // in the price panel, the ones that do not ask for "above the price" go before the candles
             bool wantAbove = !panel.IsPrice || ind.DrawAbovePrice;
             if (wantAbove != above) continue;
 
@@ -353,7 +353,7 @@ public sealed class ChartRenderer
             }
             catch (Exception ex)
             {
-                if (slot.Error == null) this.LogError($"Error dibujando {ind.Name}: {ex.Message}", ex);
+                if (slot.Error == null) this.LogError($"Error drawing {ind.Name}: {ex.Message}", ex);
                 slot.Error = ex.Message;
             }
 
@@ -376,7 +376,7 @@ public sealed class ChartRenderer
         _stroke.PathEffect = null;
     }
 
-    // =================================================================== grilla y ejes
+    // =================================================================== grid and axes
 
     private static double NiceStep(double raw)
     {
@@ -394,7 +394,7 @@ public sealed class ChartRenderer
         if (!panel.IsPrice) return NiceStep(raw);
         double row = (double)panel.RowSize;
         double step = NiceStep(raw);
-        // múltiplo del tamaño de fila
+        // multiple of the row size
         if (row > 0) step = Math.Max(row, Math.Ceiling(step / row) * row);
         return step;
     }
@@ -446,10 +446,10 @@ public sealed class ChartRenderer
             }
         }
 
-        // etiquetas de valores actuales de indicadores
+        // labels with the current indicator values
         foreach (var l in extraLabels) DrawAxisTag(canvas, layout, l.Y, l.Text, l.Background, l.Foreground, font);
 
-        // último precio
+        // last price
         if (model.Series.Count > 0)
         {
             var last = model.Series[^1];
@@ -466,8 +466,8 @@ public sealed class ChartRenderer
     }
 
     /// <summary>
-    /// Operaciones propias: un triángulo en cada ejecución (verde compra ▲, rojo venta ▼, con la cantidad) y una
-    /// línea punteada de la entrada a la salida de cada operación cerrada (verde si ganó, roja si perdió).
+    /// Own trades: a triangle on each fill (green buy up, red sell down, with the quantity) and a
+    /// dotted line from entry to exit of each closed trade (green if it won, red if it lost).
     /// </summary>
     private void DrawTradeMarks(SKCanvas canvas, ChartModel model, ChartLayout layout)
     {
@@ -507,7 +507,7 @@ public sealed class ChartRenderer
             if (float.IsNaN(x) || x < plot.Left - size || x > plot.Right + size) continue;
             float y = main.Y(m.Price);
             if (y < plot.Top - size || y > plot.Bottom + size) continue;
-            // la punta toca el precio: compra desde abajo, venta desde arriba
+            // the tip touches the price: a buy from below, a sell from above
             path.Reset();
             if (m.Buy)
             {
@@ -538,8 +538,8 @@ public sealed class ChartRenderer
     }
 
     /// <summary>
-    /// La operación elegida en una lista: recuadro de la entrada a la salida (verde si ganó, rojo si perdió), el peor y el
-    /// mejor precio por el que pasó (MAE / MFE, punteados), flecha en la entrada, cruz en la salida y una etiqueta.
+    /// The trade picked in a list: a box from entry to exit (green if it won, red if it lost), the worst and the
+    /// best price it went through (MAE / MFE, dotted), an arrow at the entry, a cross at the exit and a label.
     /// </summary>
     private void DrawFocusTrade(SKCanvas canvas, ChartModel model, ChartLayout layout, ChartRenderState state)
     {
@@ -556,7 +556,7 @@ public sealed class ChartRenderer
         float x0 = layout.CenterX(b0) - half, x1 = layout.CenterX(b1) + half;
         if (x1 < plot.Left || x0 > plot.Right) return;
 
-        // peor y mejor precio dentro de la operación (con las velas)
+        // worst and best price inside the trade (using the candles)
         decimal lo = Math.Min(f.EntryPrice, f.ExitPrice), hi = Math.Max(f.EntryPrice, f.ExitPrice);
         var inst = model.Instrument;
         for (int i = b0; i <= b1 && i < series.Count; i++)
@@ -578,7 +578,7 @@ public sealed class ChartRenderer
         _stroke.PathEffect = null;
         canvas.DrawRect(new SKRect(x0, Math.Min(yEntry, yExit), x1, Math.Max(yEntry, yExit)), _stroke);
 
-        // MAE / MFE: el extremo en contra y el extremo a favor
+        // MAE / MFE: the adverse extreme and the favorable one
         decimal adverse = f.IsLong ? lo : hi, favorable = f.IsLong ? hi : lo;
         _stroke.StrokeWidth = 1.2f;
         _stroke.PathEffect = SKPathEffect.CreateDash(new[] { 3f, 3f }, 0);
@@ -590,12 +590,12 @@ public sealed class ChartRenderer
             canvas.DrawLine(x0, y, x1, y, _stroke);
             _text.Color = color;
             float w = RenderContext.MeasureWidth(font, label);
-            // a la derecha del recuadro si entra; si no (operación pegada al borde), a la izquierda
+            // to the right of the box if it fits; otherwise (a trade hugging the edge), to the left
             float lx = x1 + 4 + w <= plot.Right ? x1 + 4 : Math.Max(plot.Left + 2, x0 - 4 - w);
             canvas.DrawText(label, lx, labelY + font.Size / 3, font, _text);
         }
 
-        // si los dos niveles quedan muy cerca, las etiquetas se separan
+        // if the two levels end up very close, the labels are separated
         float gap = font.Size + 2;
         float la = yAdverse, lf = yFavorable;
         if (Math.Abs(la - lf) < gap)
@@ -610,7 +610,7 @@ public sealed class ChartRenderer
         Level(yFavorable, lf, t.TradeWin, "MFE " + model.Instrument.FormatPrice(favorable));
         _stroke.PathEffect = null;
 
-        // entrada (flecha) y salida (cruz)
+        // entry (arrow) and exit (cross)
         float size = 7;
         using (var path = new SKPath())
         {
@@ -630,7 +630,7 @@ public sealed class ChartRenderer
         canvas.DrawLine(xx - 6, yExit - 6, xx + 6, yExit + 6, _stroke);
         canvas.DrawLine(xx - 6, yExit + 6, xx + 6, yExit - 6, _stroke);
 
-        // etiqueta arriba del recuadro, con una ✕ para sacar el resaltado
+        // label above the box, with an X to clear the highlight
         var labelFont = RenderContext.GetFont(t.FontFamily, 11f, true, false);
         const float closeW = 20;
         float w = RenderContext.MeasureWidth(labelFont, f.Label) + 14 + closeW;
@@ -657,7 +657,7 @@ public sealed class ChartRenderer
         canvas.Restore();
     }
 
-    /// <summary>Grosor y trazo de las líneas entrada → salida (configurables en el gráfico).</summary>
+    /// <summary>Thickness and dash of the entry -> exit lines (configurable on the chart).</summary>
     private void TradeLinePaint(ChartSettings s)
     {
         float w = (float)Math.Clamp(s.TradeLineWidth, 0.5, 8);
@@ -672,8 +672,8 @@ public sealed class ChartRenderer
     }
 
     /// <summary>
-    /// Operaciones de las estrategias puestas en el gráfico: flecha en la entrada (▲ compra abajo, ▼ venta arriba) con su
-    /// nombre, una cruz en la salida con el resultado, y una línea punteada entre las dos (verde si ganó, roja si perdió).
+    /// Trades of the strategies placed on the chart: an arrow at the entry (up for a buy, down for a sell) with its
+    /// name, a cross at the exit with the result, and a dotted line between the two (green if it won, red if it lost).
     /// </summary>
     private void DrawStrategySignals(SKCanvas canvas, ChartModel model, ChartLayout layout)
     {
@@ -720,7 +720,7 @@ public sealed class ChartRenderer
                 float ty;
                 if (sg.Entry)
                 {
-                    // flecha con la punta en el precio de entrada, del color de la estrategia por dentro
+                    // arrow with its tip at the entry price, filled with the strategy's color
                     path.Reset();
                     float dir = sg.Buy ? 1 : -1;
                     path.MoveTo(x, y + dir * 2);
@@ -740,7 +740,7 @@ public sealed class ChartRenderer
                 }
                 else
                 {
-                    // salida: una cruz en el precio
+                    // exit: a cross at the price
                     _stroke.StrokeWidth = 2f;
                     _stroke.Color = st.Color;
                     float c = size * 0.75f;
@@ -760,8 +760,8 @@ public sealed class ChartRenderer
     }
 
     /// <summary>
-    /// Lo que dibuja una estrategia: líneas continuas (vela a vela) y dibujos (rangos, líneas, niveles, marcas, textos).
-    /// Solo se miran los que caen en la parte visible.
+    /// What a strategy draws: continuous lines (candle by candle) and drawings (ranges, lines, levels, markers, texts).
+    /// Only the ones falling inside the visible part are looked at.
     /// </summary>
     private void DrawStrategyShapes(SKCanvas canvas, ChartModel model, ChartLayout layout, StrategyOverlay st)
     {
@@ -789,7 +789,7 @@ public sealed class ChartRenderer
             _ => null,
         };
 
-        // líneas continuas
+        // continuous lines
         using var path = new SKPath();
         foreach (var line in st.Lines)
         {
@@ -951,7 +951,7 @@ public sealed class ChartRenderer
         _stroke.PathEffect = null;
     }
 
-    /// <summary>Órdenes activas y posición de la cuenta del gráfico (líneas + etiquetas).</summary>
+    /// <summary>Active orders and position of the chart's account (lines + labels).</summary>
     private static readonly SKColor StopColor = new(240, 82, 90);
     private static readonly SKColor TargetColor = new(38, 194, 129);
 
@@ -972,7 +972,7 @@ public sealed class ChartRenderer
         string Qty(decimal q) => q.ToString("0.####", inv);
         string Money(decimal v) => v.ToString("+0.00;-0.00;0.00", inv);
 
-        // dibuja una línea con su etiqueta; devuelve el rectángulo de la etiqueta
+        // draws a line with its label; returns the label's rectangle
         SKRect? Line(decimal price, SKColor color, string label, bool dashed, bool ghost)
         {
             float y = MathF.Floor(main.Y(price)) + 0.5f;
@@ -995,7 +995,7 @@ public sealed class ChartRenderer
             return r;
         }
 
-        // botones "SL" y "TP" a la izquierda de una etiqueta: se arrastran para poner stop u objetivo
+        // "SL" and "TP" buttons to the left of a label: drag them to set a stop or target
         void Buttons(SKRect label, Order? entry)
         {
             float x = label.Left - 4;
@@ -1020,14 +1020,14 @@ public sealed class ChartRenderer
             state.Handles.Add(new BracketHandle(new SKRect(main.Rect.Left, y - 4, main.Rect.Right, y + 4), drag, false));
         }
 
-        // cross trading: la posición y las órdenes son de otro instrumento (mirás ES, ejecutás MES) y se aclara cuál
+        // cross trading: the position and the orders belong to another instrument (you watch ES, you trade MES) and it is spelled out which
         string other = acc.Instrument.Key != inst.Key ? acc.Instrument.Symbol + " · " : "";
         var pos = acc.Position;
         bool hasPosition = pos != null && pos.Volume != 0;
         if (hasPosition)
         {
             var label = Line(pos!.AveragePrice, pos.Volume > 0 ? t.PositionLong : t.PositionShort,
-                $"{other}{(pos.Volume > 0 ? "LARGO" : "CORTO")} {Qty(Math.Abs(pos.Volume))} · {Money(pos.UnrealizedPnL)}", false, false);
+                $"{other}{(pos.Volume > 0 ? "LONG" : "SHORT")} {Qty(Math.Abs(pos.Volume))} · {Money(pos.UnrealizedPnL)}", false, false);
             if (label is { } lr && br != null) Buttons(lr, null);
             if (br != null) Band(pos.AveragePrice, new BracketDrag(null, BracketRole.None));
         }
@@ -1054,14 +1054,14 @@ public sealed class ChartRenderer
             {
                 color = o.Direction == OrderDirections.Buy ? t.BuyOrder : t.SellOrder;
                 string kind = o.Type == OrderTypes.Stop ? "STP" : "LMT";
-                label = $"{kind} {(o.Direction == OrderDirections.Buy ? "COMPRA" : "VENTA")} {Qty(o.Unfilled)}";
+                label = $"{kind} {(o.Direction == OrderDirections.Buy ? "BUY" : "SELL")} {Qty(o.Unfilled)}";
             }
 
             label = other + label;
             var lr = Line(price, color, label, role == BracketRole.None, dragging);
             if (dragging && state.DragPrice > 0) Line(state.DragPrice, color, label + " →", false, false);
 
-            // orden de entrada: botones para adjuntarle stop/objetivo y sus brackets pendientes
+            // entry order: buttons to attach a stop/target to it and its pending brackets
             if (role != BracketRole.None || o.ReduceOnly || br == null) continue;
             bool entryLike = !hasPosition || (o.Direction == OrderDirections.Buy) == (pos!.Volume > 0);
             if (!entryLike) continue;
@@ -1071,7 +1071,7 @@ public sealed class ChartRenderer
             if (pb.StopTicks is int st)
             {
                 decimal sp = entry - pb.Side * st * inst.TickSize;
-                Line(sp, StopColor, $"SL al llenar · {st}t · {Money(br.PnLAt(sp, o.Unfilled, entry, pb.Side))}", true, true);
+                Line(sp, StopColor, $"SL on fill · {st}t · {Money(br.PnLAt(sp, o.Unfilled, entry, pb.Side))}", true, true);
                 Band(sp, new BracketDrag(o, BracketRole.StopLoss, pb, -1));
             }
 
@@ -1080,12 +1080,12 @@ public sealed class ChartRenderer
                 var tg = pb.Targets[i];
                 decimal tp = entry + pb.Side * tg.Ticks * inst.TickSize;
                 string pct = pb.Targets.Count > 1 ? $" {tg.Percent.ToString("0.#", inv)}%" : "";
-                Line(tp, TargetColor, $"TP{i + 1}{pct} al llenar · {tg.Ticks}t", true, true);
+                Line(tp, TargetColor, $"TP{i + 1}{pct} on fill · {tg.Ticks}t", true, true);
                 Band(tp, new BracketDrag(o, BracketRole.Target, pb, i));
             }
         }
 
-        // stop/objetivo que se está arrastrando
+        // stop/target being dragged
         if (state.BracketDrag is { } d && state.DragPrice > 0 && br != null)
         {
             decimal p = state.DragPrice;
@@ -1103,7 +1103,7 @@ public sealed class ChartRenderer
                 int side = d.Entry.Direction == OrderDirections.Buy ? 1 : -1;
                 int ticks = (int)Math.Round((p - entry) / inst.TickSize) * side;
                 bool sl = d.Role == BracketRole.StopLoss || (d.Role == BracketRole.None && ticks < 0);
-                Line(p, sl ? StopColor : TargetColor, $"{(sl ? "SL" : "TP")} al llenar · {Math.Abs(ticks)}t", false, false);
+                Line(p, sl ? StopColor : TargetColor, $"{(sl ? "SL" : "TP")} on fill · {Math.Abs(ticks)}t", false, false);
             }
         }
 
@@ -1145,9 +1145,9 @@ public sealed class ChartRenderer
         var series = model.Series;
         if (series.Count == 0 || layout.LastVisible < layout.FirstVisible) return res;
         var tz = model.Settings.TimeZone;
-        var es = CultureInfo.GetCultureInfo("es-AR");
+        var fmt = CultureInfo.GetCultureInfo("en-US");
 
-        // estimación de tiempo por píxel
+        // estimated time per pixel
         int f = layout.FirstVisible, l = layout.LastVisible;
         double spanSec = Math.Max(1, (series[l].Time - series[f].Time).TotalSeconds);
         double px = Math.Max(1, layout.CenterX(l) - layout.CenterX(f));
@@ -1178,7 +1178,7 @@ public sealed class ChartRenderer
             {
                 float x = layout.CenterX(i);
                 bool major = prevLocal != null && local.Date != prevLocal.Value.Date;
-                string text = major && chosen.Step < TimeSpan.FromDays(1) ? local.ToString("dd MMM", es) : local.ToString(chosen.Format, es);
+                string text = major && chosen.Step < TimeSpan.FromDays(1) ? local.ToString("dd MMM", fmt) : local.ToString(chosen.Format, fmt);
                 if (x - lastX >= 60 && prevBucket != long.MinValue)
                 {
                     res.Add((x, text, major));
@@ -1213,7 +1213,7 @@ public sealed class ChartRenderer
         }
     }
 
-    // =================================================================== títulos, info y cursor
+    // =================================================================== titles, info and cursor
 
     private void DrawPanelTitles(SKCanvas canvas, ChartModel model, ChartLayout layout, ChartRenderState state)
     {
@@ -1298,8 +1298,8 @@ public sealed class ChartRenderer
             var parts = new (string Label, string Value, SKColor Color)[]
             {
                 ("Ap", inst.FormatPrice(series.TicksToPrice(c.OpenTicks)), t.Text),
-                ("Máx", inst.FormatPrice(series.TicksToPrice(c.HighTicks)), t.Text),
-                ("Mín", inst.FormatPrice(series.TicksToPrice(c.LowTicks)), t.Text),
+                ("High", inst.FormatPrice(series.TicksToPrice(c.HighTicks)), t.Text),
+                ("Low", inst.FormatPrice(series.TicksToPrice(c.LowTicks)), t.Text),
                 ("Cie", inst.FormatPrice(series.TicksToPrice(c.CloseTicks)), c.CloseTicks >= c.OpenTicks ? t.UpCandle : t.DownCandle),
                 ("Vol", VolumeFormat.Compact(c.Volume, vd), t.Text),
                 ("Δ", (c.Delta > 0 ? "+" : "") + VolumeFormat.Compact(c.Delta, vd), c.Delta >= 0 ? t.Ask : t.Bid),
@@ -1321,7 +1321,7 @@ public sealed class ChartRenderer
             y += 16;
         }
 
-        // indicadores superpuestos: uno por línea; al pasar el mouse aparecen ojo, ajustes y quitar (como TradingView)
+        // overlaid indicators: one per line; hovering shows eye, settings and remove (like TradingView)
         var overlay = model.Indicators.Where(s => s.Panel == null).ToList();
         if (overlay.Count == 0 && model.Strategies.Count == 0) return;
         x = main.Rect.Left + 8;
@@ -1334,7 +1334,7 @@ public sealed class ChartRenderer
         {
             _text.Color = t.TextDim.WithAlpha(150);
             int total = overlay.Count + model.Strategies.Count;
-            string n = total == 1 ? "1 indicador" : $"{total} indicadores";
+            string n = total == 1 ? "1 indicator" : $"{total} indicators";
             canvas.DrawText(n, nx, y, font, _text);
             state.Legend.Add(new LegendHit(new SKRect(nx - 2, y - 11, nx + RenderContext.MeasureWidth(font, n) + 2, y + 4), null, LegendAction.Collapse));
             return;
@@ -1355,11 +1355,11 @@ public sealed class ChartRenderer
             y += 16;
         }
 
-        // estrategias: como un indicador más, con su estado (visual o en vivo y en qué cuenta)
+        // strategies: like one more indicator, with its state (visual or live and on which account)
         foreach (var st in model.Strategies)
         {
             if (y > main.Rect.Bottom - 12) break;
-            // (el ▶ no está en la fuente del gráfico: se dibuja el triángulo)
+            // (the play glyph is not in the chart font: the triangle is drawn)
             string name = st.Name + (st.Status.Length > 0 ? " · " + st.Status : "") + (st.Error != null ? " (!)" : "");
             float w = RenderContext.MeasureWidth(font, name) + 12;
             var row = new SKRect(nx - 4, y - 12, nx + w + 66, y + 5);
@@ -1391,13 +1391,13 @@ public sealed class ChartRenderer
         canvas.DrawRoundRect(r, 4, 4, p);
     }
 
-    /// <summary>Ojo (ocultar/mostrar) y, con el mouse encima, ajustes y quitar. Devuelve dónde terminan.</summary>
+    /// <summary>Eye (hide/show) and, with the mouse over it, settings and remove. Returns where they end.</summary>
     private static float DrawLegendIcons(SKCanvas canvas, ChartRenderState state, IndicatorSlot? slot, float x, float y, bool hover, SKColor color, StrategyOverlay? strategy = null)
     {
         bool visible = slot?.Visible ?? strategy?.Visible ?? true;
         float cy = y - 4;
         using var p = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.3f, Color = color, StrokeCap = SKStrokeCap.Round };
-        // ojo
+        // eye
         float ex = x + 7;
         using (var path = new SKPath())
         {
@@ -1414,7 +1414,7 @@ public sealed class ChartRenderer
         state.Legend.Add(new LegendHit(new SKRect(x - 2, cy - 8, x + 16, cy + 8), slot, LegendAction.ToggleVisible, strategy));
         if (!hover) return x + 16;
 
-        // ajustes (engranaje)
+        // settings (gear)
         float gx = x + 25;
         canvas.DrawCircle(gx, cy, 3.3f, p);
         for (int i = 0; i < 8; i++)
@@ -1425,7 +1425,7 @@ public sealed class ChartRenderer
 
         state.Legend.Add(new LegendHit(new SKRect(gx - 8, cy - 8, gx + 8, cy + 8), slot, LegendAction.Settings, strategy));
 
-        // quitar
+        // remove
         float cx = x + 43;
         canvas.DrawLine(cx - 4, cy - 4, cx + 4, cy + 4, p);
         canvas.DrawLine(cx - 4, cy + 4, cx + 4, cy - 4, p);
@@ -1454,7 +1454,7 @@ public sealed class ChartRenderer
         canvas.DrawPath(path, p);
     }
 
-    /// <summary>Botón chiquito abajo a la derecha para volver a lo último cuando el gráfico está corrido hacia atrás.</summary>
+    /// <summary>Small button at the bottom right to jump back to the latest bars when the chart is scrolled back.</summary>
     private static void DrawGoLatest(SKCanvas canvas, ChartModel model, ChartLayout layout, ChartRenderState state)
     {
         if (model.Viewport.ScrollBars < 2 || model.Series.Count == 0) return;
@@ -1514,7 +1514,7 @@ public sealed class ChartRenderer
         if (bar >= 0 && bar < model.Series.Count)
         {
             var local = TimeZoneInfo.ConvertTimeFromUtc(model.Series[bar].Time, model.Settings.TimeZone);
-            string ts = local.ToString(model.Period.IsTimeBased && model.Period.ApproxDuration >= TimeSpan.FromDays(1) ? "ddd dd MMM yyyy" : "ddd dd MMM  HH:mm:ss", CultureInfo.GetCultureInfo("es-AR"));
+            string ts = local.ToString(model.Period.IsTimeBased && model.Period.ApproxDuration >= TimeSpan.FromDays(1) ? "ddd dd MMM yyyy" : "ddd dd MMM  HH:mm:ss", CultureInfo.GetCultureInfo("en-US"));
             float w = RenderContext.MeasureWidth(font, ts) + 12;
             var r = new SKRect(cx - w / 2, layout.TimeAxis.Top + 1, cx + w / 2, layout.TimeAxis.Bottom - 1);
             _fill.Color = t.CrosshairLabelBack;
@@ -1524,7 +1524,7 @@ public sealed class ChartRenderer
         }
     }
 
-    /// <summary>Cruz que viene de otro gráfico del mismo grupo de color (más tenue).</summary>
+    /// <summary>Crosshair coming from another chart in the same color group (fainter).</summary>
     private void DrawLinkedCrosshair(SKCanvas canvas, ChartModel model, ChartLayout layout, ChartRenderState state)
     {
         if (state.LinkedTime is not { } time || model.Series.Count == 0) return;
@@ -1558,7 +1558,7 @@ public sealed class ChartRenderer
         if (x >= layout.Plot.Left && x <= layout.Plot.Right)
         {
             var local = TimeZoneInfo.ConvertTimeFromUtc(time, model.Settings.TimeZone);
-            string ts = local.ToString(model.Period.IsTimeBased && model.Period.ApproxDuration >= TimeSpan.FromDays(1) ? "ddd dd MMM yyyy" : "ddd dd MMM  HH:mm", CultureInfo.GetCultureInfo("es-AR"));
+            string ts = local.ToString(model.Period.IsTimeBased && model.Period.ApproxDuration >= TimeSpan.FromDays(1) ? "ddd dd MMM yyyy" : "ddd dd MMM  HH:mm", CultureInfo.GetCultureInfo("en-US"));
             float w = RenderContext.MeasureWidth(font, ts) + 12;
             var r = new SKRect(x - w / 2, layout.TimeAxis.Top + 1, x + w / 2, layout.TimeAxis.Bottom - 1);
             _fill.Color = t.CrosshairLabelBack;
@@ -1580,8 +1580,8 @@ public sealed class ChartRenderer
         string? msg = state.Message;
         if (msg == null)
         {
-            if (model.Data.IsLoadingHistory) msg = $"Cargando historia…  {model.Data.HistoryProgress * 100:0}%";
-            else if (model.Series.Count == 0) msg = model.Data.HistoryError != null ? "Error: " + model.Data.HistoryError : "Esperando datos…";
+            if (model.Data.IsLoadingHistory) msg = $"Loading history…  {model.Data.HistoryProgress * 100:0}%";
+            else if (model.Series.Count == 0) msg = model.Data.HistoryError != null ? "Error: " + model.Data.HistoryError : "Waiting for data…";
         }
 
         if (msg == null) return;

@@ -4,7 +4,7 @@ using TradingHub.Strategies;
 
 namespace TradingHub.App.Lab;
 
-/// <summary>Gráficos de los informes (PNG, estilo documento: fondo blanco, apto para imprimir).</summary>
+/// <summary>Report charts (PNG, document style: white background, fit for printing).</summary>
 internal static class ReportCharts
 {
     private static readonly SKColor Bg = SKColors.White;
@@ -19,13 +19,13 @@ internal static class ReportCharts
         new(37, 99, 235), new(234, 140, 0), new(22, 163, 107), new(168, 85, 247), new(220, 53, 69), new(14, 165, 233), new(132, 94, 54), new(236, 72, 153),
     };
 
-    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-AR");
+    private static readonly CultureInfo Fmt = CultureInfo.GetCultureInfo("en-US");
     private static SKTypeface Face(bool bold = false) => SKTypeface.FromFamilyName("Helvetica Neue", bold ? SKFontStyle.Bold : SKFontStyle.Normal) ?? SKTypeface.Default;
 
     private static string Compact(double v)
     {
         double a = Math.Abs(v);
-        string s = a >= 1_000_000 ? (v / 1_000_000).ToString("0.#", Es) + "M" : a >= 10_000 ? (v / 1000).ToString("0.#", Es) + "K" : v.ToString(a >= 100 ? "N0" : "N2", Es);
+        string s = a >= 1_000_000 ? (v / 1_000_000).ToString("0.#", Fmt) + "M" : a >= 10_000 ? (v / 1000).ToString("0.#", Fmt) + "K" : v.ToString(a >= 100 ? "N0" : "N2", Fmt);
         return s;
     }
 
@@ -56,7 +56,7 @@ internal static class ReportCharts
         c.DrawText(title, x, y, font, p);
     }
 
-    /// <summary>Curva de capital arriba y drawdown ("bajo el agua") abajo. Series extra en colores (componentes).</summary>
+    /// <summary>Equity curve on top and drawdown ("under water") below. Extra series in colors (components).</summary>
     public static byte[] Equity(IReadOnlyList<(DateTime Time, decimal Equity)> points, decimal capital, string title,
         IReadOnlyList<(string Label, IReadOnlyList<(DateTime Time, decimal Equity)> Points)>? extra = null)
     {
@@ -92,7 +92,7 @@ internal static class ReportCharts
             c.DrawText(s, left - 12 - Tw(font, s), y + 6, font, axisText);
         }
 
-        // capital inicial
+        // initial capital
         using (var cap = new SKPaint { Color = AxisC, StrokeWidth = 1.5f, PathEffect = SKPathEffect.CreateDash(new[] { 8f, 6f }, 0), IsAntialias = true })
             c.DrawLine(left, Y((double)capital), right, Y((double)capital), cap);
 
@@ -151,7 +151,7 @@ internal static class ReportCharts
         {
             float y = MathF.Round(YD(v)) + 0.5f;
             c.DrawLine(left, y, right, y, grid);
-            var s = v.ToString("0.#", Es) + "%";
+            var s = v.ToString("0.#", Fmt) + "%";
             c.DrawText(s, left - 12 - Tw(font, s), y + 6, font, axisText);
         }
 
@@ -172,17 +172,17 @@ internal static class ReportCharts
             c.DrawText("DRAWDOWN", left, ddTop - 12, label, lp);
         }
 
-        // fechas
+        // dates
         int nDates = 6;
         for (int i = 0; i <= nDates; i++)
         {
             var t = t0.AddSeconds(span * i / nDates);
-            var s = t.ToString(span > 86400 * 200 ? "MMM yyyy" : span > 86400 * 3 ? "dd MMM" : "dd/MM HH:mm", Es);
+            var s = t.ToString(span > 86400 * 200 ? "MMM yyyy" : span > 86400 * 3 ? "dd MMM" : "dd/MM HH:mm", Fmt);
             float x = X(t);
             c.DrawText(s, Math.Clamp(x - Tw(font, s) / 2, left, right - Tw(font, s)), H - 34, font, axisText);
         }
 
-        // leyenda de componentes
+        // component legend
         if (extra is { Count: > 0 })
         {
             float lx = left + 10, ly = top + 22;
@@ -196,22 +196,22 @@ internal static class ReportCharts
                 ly += 24;
             }
 
-            Item("Portafolio", LineC);
+            Item("Portfolio", LineC);
             for (int k = 0; k < extra.Count; k++) Item(extra[k].Label, Palette[(k + 1) % Palette.Length]);
         }
 
         return Encode(surface);
     }
 
-    /// <summary>Rendimiento mensual (% sobre el capital al empezar el mes) como mapa de calor.</summary>
+    /// <summary>Monthly performance (% of the capital at the start of the month) as a heat map.</summary>
     public static byte[] Monthly(IReadOnlyList<YearReturns> years)
     {
         int W = 1600, rowH = 52, H = 130 + Math.Max(1, years.Count) * rowH;
         using var surface = SKSurface.Create(new SKImageInfo(W, H));
         var c = surface.Canvas;
         c.Clear(Bg);
-        Title(c, "Rendimiento mensual", 40, 46);
-        string[] months = { "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Año" };
+        Title(c, "Monthly performance", 40, 46);
+        string[] months = { "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Year" };
         float left = 110, top = 96, cellW = (W - left - 40) / 13f;
         using var font = new SKFont(Face(), 17);
         using var bold = new SKFont(Face(true), 17);
@@ -241,7 +241,7 @@ internal static class ReportCharts
                 using var fill = new SKPaint { Color = bg, IsAntialias = true };
                 c.DrawRoundRect(rect, 6, 6, fill);
                 if (!v.HasValue) continue;
-                var s = (v.Value >= 0 ? "+" : "") + v.Value.ToString("0.0", Es) + "%";
+                var s = (v.Value >= 0 ? "+" : "") + v.Value.ToString("0.0", Fmt) + "%";
                 using var txt = new SKPaint { Color = Math.Abs((double)v.Value) / maxAbs > 0.6 ? SKColors.White : TextC, IsAntialias = true };
                 c.DrawText(s, rect.MidX - Tw(m == 12 ? bold : font, s) / 2, rect.MidY + 6, m == 12 ? bold : font, txt);
             }
@@ -250,14 +250,14 @@ internal static class ReportCharts
         return Encode(surface);
     }
 
-    /// <summary>Distribución del resultado de las operaciones.</summary>
+    /// <summary>Distribution of the trades' results.</summary>
     public static byte[] Histogram(IReadOnlyList<(decimal From, decimal To, int Count)> buckets)
     {
         const int W = 1600, H = 620;
         using var surface = SKSurface.Create(new SKImageInfo(W, H));
         var c = surface.Canvas;
         c.Clear(Bg);
-        Title(c, "Distribución de resultados por operación", 40, 46);
+        Title(c, "Distribution of results per trade", 40, 46);
         if (buckets.Count == 0) return Encode(surface);
         float left = 90, right = W - 40, top = 90, bottom = H - 90;
         int max = Math.Max(1, buckets.Max(b => b.Count));
@@ -269,7 +269,7 @@ internal static class ReportCharts
         {
             float y = bottom - (float)(v / max) * (bottom - top);
             c.DrawLine(left, y, right, y, grid);
-            var s = v.ToString("0", Es);
+            var s = v.ToString("0", Fmt);
             c.DrawText(s, left - 12 - Tw(font, s), y + 6, font, tp);
         }
 
@@ -295,7 +295,7 @@ internal static class ReportCharts
         return Encode(surface);
     }
 
-    /// <summary>Curvas de Monte Carlo (operaciones en otro orden).</summary>
+    /// <summary>Monte Carlo curves (trades in a different order).</summary>
     public static byte[] Curves(IReadOnlyList<IReadOnlyList<decimal>> curves, decimal capital, string title)
     {
         const int W = 1600, H = 620;
@@ -338,12 +338,12 @@ internal static class ReportCharts
 
         using (var cap = new SKPaint { Color = AxisC, StrokeWidth = 1.5f, PathEffect = SKPathEffect.CreateDash(new[] { 8f, 6f }, 0), IsAntialias = true })
             c.DrawLine(left, Y((double)capital), right, Y((double)capital), cap);
-        var lbl = "operaciones →";
+        var lbl = "trades →";
         c.DrawText(lbl, right - Tw(font, lbl), H - 22, font, tp);
         return Encode(surface);
     }
 
-    /// <summary>Matriz de correlación (−1 a 1) entre las estrategias de un portafolio.</summary>
+    /// <summary>Correlation matrix (-1 to 1) between a portfolio's strategies.</summary>
     public static byte[] Correlation(IReadOnlyList<string> labels, double[,] corr)
     {
         int n = labels.Count;
@@ -353,7 +353,7 @@ internal static class ReportCharts
         using var surface = SKSurface.Create(new SKImageInfo(W, H));
         var c = surface.Canvas;
         c.Clear(Bg);
-        Title(c, "Correlación de los resultados diarios", 40, 46);
+        Title(c, "Correlation of the daily results", 40, 46);
         float left = labelW, top = 110;
         using var font = new SKFont(Face(), 17);
         using var bold = new SKFont(Face(true), 19);
@@ -372,7 +372,7 @@ internal static class ReportCharts
                 var col = i == j ? GridC : v >= 0 ? DownC.WithAlpha((byte)(30 + 200 * Math.Min(1, Math.Abs(v)))) : LineC.WithAlpha((byte)(30 + 200 * Math.Min(1, Math.Abs(v))));
                 using var fill = new SKPaint { Color = col, IsAntialias = true };
                 c.DrawRoundRect(rect, 6, 6, fill);
-                var s = v.ToString("0.00", Es);
+                var s = v.ToString("0.00", Fmt);
                 using var txt = new SKPaint { Color = Math.Abs(v) > 0.6 && i != j ? SKColors.White : TextC, IsAntialias = true };
                 c.DrawText(s, rect.MidX - Tw(bold, s) / 2, rect.MidY + 7, bold, txt);
             }

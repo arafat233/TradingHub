@@ -12,14 +12,14 @@ using TradingHub.Data;
 namespace TradingHub.App.Views;
 
 /// <summary>
-/// Barra de un gráfico: instrumento, historia, período, estilo, columnas del footprint y ticks por fila.
-/// La usan la ventana principal (sobre el gráfico activo) y cada ventana de gráfico separada.
+/// A chart's toolbar: instrument, history, period, style, footprint columns and ticks per row.
+/// It is used by the main window (acting on the active chart) and by each separate chart window.
 /// </summary>
 internal sealed class ChartToolbar : UserControl
 {
     private readonly TradingView _host;
     private readonly bool _floating;
-    // períodos: los favoritos en fila y un selector con todos (cada uno con su estrella)
+    // periods: the favorites in a row and a picker with all of them (each one with its star)
     private readonly Border _periodsHost = new() { VerticalAlignment = VerticalAlignment.Center };
     private Ui.Segmented<string>? _periods;
     private string _favSig = "";
@@ -27,7 +27,7 @@ internal sealed class ChartToolbar : UserControl
     private readonly TextBlock _periodMenuText = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Flyout _periodFlyout = new() { Placement = PlacementMode.BottomEdgeAlignedLeft };
 
-    // tipo de gráfico: un selector al lado de Indicadores
+    // chart type: a picker next to Indicators
     private readonly ChoiceButton<ChartStyle> _styleBox;
     private readonly ComboBox _layoutBox = new() { MinWidth = 190, MaxWidth = 240 };
     private readonly ChoiceButton<int> _stepBox;
@@ -36,28 +36,28 @@ internal sealed class ChartToolbar : UserControl
     private bool _syncing;
     private readonly LinkButton _link;
 
-    /// <summary>Todos los períodos del selector, por grupo.</summary>
+    /// <summary>Every period of the picker, by group.</summary>
     internal static readonly (string Title, string[] Codes)[] PeriodGroups =
     {
-        ("Segundos", new[] { "S5", "S10", "S15", "S30" }),
-        ("Minutos", new[] { "M1", "M2", "M3", "M5", "M10", "M15", "M30" }),
-        ("Horas", new[] { "H1", "H2", "H4", "H6", "H12" }),
-        ("Días", new[] { "Daily", "Weekly", "Monthly" }),
+        ("Seconds", new[] { "S5", "S10", "S15", "S30" }),
+        ("Minutes", new[] { "M1", "M2", "M3", "M5", "M10", "M15", "M30" }),
+        ("Hours", new[] { "H1", "H2", "H4", "H6", "H12" }),
+        ("Days", new[] { "Daily", "Weekly", "Monthly" }),
         ("Ticks", new[] { "Tick100", "Tick250", "Tick500", "Tick1000" }),
-        ("Volumen", new[] { "Volume100", "Volume500", "Volume1000" }),
-        ("Rango y otros", new[] { "Range10", "Range20", "Delta50", "Delta100", "Renko10" }),
+        ("Volume", new[] { "Volume100", "Volume500", "Volume1000" }),
+        ("Range and others", new[] { "Range10", "Range20", "Delta50", "Delta100", "Renko10" }),
     };
 
     private static string PeriodLabel(string code) => ChartPeriod.TryParse(code, out var p) ? p.DisplayName : code;
 
-    /// <summary>Opciones especiales del botón de historia.</summary>
+    /// <summary>Special options of the history button.</summary>
     internal const double AllHistory = -1, CustomHistory = -2;
 
     internal static readonly (double Hours, string Label)[] HistoryOptions =
     {
-        (0.5, "30 min"), (1, "1 h"), (1.5, "1,5 h"), (3, "3 h"), (6, "6 h"), (12, "12 h"), (24, "1 día"), (72, "3 días"), (168, "7 días"),
-        (720, "30 días"), (2160, "90 días"), (4380, "6 meses"), (8760, "1 año"), (17520, "2 años"), (43800, "5 años"),
-        (AllHistory, "Todo el historial"), (CustomHistory, "Desde una fecha…"),
+        (0.5, "30 min"), (1, "1 h"), (1.5, "1,5 h"), (3, "3 h"), (6, "6 h"), (12, "12 h"), (24, "1 day"), (72, "3 days"), (168, "7 days"),
+        (720, "30 days"), (2160, "90 days"), (4380, "6 months"), (8760, "1 year"), (17520, "2 years"), (43800, "5 years"),
+        (AllHistory, "All the history"), (CustomHistory, "From a date…"),
     };
 
     public ChartToolbar(TradingView host, bool floating, params Control[] rightControls)
@@ -74,25 +74,25 @@ internal sealed class ChartToolbar : UserControl
         };
         _periodMenu.Content = Ui.H(6, _periodMenuText, Ui.Icon(MaterialIconKind.ChevronDown, 14, Ui.Text2));
         _periodMenu.Flyout = _periodFlyout;
-        ToolTip.SetTip(_periodMenu, "Todos los períodos (segundos, minutos, horas, días, ticks, volumen, rango…). Clic derecho sobre uno: lo pone o lo saca de la barra.");
+        ToolTip.SetTip(_periodMenu, "Every period (seconds, minutes, hours, days, ticks, volume, range…). Right-click one to add it to or remove it from the bar.");
         _periodFlyout.Opening += (_, _) => _periodFlyout.Content = BuildPeriodMenu();
         RebuildFavorites();
         _styleBox = new ChoiceButton<ChartStyle>(MaterialIconKind.ChartBoxOutline, new[]
         {
-            (ChartStyle.Candles, "Velas"),
-            (ChartStyle.Bars, "Barras"),
-            (ChartStyle.Line, "Línea"),
+            (ChartStyle.Candles, "Candles"),
+            (ChartStyle.Bars, "Bars"),
+            (ChartStyle.Line, "Line"),
             (ChartStyle.HeikinAshi, "Heikin Ashi"),
             (ChartStyle.Footprint, "Footprint"),
-        }, "Tipo de gráfico: velas, barras, línea, Heikin Ashi o footprint");
+        }, "Chart type: candles, bars, line, Heikin Ashi or footprint");
         _styleBox.Changed += SetStyle;
         _stepBox = new ChoiceButton<int>(MaterialIconKind.FormatLineSpacing,
             new[] { 0, 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000 }.Select(n => (n, n == 0 ? "Auto" : $"{n} tick{(n > 1 ? "s" : "")}")),
-            "Ticks por fila del footprint (Auto = se adapta al zoom)");
+            "Ticks per footprint row (Auto = it adapts to the zoom)");
         _historyBox = new ChoiceButton<double>(MaterialIconKind.History,
             HistoryOptions.Select(h => (h.Hours, h.Label)),
-            "Cuánta historia cargar (hasta todo el historial). Se trae sola del exchange: lo reciente con ticks (footprint) y lo más viejo en velas de 1 minuto, en segundos. Lo bajado en Datos se usa con ticks.",
-            h => h == AllHistory ? "Todo" : HistoryOptions.First(x => x.Hours == h).Label);
+            "How much history to load (up to all of it). It is fetched from the exchange automatically: recent data with ticks (footprint) and older data as 1 minute candles, in seconds. Whatever was downloaded in Data is used with ticks.",
+            h => h == AllHistory ? "All" : HistoryOptions.First(x => x.Hours == h).Label);
         Content = Build(rightControls);
         Hook();
         RefreshLayoutBox();
@@ -100,7 +100,7 @@ internal sealed class ChartToolbar : UserControl
 
     public InstrumentPicker Picker { get; }
 
-    /// <summary>Gráfico sobre el que actúa la barra.</summary>
+    /// <summary>Chart the toolbar acts on.</summary>
     public ChartTab? Chart
     {
         get => _chart;
@@ -113,9 +113,9 @@ internal sealed class ChartToolbar : UserControl
 
     private Control Build(Control[] rightControls)
     {
-        ToolTip.SetTip(_layoutBox, "Cómo se arma cada vela del footprint");
+        ToolTip.SetTip(_layoutBox, "How each footprint candle is built");
 
-        // se acomoda en dos líneas si la ventana es angosta (nunca corta botones)
+        // it lays out on two lines if the window is narrow (it never cuts off buttons)
         var left = new WrapPanel { ItemSpacing = 8, LineSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
         foreach (var c in new Control[] { _link, Picker, _historyBox, Ui.Divider(true), Ui.H(4, _periodsHost, _periodMenu), _layoutBox, _stepBox })
         {
@@ -125,14 +125,14 @@ internal sealed class ChartToolbar : UserControl
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
         right.Children.Add(_styleBox);
-        right.Children.Add(Ui.Button("Indicadores", MaterialIconKind.FunctionVariant, () => _host.OpenIndicators(_chart)));
-        right.Children.Add(Ui.IconButton(MaterialIconKind.ViewColumnOutline, "Editar footprint (columnas)", () => _host.OpenFootprintEditor(_chart)));
-        right.Children.Add(Ui.IconButton(MaterialIconKind.PaletteOutline, "Configuración del gráfico: colores del fondo, las velas, los ejes…", () => _host.OpenChartSettings(_chart)));
+        right.Children.Add(Ui.Button("Indicators", MaterialIconKind.FunctionVariant, () => _host.OpenIndicators(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.ViewColumnOutline, "Edit footprint (columns)", () => _host.OpenFootprintEditor(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.PaletteOutline, "Chart settings: colors for the background, the candles, the axes…", () => _host.OpenChartSettings(_chart)));
         Button? strategies = null;
-        strategies = Ui.IconButton(MaterialIconKind.RobotOutline, "Estrategias en el gráfico: marcan dónde entran y salen (historia y en vivo), solo visuales o ejecutando en una cuenta", () => _host.ShowStrategyMenu(_chart, strategies!));
+        strategies = Ui.IconButton(MaterialIconKind.RobotOutline, "Strategies on the chart: they mark where they enter and exit (history and live), visual only or executing on an account", () => _host.ShowStrategyMenu(_chart, strategies!));
         right.Children.Add(strategies);
         Button? templates = null;
-        templates = Ui.IconButton(MaterialIconKind.BookmarkMultipleOutline, "Plantillas de gráfico: guardar cómo se ve este gráfico (estilo, colores, indicadores) y aplicarlo a otros", () => _host.ShowChartTemplates(_chart, templates!));
+        templates = Ui.IconButton(MaterialIconKind.BookmarkMultipleOutline, "Chart templates: save how this chart looks (style, colors, indicators) and apply it to others", () => _host.ShowChartTemplates(_chart, templates!));
         right.Children.Add(templates);
         foreach (var c in rightControls) right.Children.Add(c);
 
@@ -180,7 +180,7 @@ internal sealed class ChartToolbar : UserControl
         };
     }
 
-    /// <summary>Elegir desde qué fecha cargar.</summary>
+    /// <summary>Pick the date to load from.</summary>
     private void ShowCustomHistory()
     {
         var chart = _chart;
@@ -191,8 +191,8 @@ internal sealed class ChartToolbar : UserControl
             DisplayDateEnd = DateTime.Today,
             Width = 200,
         };
-        var load = Ui.Button("Cargar", MaterialIconKind.Download, () => { }, "primary");
-        var panel = Ui.V(10, Ui.H3("Cargar historia desde"), picker, Ui.Faint("Se trae sola del exchange (velas de 1 minuto para lo viejo)."), load);
+        var load = Ui.Button("Load", MaterialIconKind.Download, () => { }, "primary");
+        var panel = Ui.V(10, Ui.H3("Load history from"), picker, Ui.Faint("It is fetched from the exchange automatically (1 minute candles for the older part)."), load);
         panel.Margin = new Thickness(14);
         var flyout = new Flyout { Content = panel, Placement = PlacementMode.BottomEdgeAlignedLeft };
         load.Click += (_, _) =>
@@ -206,20 +206,20 @@ internal sealed class ChartToolbar : UserControl
         Sync();
     }
 
-    /// <summary>Texto corto para un rango de horas (24 → «1 día», 2000 → «83 días»).</summary>
+    /// <summary>Short text for a range of hours (24 -> "1 day", 2000 -> "83 days").</summary>
     internal static string SpanText(double hours) =>
-        hours == AllHistory ? "todo el historial"
+        hours == AllHistory ? "all the history"
         : HistoryOptions.FirstOrDefault(h => Math.Abs(h.Hours - hours) < 0.01).Label is { } l ? l
-        : hours < 48 ? $"{hours:0.#} h" : $"{hours / 24:0} días";
+        : hours < 48 ? $"{hours:0.#} h" : $"{hours / 24:0} days";
 
-    /// <summary>Los favoritos en fila (se rehace solo si cambiaron).</summary>
+    /// <summary>The favorites in a row (it is only rebuilt if they changed).</summary>
     private void RebuildFavorites()
     {
         var favorites = _host.Services.Settings.FavoritePeriods.Where(c => ChartPeriod.TryParse(c, out _)).ToList();
         string sig = string.Join(",", favorites);
         if (sig == _favSig && _periods != null) return;
         _favSig = sig;
-        // en el orden de duración (segundos, minutos, horas, días; después ticks, volumen…)
+        // in order of duration (seconds, minutes, hours, days; then ticks, volume…)
         var ordered = PeriodGroups.SelectMany(g => g.Codes).Where(favorites.Contains).Concat(favorites.Where(c => !PeriodGroups.Any(g => g.Codes.Contains(c)))).ToList();
         _periods = new Ui.Segmented<string>(ordered.Select(c => (c, PeriodLabel(c), (string?)null)));
         _periods.SelectionChanged += code => SetPeriod(ChartPeriod.Parse(code));
@@ -234,7 +234,7 @@ internal sealed class ChartToolbar : UserControl
         Sync();
     }
 
-    /// <summary>El selector de períodos: todos por grupo, con su estrella para la barra, y uno a medida.</summary>
+    /// <summary>The period picker: all of them by group, each with its star for the toolbar, plus a custom one.</summary>
     private Control BuildPeriodMenu()
     {
         var favorites = _host.Services.Settings.FavoritePeriods;
@@ -256,19 +256,19 @@ internal sealed class ChartToolbar : UserControl
                 if (isCurrent) pick.Classes.Add("primary");
                 else if (fav)
                 {
-                    // los que están en la barra, con el color del acento
+                    // the ones on the toolbar, in the accent color
                     pick.Foreground = Ui.Accent;
                     pick.FontWeight = Avalonia.Media.FontWeight.SemiBold;
                 }
 
-                ToolTip.SetTip(pick, fav ? "En la barra · clic derecho para sacarlo" : "Clic derecho para ponerlo en la barra");
+                ToolTip.SetTip(pick, fav ? "On the bar · right-click to remove it" : "Right-click to put it on the bar");
                 var c = code;
                 pick.Click += (_, _) =>
                 {
                     _periodFlyout.Hide();
                     SetPeriod(ChartPeriod.Parse(c));
                 };
-                // clic derecho: lo pone o lo saca de la barra
+                // right click: it puts it on the toolbar or takes it off
                 pick.AddHandler(PointerReleasedEvent, (_, e) =>
                 {
                     if (e.InitialPressMouseButton != MouseButton.Right) return;
@@ -285,7 +285,7 @@ internal sealed class ChartToolbar : UserControl
             row++;
         }
 
-        var custom = new TextBox { Watermark = "A medida: M3, H2, Tick500, Range20…", Width = 240 };
+        var custom = new TextBox { Watermark = "Custom: M3, H2, Tick500, Range20…", Width = 240 };
         custom.KeyDown += (_, e) =>
         {
             if (e.Key != Key.Enter) return;
@@ -294,11 +294,11 @@ internal sealed class ChartToolbar : UserControl
                 _periodFlyout.Hide();
                 SetPeriod(p);
             }
-            else _host.SetStatus("Período inválido. Ejemplos: M3, H2, Tick500, Volume100, Range20");
+            else _host.SetStatus("Invalid period. Examples: M3, H2, Tick500, Volume100, Range20");
         };
 
-        var body = Ui.V(12, Ui.H3("Período"), grid, new Border { Height = 1, Background = Ui.Line }, Ui.H(10, custom, Ui.Faint("Enter para usarlo")),
-            new TextBlock { Text = "Clic derecho sobre un período: lo pone en la barra del gráfico (o lo saca). Los de la barra se ven en color.", Classes = { "faint", "small" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        var body = Ui.V(12, Ui.H3("Period"), grid, new Border { Height = 1, Background = Ui.Line }, Ui.H(10, custom, Ui.Faint("Enter to use it")),
+            new TextBlock { Text = "Right-click a period to put it on the chart bar (or take it off). The ones on the bar show in color.", Classes = { "faint", "small" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         body.Margin = new Thickness(16, 14, 16, 14);
         body.Width = 470;
         return body;
@@ -310,7 +310,7 @@ internal sealed class ChartToolbar : UserControl
         _layoutBox.Items.Clear();
         foreach (var p in FootprintLayout.Presets) _layoutBox.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p });
         foreach (var p in FootprintLayout.LoadUserTemplates()) _layoutBox.Items.Add(new ComboBoxItem { Content = "★ " + p.Name, Tag = p });
-        _layoutBox.Items.Add(new ComboBoxItem { Content = "Editar columnas…", Tag = "edit" });
+        _layoutBox.Items.Add(new ComboBoxItem { Content = "Edit columns…", Tag = "edit" });
         _syncing = false;
         Sync();
     }
@@ -348,7 +348,7 @@ internal sealed class ChartToolbar : UserControl
         string? favCode = favorites.FirstOrDefault(code => ChartPeriod.TryParse(code, out var fp) && fp == m.Period);
         _periods?.Select(favCode);
         _periodMenuText.Text = m.Period.DisplayName;
-        _periodMenuText.Foreground = favCode == null ? Ui.Accent : Ui.Text1; // si no está en la barra, el selector lo muestra marcado
+        _periodMenuText.Foreground = favCode == null ? Ui.Accent : Ui.Text1; // if it is not on the toolbar, the picker shows it marked
         _styleBox.Select(m.Settings.Style);
         _layoutBox.IsVisible = m.Settings.Style == ChartStyle.Footprint;
         _stepBox.IsVisible = m.Settings.Style == ChartStyle.Footprint;
@@ -360,7 +360,7 @@ internal sealed class ChartToolbar : UserControl
         {
             var near = HistoryOptions.Where(h => h.Hours > 0).OrderBy(h => Math.Abs(h.Hours - hours)).First();
             _historyBox.Select(near.Hours);
-            // rango a medida (desde una fecha): muestra los días
+            // custom range (from a date): it shows the days
             if (Math.Abs(near.Hours - hours) > hours * 0.05) _historyBox.ShowText(SpanText(hours));
         }
         _syncing = false;
@@ -368,7 +368,7 @@ internal sealed class ChartToolbar : UserControl
         _host.UpdateTitles(c);
     }
 
-    /// <summary>Precio y variación desde el inicio de la sesión en el selector de instrumento.</summary>
+    /// <summary>Price and change since the session start in the instrument picker.</summary>
     public void UpdateQuote()
     {
         var model = _chart?.Model;
@@ -388,8 +388,8 @@ internal sealed class ChartToolbar : UserControl
 }
 
 /// <summary>
-/// Barra de dibujos de cada gráfico (a la izquierda, como en ATAS): herramientas agrupadas; la flechita de
-/// abajo de un grupo abre sus variantes (líneas, posiciones…) y el botón queda con la última usada.
+/// Each chart's drawing toolbar (on the left, as in ATAS): tools in groups; the little arrow at the
+/// bottom of a group opens its variants (lines, positions…) and the button keeps the last one used.
 /// </summary>
 internal sealed class DrawingToolStrip : UserControl
 {
@@ -402,18 +402,18 @@ internal sealed class DrawingToolStrip : UserControl
 
     private static readonly Dictionary<DrawingKind, (MaterialIconKind Icon, string Name)> Info = new()
     {
-        [DrawingKind.HorizontalLine] = (MaterialIconKind.Minus, "Línea horizontal"),
-        [DrawingKind.HorizontalRay] = (MaterialIconKind.ArrowRightThin, "Rayo horizontal"),
-        [DrawingKind.VerticalLine] = (MaterialIconKind.DragVertical, "Línea vertical"),
-        [DrawingKind.TrendLine] = (MaterialIconKind.ChartLineVariant, "Línea de tendencia"),
-        [DrawingKind.Ray] = (MaterialIconKind.ArrowTopRightThin, "Rayo"),
-        [DrawingKind.ExtendedLine] = (MaterialIconKind.ArrowExpandHorizontal, "Línea extendida"),
-        [DrawingKind.Rectangle] = (MaterialIconKind.RectangleOutline, "Rectángulo / zona"),
-        [DrawingKind.FibRetracement] = (MaterialIconKind.FormatLineSpacing, "Retroceso de Fibonacci"),
-        [DrawingKind.Ruler] = (MaterialIconKind.RulerSquare, "Regla (medir)"),
-        [DrawingKind.LongPosition] = (MaterialIconKind.TrendingUp, "Posición larga (entrada, stop y objetivo)"),
-        [DrawingKind.ShortPosition] = (MaterialIconKind.TrendingDown, "Posición corta (entrada, stop y objetivo)"),
-        [DrawingKind.Text] = (MaterialIconKind.FormatText, "Texto"),
+        [DrawingKind.HorizontalLine] = (MaterialIconKind.Minus, "Horizontal line"),
+        [DrawingKind.HorizontalRay] = (MaterialIconKind.ArrowRightThin, "Horizontal ray"),
+        [DrawingKind.VerticalLine] = (MaterialIconKind.DragVertical, "Vertical line"),
+        [DrawingKind.TrendLine] = (MaterialIconKind.ChartLineVariant, "Trend line"),
+        [DrawingKind.Ray] = (MaterialIconKind.ArrowTopRightThin, "Ray"),
+        [DrawingKind.ExtendedLine] = (MaterialIconKind.ArrowExpandHorizontal, "Extended line"),
+        [DrawingKind.Rectangle] = (MaterialIconKind.RectangleOutline, "Rectangle / zone"),
+        [DrawingKind.FibRetracement] = (MaterialIconKind.FormatLineSpacing, "Fibonacci retracement"),
+        [DrawingKind.Ruler] = (MaterialIconKind.RulerSquare, "Ruler (measure)"),
+        [DrawingKind.LongPosition] = (MaterialIconKind.TrendingUp, "Long position (entry, stop and target)"),
+        [DrawingKind.ShortPosition] = (MaterialIconKind.TrendingDown, "Short position (entry, stop and target)"),
+        [DrawingKind.Text] = (MaterialIconKind.FormatText, "Text"),
     };
 
     private readonly List<Group> _groups = new();
@@ -445,7 +445,7 @@ internal sealed class DrawingToolStrip : UserControl
             if (kinds.Length > 1)
             {
                 var more = new Button { Content = Ui.Icon(MaterialIconKind.ChevronDown, 11, Ui.Text2) }.Classes("toolmore");
-                ToolTip.SetTip(more, "Más herramientas de este grupo");
+                ToolTip.SetTip(more, "More tools in this group");
                 more.Click += (_, _) => ShowGroup(g, more);
                 panel.Children.Add(more);
             }
@@ -456,7 +456,7 @@ internal sealed class DrawingToolStrip : UserControl
         clear.Width = 30;
         clear.Height = 28;
         clear.MinHeight = 0;
-        ToolTip.SetTip(clear, "Borrar todos los dibujos de este instrumento");
+        ToolTip.SetTip(clear, "Delete every drawing on this instrument");
         clear.Click += (_, _) => ClearRequested?.Invoke();
         panel.Children.Add(clear);
         _groups[0].Button.IsChecked = true;
@@ -506,7 +506,7 @@ internal sealed class DrawingToolStrip : UserControl
         menu.ShowAt(anchor);
     }
 
-    /// <summary>Marca la herramienta activa (null = cursor); el grupo pasa a mostrarla.</summary>
+    /// <summary>Marks the active tool (null = cursor); the group switches to showing it.</summary>
     public void Check(DrawingKind? kind)
     {
         foreach (var g in _groups)

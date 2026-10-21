@@ -8,8 +8,8 @@ using TradingHub.Indicators;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Plantillas guardadas en disco: de gráfico (estilo, footprint, colores, lo que se muestra e indicadores; sirven para
-/// cualquier instrumento y período) y de indicador (sus ajustes, con una predeterminada para los nuevos).
+/// Templates stored on disk: chart ones (style, footprint, colors, what is shown and indicators; they work for
+/// any instrument and period) and indicator ones (its settings, with one default for new ones).
 /// </summary>
 internal static partial class Workspace
 {
@@ -54,14 +54,14 @@ internal static partial class Workspace
                 .OrderBy(x => x.Item1, StringComparer.CurrentCultureIgnoreCase).ToList()
             : Array.Empty<(string, string)>();
 
-    // ===================================================================== gráfico
+    // ===================================================================== chart
 
     public static IReadOnlyList<string> ChartTemplateNames() => Listed<ChartTemplateDto>(ChartTemplatesDir, d => d.Name).Select(x => x.Name).ToList();
 
-    /// <summary>Guarda cómo se ve el gráfico (sin el instrumento ni el período) como plantilla.</summary>
+    /// <summary>Stores how the chart looks (without the instrument or the period) as a template.</summary>
     public static void SaveChartTemplate(ChartTab tab, string name)
     {
-        var m = tab.Model ?? throw new InvalidOperationException("El gráfico todavía no cargó");
+        var m = tab.Model ?? throw new InvalidOperationException("The chart has not loaded yet");
         var dto = new ChartTemplateDto { Name = name.Trim(), Settings = JObject.FromObject(m.Settings, Serializer), BarWidth = m.Viewport.BarWidth };
         dto.Settings.Remove(nameof(ChartSettings.TimeZoneId));
         foreach (var slot in m.Indicators) dto.Indicators.Add(ToIndicatorDto(slot));
@@ -69,7 +69,7 @@ internal static partial class Workspace
         File.WriteAllText(Path.Combine(ChartTemplatesDir, FileName(name)), JsonConvert.SerializeObject(dto, Formatting.Indented, Settings));
     }
 
-    /// <summary>Aplica una plantilla a un gráfico: reemplaza su estilo, colores, lo que muestra y sus indicadores.</summary>
+    /// <summary>Applies a template to a chart: it replaces its style, colors, what it shows and its indicators.</summary>
     public static bool ApplyChartTemplate(TradingView w, ChartTab tab, string name)
     {
         var path = Listed<ChartTemplateDto>(ChartTemplatesDir, d => d.Name).FirstOrDefault(x => x.Name == name).Path;
@@ -83,7 +83,7 @@ internal static partial class Workspace
         }
 
         if (fresh.Layout.Columns.Count == 0) fresh.Layout = FootprintLayout.Presets[0].Clone();
-        // todo lo del gráfico menos la zona horaria (es de la app)
+        // everything about the chart except the time zone (that one belongs to the app)
         string? tz = m.Settings.TimeZoneId;
         foreach (var p in typeof(ChartSettings).GetProperties().Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0))
             p.SetValue(m.Settings, p.GetValue(fresh));
@@ -104,7 +104,7 @@ internal static partial class Workspace
         if (path != null) File.Delete(path);
     }
 
-    // ===================================================================== indicador
+    // ===================================================================== indicator
 
     private static string IndicatorDir(Type t) => Path.Combine(IndicatorTemplatesDir, FileName(t.FullName ?? t.Name)[..^5]);
 
@@ -133,7 +133,7 @@ internal static partial class Workspace
         if (path != null) File.Delete(path);
     }
 
-    /// <summary>Un indicador nuevo arranca con su plantilla predeterminada (si tiene). Devuelve true si la aplicó.</summary>
+    /// <summary>A new indicator starts with its default template (if it has one). Returns true if it applied it.</summary>
     public static bool ApplyDefaultIndicatorTemplate(AppServices svc, Indicator ind) =>
         svc.Settings.DefaultIndicatorTemplates.TryGetValue(ind.GetType().FullName!, out var name) && ApplyIndicatorTemplate(ind, name);
 }

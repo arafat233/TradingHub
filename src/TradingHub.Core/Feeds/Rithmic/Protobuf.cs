@@ -3,8 +3,8 @@ using System.Text;
 namespace TradingHub.Feeds.Rithmic;
 
 /// <summary>
-/// Codificador/decodificador protobuf mínimo (solo lo que usa R|Protocol: varints y strings).
-/// Evita depender del kit oficial para los mensajes básicos.
+/// Minimal protobuf encoder/decoder (only what R|Protocol uses: varints and strings).
+/// It avoids depending on the official kit for the basic messages.
 /// </summary>
 public sealed class ProtoWriter
 {
@@ -52,7 +52,7 @@ public sealed class ProtoWriter
     public byte[] ToArray() => _ms.ToArray();
 }
 
-/// <summary>Mensaje protobuf decodificado como mapa campo → valores.</summary>
+/// <summary>Protobuf message decoded as a field -> values map.</summary>
 public sealed class ProtoMessage
 {
     private readonly Dictionary<int, List<object>> _fields = new();
@@ -90,7 +90,7 @@ public sealed class ProtoMessage
                     pos += 4;
                     break;
                 default:
-                    throw new FormatException($"Tipo de campo protobuf no soportado: {wire}");
+                    throw new FormatException($"Unsupported protobuf field type: {wire}");
             }
 
             if (!m._fields.TryGetValue(field, out var list)) m._fields[field] = list = new List<object>();
@@ -126,7 +126,7 @@ public sealed class ProtoMessage
         _ => fallback,
     } : fallback;
 
-    /// <summary>Un número venga como venga: texto ("1234.50"), double, float o entero (Rithmic usa los cuatro).</summary>
+    /// <summary>A number however it comes: text ("1234.50"), double, float or integer (Rithmic uses all four).</summary>
     public decimal? Number(int field)
     {
         if (!_fields.TryGetValue(field, out var l)) return null;
@@ -143,7 +143,7 @@ public sealed class ProtoMessage
     public string? String(int field) =>
         _fields.TryGetValue(field, out var l) && l[0] is byte[] b ? Encoding.UTF8.GetString(b) : null;
 
-    /// <summary>Todos los valores enteros de un campo repetido (sueltos o empaquetados).</summary>
+    /// <summary>Every integer value of a repeated field (loose or packed).</summary>
     public IEnumerable<long> Ints(int field)
     {
         if (!_fields.TryGetValue(field, out var l)) yield break;

@@ -12,7 +12,7 @@ public sealed record TradovateAccount(long Id, string Name, bool Active);
 
 public sealed record TradovateFill(long Id, long OrderId, long AccountId, string Symbol, DateTime Time, bool Buy, decimal Quantity, decimal Price);
 
-/// <summary>Una orden de Tradovate como la ve Trading Hub (la orden más su última versión: cantidad, tipo y precios).</summary>
+/// <summary>A Tradovate order as Trading Hub sees it (the order plus its latest version: quantity, type and prices).</summary>
 public sealed class TradovateOrderState
 {
     public long Id { get; init; }
@@ -58,9 +58,9 @@ public sealed class TradovateCashState
 }
 
 /// <summary>
-/// La cuenta de Tradovate en vivo: el socket de usuario sincroniza cuentas, órdenes, ejecuciones, posiciones y saldos
-/// (user/syncrequest y después eventos «props»); las órdenes se mandan por REST. Las ejecuciones se avisan para que
-/// queden en el historial de la cuenta en Trading Hub.
+/// The live Tradovate account: the user socket synchronizes accounts, orders, fills, positions and balances
+/// (user/syncrequest and then "props" events); the orders are sent over REST. The fills are reported so that
+/// they end up in the account's history in Trading Hub.
 /// </summary>
 public sealed class TradovateTradingSession : IDisposable
 {
@@ -82,14 +82,14 @@ public sealed class TradovateTradingSession : IDisposable
         _conn.User.StateChanged += (up, why) =>
         {
             IsConnected = up;
-            StatusText = up ? "Conectada" : "Tradovate: " + why;
+            StatusText = up ? "Connected" : "Tradovate: " + why;
             Changed?.Invoke();
             if (!up && !_life.IsCancellationRequested) _ = Task.Run(() => RunAsync(_life.Token));
         };
     }
 
     public bool IsConnected { get; private set; }
-    public string StatusText { get; private set; } = "Conectando a Tradovate…";
+    public string StatusText { get; private set; } = "Connecting to Tradovate…";
     public bool IsDemo => _conn.IsDemo;
     public TradovateConnection Connection => _conn;
 
@@ -128,7 +128,7 @@ public sealed class TradovateTradingSession : IDisposable
                     var d = await _conn.User.RequestAsync("user/syncrequest", new JsonObject { ["users"] = new JsonArray(_conn.UserId) }, ct).ConfigureAwait(false);
                     ApplySnapshot(d);
                     IsConnected = true;
-                    StatusText = "Conectada";
+                    StatusText = "Connected";
                     Changed?.Invoke();
                     return;
                 }
@@ -151,7 +151,7 @@ public sealed class TradovateTradingSession : IDisposable
         }
     }
 
-    /// <summary>Saldos (la foto de cada cuenta) cada 10 s.</summary>
+    /// <summary>Balances (each account's snapshot) every 10 s.</summary>
     private async Task CashLoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -173,7 +173,7 @@ public sealed class TradovateTradingSession : IDisposable
                 }
                 catch (Exception)
                 {
-                    // se reintenta en la próxima vuelta
+                    // it is retried on the next pass
                 }
             }
 
@@ -193,7 +193,7 @@ public sealed class TradovateTradingSession : IDisposable
     private static DateTime Time(JsonElement e, string key) =>
         DateTime.TryParse(Str(e, key), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t) ? t : DateTime.UtcNow;
 
-    // ===================================================================== sincronización
+    // ===================================================================== synchronization
 
     private void ApplySnapshot(JsonElement d)
     {
@@ -321,7 +321,7 @@ public sealed class TradovateTradingSession : IDisposable
         o.Text = Str(v, "text");
     }
 
-    // ===================================================================== consultas
+    // ===================================================================== queries
 
     public List<TradovateOrderState> OrdersOf(long accountId, long? contractId = null)
     {
@@ -353,9 +353,9 @@ public sealed class TradovateTradingSession : IDisposable
         lock (_gate) return _fills.Values.Where(f => f.AccountId == accountId).OrderBy(f => f.Time).ToList();
     }
 
-    // ===================================================================== órdenes
+    // ===================================================================== orders
 
-    /// <summary>Manda una orden; devuelve su número en Tradovate (o lanza el motivo del rechazo).</summary>
+    /// <summary>Sends an order; returns its number in Tradovate (or throws the rejection reason).</summary>
     public async Task<long> PlaceAsync(TradovateAccount account, string contract, bool buy, string orderType, int qty, decimal? price, decimal? stopPrice, bool automated, CancellationToken ct)
     {
         var body = new JsonObject
@@ -375,14 +375,14 @@ public sealed class TradovateTradingSession : IDisposable
         string reason = Str(res, "failureReason");
         long id = Long(res, "orderId");
         if (id == 0 || (reason.Length > 0 && reason != "Success"))
-            throw new TradovateException("Tradovate rechazó la orden: " + (Str(res, "failureText") is { Length: > 0 } t ? t : reason.Length > 0 ? reason : "sin motivo"));
+            throw new TradovateException("Tradovate rejected the order: " + (Str(res, "failureText") is { Length: > 0 } t ? t : reason.Length > 0 ? reason : "no reason"));
         return id;
     }
 
     public async Task CancelAsync(long orderId, CancellationToken ct)
     {
         var res = await _conn.PostAsync("/order/cancelorder", new JsonObject { ["orderId"] = orderId }, ct).ConfigureAwait(false);
-        if (Str(res, "failureReason") is { Length: > 0 } r && r != "Success") throw new TradovateException("Tradovate no canceló la orden: " + (Str(res, "failureText") is { Length: > 0 } t ? t : r));
+        if (Str(res, "failureReason") is { Length: > 0 } r && r != "Success") throw new TradovateException("Tradovate did not cancel the order: " + (Str(res, "failureText") is { Length: > 0 } t ? t : r));
     }
 
     public async Task ModifyAsync(TradovateOrderState o, int qty, decimal price, CancellationToken ct)
@@ -391,7 +391,7 @@ public sealed class TradovateTradingSession : IDisposable
         if (o.Type is "Stop" or "StopLimit") body["stopPrice"] = price;
         else body["price"] = price;
         var res = await _conn.PostAsync("/order/modifyorder", body, ct).ConfigureAwait(false);
-        if (Str(res, "failureReason") is { Length: > 0 } r && r != "Success") throw new TradovateException("Tradovate no modificó la orden: " + (Str(res, "failureText") is { Length: > 0 } t ? t : r));
+        if (Str(res, "failureReason") is { Length: > 0 } r && r != "Success") throw new TradovateException("Tradovate did not modify the order: " + (Str(res, "failureText") is { Length: > 0 } t ? t : r));
     }
 
     public async Task LiquidateAsync(long accountId, long contractId, CancellationToken ct) =>
@@ -401,8 +401,8 @@ public sealed class TradovateTradingSession : IDisposable
 }
 
 /// <summary>
-/// Una cuenta de Tradovate operando un futuro (ES → el contrato del mes, ESZ6). Sirve con los gráficos de cualquier
-/// conexión de futuros (Tradovate, Rithmic): el Chart Trader, el DOM, los stops y las estrategias operan igual.
+/// A Tradovate account trading a future (ES -> the front-month contract, ESZ6). It works with charts from any
+/// futures connection (Tradovate, Rithmic): the Chart Trader, the DOM, the stops and the strategies all trade the same.
 /// </summary>
 public sealed class TradovateBroker : ITradingAccount, IDisposable
 {
@@ -435,7 +435,7 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
     public string? LastError { get; private set; }
     public event Action? Changed;
 
-    /// <summary>Raíz del contrato (NQ) aunque el gráfico sea de otra conexión.</summary>
+    /// <summary>Root of the contract (NQ) even if the chart belongs to another connection.</summary>
     private string Root => _data.Instrument.Symbol.Split(' ', ':')[0];
 
     private async Task<(long Id, string Name)> ContractAsync()
@@ -450,7 +450,7 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
         }
         catch (Exception ex)
         {
-            LastError = "No se pudo saber el contrato del mes en Tradovate: " + ex.Message;
+            LastError = "Could not determine the front-month contract at Tradovate: " + ex.Message;
             Changed?.Invoke();
             throw;
         }
@@ -487,17 +487,17 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
             {
                 if (!_byId.TryGetValue(s.Id, out var o))
                 {
-                    if (s.Done) continue; // terminada antes de abrir Trading Hub
+                    if (s.Done) continue; // finished before Trading Hub opened
                     o = new Order { ExchangeOrderId = s.Id.ToString(CultureInfo.InvariantCulture), Comment = "Tradovate" };
                     _byId[s.Id] = o;
                 }
 
                 Apply(s, o);
-                if (s.Rejected && s.Text.Length > 0) LastError = "Tradovate rechazó la orden: " + s.Text;
+                if (s.Rejected && s.Text.Length > 0) LastError = "Tradovate rejected the order: " + s.Text;
                 if (o.State == OrderStates.Active) active.Add(o);
             }
 
-            // las recién mandadas que todavía no aparecieron
+            // the just-sent ones that have not shown up yet
             foreach (var o in _pending.Where(o => o.State == OrderStates.Active && !active.Contains(o))) active.Add(o);
             _pending.RemoveAll(o => o.State != OrderStates.Active || o.ExchangeOrderId.Length > 0);
         }
@@ -507,7 +507,7 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
         Position.Volume = p?.Net ?? 0;
         Position.AveragePrice = p?.NetPrice ?? 0;
         decimal pv = Instrument.PointValue > 0 ? Instrument.PointValue : 1;
-        // lo cerrado hoy: la cantidad que se compró y se vendió, al precio promedio de cada lado
+        // what was closed today: the quantity bought and sold, at the average price of each side
         Position.RealizedPnL = p is { Bought: > 0, Sold: > 0 }
             ? Math.Min(p.Bought, p.Sold) * (p.SoldValue / p.Sold - p.BoughtValue / p.Bought) * pv
             : 0;
@@ -523,7 +523,7 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
         {
             order.State = OrderStates.Failed;
             order.Status = OrderStatus.Rejected;
-            LastError = "En futuros la cantidad tiene que ser un número entero de contratos (1, 2, 3…)";
+            LastError = "In futures the quantity has to be a whole number of contracts (1, 2, 3…)";
             Changed?.Invoke();
             return order;
         }
@@ -537,7 +537,7 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
                 var (_, contract) = await ContractAsync().ConfigureAwait(false);
                 decimal px = price > 0 ? Instrument.RoundPrice(price) : 0;
                 string ot = type == OrderTypes.Market ? "Market" : type == OrderTypes.Stop ? "Stop" : "Limit";
-                // las de una estrategia (comentario «Estrategia: …») van marcadas como automáticas, como pide Tradovate
+                // a strategy's own (comment of the form "<strategy>: …") are marked as automated, as Tradovate requires
                 bool automated = comment.Contains(": ", StringComparison.Ordinal);
                 long id = await _session.PlaceAsync(_account, contract, dir == OrderDirections.Buy, ot, q,
                     type == OrderTypes.Limit ? px : null, type == OrderTypes.Stop ? px : null, automated, CancellationToken.None).ConfigureAwait(false);
@@ -614,7 +614,7 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
                 for (int i = 0; i < 30 && IdOf(order) == 0 && order.State == OrderStates.Active; i++) await Task.Delay(100).ConfigureAwait(false);
                 long id = IdOf(order);
                 var s = _contract is { } c ? _session.OrdersOf(_account.Id, c.Id).FirstOrDefault(x => x.Id == id) : null;
-                if (s == null) throw new InvalidOperationException("La orden todavía no figura en Tradovate");
+                if (s == null) throw new InvalidOperationException("The order does not appear at Tradovate yet");
                 await _session.ModifyAsync(s, total, px, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -631,15 +631,15 @@ public sealed class TradovateBroker : ITradingAccount, IDisposable
     {
         CancelAll();
         var q = Position.Volume;
-        if (q > 0) Send(OrderDirections.Sell, OrderTypes.Market, q, 0, "Cerrar");
-        else if (q < 0) Send(OrderDirections.Buy, OrderTypes.Market, -q, 0, "Cerrar");
+        if (q > 0) Send(OrderDirections.Sell, OrderTypes.Market, q, 0, "Close");
+        else if (q < 0) Send(OrderDirections.Buy, OrderTypes.Market, -q, 0, "Close");
     }
 
     public void Reverse()
     {
         var q = Position.Volume;
-        if (q > 0) Market(OrderDirections.Sell, q * 2, "Revertir");
-        else if (q < 0) Market(OrderDirections.Buy, -q * 2, "Revertir");
+        if (q > 0) Market(OrderDirections.Sell, q * 2, "Reverse");
+        else if (q < 0) Market(OrderDirections.Buy, -q * 2, "Reverse");
     }
 
     public void Dispose() => _session.Changed -= Sync;

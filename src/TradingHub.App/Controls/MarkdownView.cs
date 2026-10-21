@@ -8,8 +8,8 @@ using Avalonia.Media;
 namespace TradingHub.App.Controls;
 
 /// <summary>
-/// Visor simple de Markdown para los reportes: títulos, citas, listas, tablas, bloques de código,
-/// separadores y negrita / cursiva / código en línea.
+/// A simple Markdown viewer for the reports: headings, quotes, lists, tables, code blocks,
+/// separators and bold / italic / inline code.
 /// </summary>
 public sealed class MarkdownView : UserControl
 {
@@ -17,7 +17,7 @@ public sealed class MarkdownView : UserControl
     private static readonly Regex Inline = new(@"(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)", RegexOptions.Compiled);
     private static readonly Regex ImageLine = new(@"^!\[([^\]]*)\]\(([^)]+)\)$", RegexOptions.Compiled);
 
-    // colores (modo app oscuro o modo «hoja» claro, como un documento)
+    // colors (dark app mode or light “sheet” mode, like a document)
     private IBrush _text = Ui.Text0, _muted = Ui.Text1, _line = Ui.Line, _code = Ui.Bg2, _header = Ui.Bg3, _alt = Ui.Bg2, _quote = Ui.Bg2, _accent = Ui.Accent;
 
     public MarkdownView()
@@ -25,10 +25,10 @@ public sealed class MarkdownView : UserControl
         Content = _root;
     }
 
-    /// <summary>Carpeta del archivo (para las imágenes con ruta relativa).</summary>
+    /// <summary>The file's folder (for images with a relative path).</summary>
     public string? BasePath { get; set; }
 
-    /// <summary>Estilo documento: fondo claro y texto oscuro (para leer e imprimir reportes).</summary>
+    /// <summary>Document style: light background and dark text (to read and print reports).</summary>
     public bool Paper
     {
         set
@@ -95,7 +95,7 @@ public sealed class MarkdownView : UserControl
                 }
                 catch
                 {
-                    // imagen dañada: se muestra el texto alternativo
+                    // broken image: the alt text is shown
                 }
 
                 _root.Children.Add(Text($"[{img.Groups[1].Value}]", 12, FontWeight.Normal));
@@ -167,7 +167,7 @@ public sealed class MarkdownView : UserControl
                 continue;
             }
 
-            // párrafo: junta las líneas seguidas
+            // paragraph: it joins consecutive lines
             var para = new List<string> { t };
             while (i + 1 < lines.Length && lines[i + 1].Trim() is { Length: > 0 } next && !IsBlockStart(next)) para.Add(lines[++i].Trim());
             _root.Children.Add(Text(string.Join(" ", para), 13.5, FontWeight.Normal));
@@ -177,7 +177,7 @@ public sealed class MarkdownView : UserControl
     private static bool IsBlockStart(string t) =>
         t.StartsWith('#') || t.StartsWith('|') || t.StartsWith('>') || t.StartsWith("```") || t.StartsWith("![") || Regex.IsMatch(t, @"^([-*+]|\d+[.)])\s+") || Regex.IsMatch(t, @"^(-{3,}|\*{3,})$");
 
-    /// <summary>Texto con negrita, cursiva y código en línea.</summary>
+    /// <summary>Text with bold, italic and inline code.</summary>
     private SelectableTextBlock Text(string text, double size, FontWeight weight)
     {
         var tb = new SelectableTextBlock { FontSize = size, FontWeight = weight, TextWrapping = TextWrapping.Wrap, Foreground = _text };

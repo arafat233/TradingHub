@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>TradingHub</RootNamespace>
-    <!-- La API de indicadores replica la de ATAS (que no usa nullable) -->
+    <!-- The indicator API mirrors ATAS's (which does not use nullable) -->
     <Nullable>annotations</Nullable>
   </PropertyGroup>
   <ItemGroup>

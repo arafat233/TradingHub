@@ -4,8 +4,8 @@ using TradingHub.Market;
 namespace TradingHub.Feeds.Rithmic;
 
 /// <summary>
-/// Números de campo y plantillas de R|Protocol (Rithmic). Verificados contra el servidor:
-/// template_id, user_msg, rp_code y system_name. El resto sigue la especificación pública de la API.
+/// Field numbers and templates of R|Protocol (Rithmic). Verified against the server:
+/// template_id, user_msg, rp_code and system_name. The rest follows the public API specification.
 /// </summary>
 internal static class Rp
 {
@@ -28,7 +28,7 @@ internal static class Rp
     public const int AggregatedQuotes = 153644;
     public const int HasAggregatedQuotes = 153649;
 
-    // datos de mercado
+    // market data
     public const int Symbol = 110100;
     public const int Exchange = 110101;
     public const int Request = 100000;
@@ -47,7 +47,7 @@ internal static class Rp
     public const int Description = 110114;
     public const int NeedUpdates = 154352;
 
-    // plantillas
+    // templates
     public const int RequestSystemInfo = 16;
     public const int ResponseSystemInfo = 17;
     public const int RequestLogin = 10;
@@ -63,8 +63,8 @@ internal static class Rp
 }
 
 /// <summary>
-/// Servidores (gateways) de R|Protocol por región, como los muestra ATAS. Cada uno ofrece sus propios
-/// sistemas (Rithmic Paper Trading, Rithmic 01, prop firms…): la lista se pide a cada servidor.
+/// R|Protocol servers (gateways) by region, as ATAS shows them. Each one offers its own
+/// systems (Rithmic Paper Trading, Rithmic 01, prop firms…): the list is requested from each server.
 /// </summary>
 public static class RithmicGateways
 {
@@ -91,7 +91,7 @@ public static class RithmicGateways
 
     public static string NameOf(string uri) => Known.FirstOrDefault(k => k.Uri == uri).Name ?? uri;
 
-    /// <summary>Orden de los sistemas en la lista: primero los de Rithmic, después las prop firms.</summary>
+    /// <summary>Order of the systems in the list: Rithmic's own first, then the prop firms.</summary>
     public static int SystemRank(string system) => system switch
     {
         "Rithmic Paper Trading" => 0,
@@ -102,13 +102,13 @@ public static class RithmicGateways
     };
 }
 
-/// <summary>Un sistema en un servidor ("Rithmic Paper Trading. Chicago Area"), con lo que tardó en responder.</summary>
+/// <summary>A system on a server ("Rithmic Paper Trading. Chicago Area"), with how long it took to answer.</summary>
 public sealed record RithmicServer(string System, string Gateway, string Uri, int LatencyMs, bool Aggregated = false)
 {
     public string Display => $"{System}. {Gateway}";
 }
 
-/// <summary>Arma la lista completa sistema × servidor preguntándole a cada servidor (no hace falta usuario).</summary>
+/// <summary>Builds the full system x server list by asking each server (no user needed).</summary>
 public static class RithmicDirectory
 {
     public static async Task<List<RithmicServer>> DiscoverAsync(CancellationToken ct)
@@ -126,7 +126,7 @@ public static class RithmicDirectory
             }
             catch (Exception) when (!ct.IsCancellationRequested)
             {
-                return new List<RithmicServer>(); // servidor inalcanzable desde acá (p. ej. Colo 75)
+                return new List<RithmicServer>(); // server unreachable from here (e.g. Colo 75)
             }
         });
         var all = (await Task.WhenAll(tasks).ConfigureAwait(false)).SelectMany(x => x).ToList();
@@ -136,10 +136,10 @@ public static class RithmicDirectory
     }
 }
 
-/// <summary>Resultado de una operación contra Rithmic, con el código del servidor.</summary>
+/// <summary>Result of an operation against Rithmic, with the server's code.</summary>
 public sealed record RithmicResult(bool Ok, string Message, IReadOnlyList<string> Codes);
 
-/// <summary>Cliente de R|Protocol: una conexión WebSocket con mensajes protobuf.</summary>
+/// <summary>R|Protocol client: one WebSocket connection with protobuf messages.</summary>
 public sealed class RithmicClient : IAsyncDisposable
 {
     private readonly ClientWebSocket _ws = new();
@@ -151,7 +151,7 @@ public sealed class RithmicClient : IAsyncDisposable
     public static async Task<IReadOnlyList<string>> ListSystemsAsync(string uri, CancellationToken ct) =>
         (await ListSystemsInfoAsync(uri, ct).ConfigureAwait(false)).Select(s => s.Name).ToList();
 
-    /// <summary>Sistemas del servidor y si cada uno ofrece cotizaciones agregadas.</summary>
+    /// <summary>Systems of the server and whether each one offers aggregated quotes.</summary>
     public static async Task<IReadOnlyList<(string Name, bool Aggregated)>> ListSystemsInfoAsync(string uri, CancellationToken ct)
     {
         await using var c = new RithmicClient();
@@ -165,8 +165,8 @@ public sealed class RithmicClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Si conviene pedir cotizaciones agregadas: solo si el sistema las ofrece (si se piden en uno que no,
-    /// Rithmic rechaza el login con «an error occurred while parsing data»).
+    /// Whether it is worth asking for aggregated quotes: only if the system offers them (if they are asked for on one that does not,
+    /// Rithmic rejects the login with "an error occurred while parsing data").
     /// </summary>
     public static async Task<bool?> AggregatedQuotesFor(string uri, string system, bool wanted, CancellationToken ct)
     {
@@ -180,13 +180,13 @@ public sealed class RithmicClient : IAsyncDisposable
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            return null; // ante la duda no se pide (el login funciona igual)
+            return null; // when in doubt it is not requested (the login works anyway)
         }
     }
 
     public async Task ConnectAsync(string uri, CancellationToken ct, int timeoutMs = 15000)
     {
-        // pings propios: si el servidor no contesta, la conexión está muerta y se reconecta sola
+        // our own pings: if the server does not answer, the connection is dead and it reconnects on its own
         _ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
         _ws.Options.KeepAliveTimeout = TimeSpan.FromSeconds(10);
         using var t = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -201,8 +201,8 @@ public sealed class RithmicClient : IAsyncDisposable
         finally { _send.Release(); }
     }
 
-    // un solo buffer por conexión (nunca hay dos lecturas a la vez): antes cada mensaje pedía 64 KB nuevos y bajar un
-    // día tick a tick del ES (más de un millón de mensajes) generaba decenas de GB de basura
+    // a single buffer per connection (there are never two reads at once): before, each message asked for a fresh 64 KB and downloading
+    // one day of ES tick by tick (more than a million messages) generated tens of GB of garbage
     private readonly byte[] _recv = new byte[1 << 16];
     private MemoryStream? _large;
 
@@ -212,7 +212,7 @@ public sealed class RithmicClient : IAsyncDisposable
         if (r.MessageType == WebSocketMessageType.Close) return null;
         if (r.EndOfMessage) return ProtoMessage.Parse(_recv.AsSpan(0, r.Count));
 
-        // mensaje más grande que el buffer: se junta
+        // message bigger than the buffer: it is joined up
         var ms = _large ??= new MemoryStream();
         ms.SetLength(0);
         ms.Write(_recv, 0, r.Count);
@@ -226,7 +226,7 @@ public sealed class RithmicClient : IAsyncDisposable
         return ProtoMessage.Parse(ms.GetBuffer().AsSpan(0, (int)ms.Length));
     }
 
-    /// <summary>Inicia sesión en una "planta" (1 = cotizaciones, 2 = órdenes, 3 = historia, 4 = PnL).</summary>
+    /// <summary>Logs in to a "plant" (1 = quotes, 2 = orders, 3 = history, 4 = PnL).</summary>
     public async Task<RithmicResult> LoginAsync(string user, string password, string system, string appName, string appVersion, int infraType, CancellationToken ct, bool? aggregatedQuotes = null)
     {
         var req = new ProtoWriter()
@@ -239,13 +239,13 @@ public sealed class RithmicClient : IAsyncDisposable
             .String(Rp.AppVersion, appVersion)
             .String(Rp.SystemName, system)
             .Int(Rp.InfraType, infraType);
-        // cotizaciones agregadas (como la opción de ATAS): menos mensajes de libro, mismo precio
+        // aggregated quotes (like ATAS's option): fewer book messages, same price
         if (aggregatedQuotes is { } agg) req.Bool(Rp.AggregatedQuotes, agg);
         await SendAsync(req, ct).ConfigureAwait(false);
         for (int i = 0; i < 20; i++)
         {
             var m = await ReceiveAsync(ct).ConfigureAwait(false);
-            if (m == null) return new RithmicResult(false, "El servidor cerró la conexión", Array.Empty<string>());
+            if (m == null) return new RithmicResult(false, "The server closed the connection", Array.Empty<string>());
             if (m.Int(Rp.TemplateId) != Rp.ResponseLogin) continue;
             var codes = m.Strings(Rp.RpCode).ToList();
             bool ok = codes.Count > 0 && codes[0] == "0";
@@ -253,21 +253,21 @@ public sealed class RithmicClient : IAsyncDisposable
             {
                 double hb = m.Int(Rp.HeartbeatInterval, 60);
                 StartHeartbeat(TimeSpan.FromSeconds(Math.Max(5, hb - 5)));
-                return new RithmicResult(true, $"Sesión iniciada (FCM {m.String(Rp.FcmId)}, IB {m.String(Rp.IbId)})", codes);
+                return new RithmicResult(true, $"Signed in (FCM {m.String(Rp.FcmId)}, IB {m.String(Rp.IbId)})", codes);
             }
 
             LastError = string.Join(" ", codes);
             string reason = string.Join(" — ", codes.Skip(1).DefaultIfEmpty(string.Join(" ", codes)));
             string help = codes.FirstOrDefault() switch
             {
-                "13" => $"Rithmic rechazó el usuario en «{system}» (permission denied). Revisá que el servidor diga el mismo sistema que te dio tu broker (en ATAS: «Rithmic paper trading» es «Rithmic Paper Trading») y la contraseña. Si todo coincide, puede que tu usuario no tenga habilitado el acceso por API (R|Protocol): eso lo habilita Rithmic o tu broker.",
-                "11" => $"Rithmic no aceptó el pedido de login ({reason}).",
-                _ => "Rithmic rechazó el login: " + reason,
+                "13" => $"Rithmic rejected the user on “{system}” (permission denied). Check that the server states the same system your broker gave you (in ATAS: “Rithmic paper trading” is “Rithmic Paper Trading”) and the password. If everything matches, your user may not have API access (R|Protocol) enabled: that is enabled by Rithmic or your broker.",
+                "11" => $"Rithmic did not accept the login request ({reason}).",
+                _ => "Rithmic rejected the login: " + reason,
             };
             return new RithmicResult(false, help, codes);
         }
 
-        return new RithmicResult(false, "Sin respuesta de login", Array.Empty<string>());
+        return new RithmicResult(false, "No login response", Array.Empty<string>());
     }
 
     private void StartHeartbeat(TimeSpan every)
@@ -286,7 +286,7 @@ public sealed class RithmicClient : IAsyncDisposable
             }
             catch (Exception)
             {
-                // conexión cerrada: el que la usa se entera al leer
+                // connection closed: whoever is using it finds out on the next read
             }
         }, CancellationToken.None);
     }
@@ -306,14 +306,14 @@ public sealed class RithmicClient : IAsyncDisposable
         }
         catch
         {
-            // cierre de mejor esfuerzo
+            // best-effort close
         }
 
         _ws.Dispose();
     }
 }
 
-/// <summary>Credenciales y servidor para conectarse a Rithmic.</summary>
+/// <summary>Credentials and server for connecting to Rithmic.</summary>
 public sealed class RithmicSettings
 {
     public string Uri { get; set; } = RithmicGateways.TestUri;
@@ -323,21 +323,21 @@ public sealed class RithmicSettings
     public string AppName { get; set; } = "TradingHub";
     public string AppVersion { get; set; } = "0.2";
 
-    /// <summary>Cotizaciones agregadas (opción de Rithmic, como en ATAS).</summary>
+    /// <summary>Aggregated quotes (a Rithmic option, as in ATAS).</summary>
     public bool AggregatedQuotes { get; set; } = true;
 
-    /// <summary>Tiempo de espera para conectar, en milisegundos.</summary>
+    /// <summary>Connection timeout, in milliseconds.</summary>
     public int TimeoutMs { get; set; } = 10000;
 
-    /// <summary>Contratos a ofrecer en el selector ("NQ:CME", "ES:CME", "GC:COMEX"...). Se resuelven al mes activo.</summary>
+    /// <summary>Contracts to offer in the picker ("NQ:CME", "ES:CME", "GC:COMEX"...). They resolve to the active month.</summary>
     public List<string> Products { get; set; } = new() { "ES:CME", "NQ:CME", "MES:CME", "MNQ:CME", "YM:CBOT", "RTY:CME", "CL:NYMEX", "GC:COMEX", "6E:CME", "ZN:CBOT" };
 }
 
 /// <summary>
-/// Datos en vivo de Rithmic (planta de cotizaciones): operaciones y mejor bid/ask.
-/// La historia de ticks llega con lo que Trading Hub va grabando en disco.
-/// Requiere un usuario de Rithmic; en servidores de producción, Rithmic además exige que la
-/// aplicación esté aprobada (prueba de conformidad), si no rechaza el login.
+/// Live Rithmic data (quote plant): trades and best bid/ask.
+/// The tick history arrives along with whatever Trading Hub is recording to disk.
+/// It requires a Rithmic user; on production servers, Rithmic also requires the
+/// application to be approved (conformance test), otherwise it rejects the login.
 /// </summary>
 public sealed partial class RithmicFeed : IMarketDataFeed
 {
@@ -346,11 +346,11 @@ public sealed partial class RithmicFeed : IMarketDataFeed
     private readonly RithmicTickerPlant _ticker;
     private readonly RithmicHistoryPlant _history;
 
-    /// <summary>Tick y valor del punto de un futuro por su raíz (ES, NQ, CL…), o null si no se conoce.</summary>
+    /// <summary>Tick and point value of a future by its root (ES, NQ, CL…), or null if it is not known.</summary>
     public static (decimal Tick, decimal PointValue, string Name)? SpecFor(string root) =>
         FuturesCatalog.Find(root) is { } p ? (p.Tick, p.PointValue, p.Name) : null;
 
-    /// <summary>Valor del punto de un contrato por su símbolo completo (ESZ6 → ES → 50); 1 si no se conoce.</summary>
+    /// <summary>Point value of a contract by its full symbol (ESZ6 -> ES -> 50); 1 if it is not known.</summary>
     public static decimal PointValueOfContract(string contract)
     {
         string root = System.Text.RegularExpressions.Regex.Replace(contract, "[FGHJKMNQUVXZ][0-9]{1,2}$", "");
@@ -364,7 +364,7 @@ public sealed partial class RithmicFeed : IMarketDataFeed
         _history = new RithmicHistoryPlant(() => _settings);
     }
 
-    /// <summary>Cambió la configuración (servidor, usuario…): las mismas sesiones vuelven a entrar con los datos nuevos.</summary>
+    /// <summary>The configuration changed (server, user…): the same sessions log in again with the new data.</summary>
     public void Reconfigure(RithmicSettings settings)
     {
         _settings = settings;
@@ -373,12 +373,12 @@ public sealed partial class RithmicFeed : IMarketDataFeed
         _history.Reset();
     }
 
-    /// <summary>Prueba de conexión sin abrir otra sesión (otra cortaría la que usan los gráficos).</summary>
+    /// <summary>Connection test without opening another session (another one would cut the one the charts use).</summary>
     public Task<(bool Ok, string Message)> TestAsync(CancellationToken ct) => _ticker.WaitConnectedAsync(TimeSpan.FromSeconds(20), ct);
 
     public bool IsConnected => _ticker.IsConnected;
 
-    /// <summary>Veces que entró a cada planta (las pruebas verifican que sea una sola sesión por planta).</summary>
+    /// <summary>Times it logged in to each plant (the tests verify there is a single session per plant).</summary>
     public int TickerLogins => _ticker.Logins;
 
     public int HistoryLogins => _history.Logins;
@@ -388,7 +388,7 @@ public sealed partial class RithmicFeed : IMarketDataFeed
     public bool SupportsHistory => true;
     public bool IsLive => true;
 
-    /// <summary>Primero los contratos que elegiste en la conexión y después todos los de CME Group (al mes activo).</summary>
+    /// <summary>First the contracts you picked in the connection and then all of CME Group's (at the active month).</summary>
     public Task<IReadOnlyList<Instrument>> GetInstrumentsAsync(CancellationToken ct)
     {
         var list = new List<Instrument>();
@@ -406,7 +406,7 @@ public sealed partial class RithmicFeed : IMarketDataFeed
                 TickSize = product?.Tick ?? 0.25m,
                 VolumeStep = 1,
                 PointValue = product?.PointValue ?? 1m,
-                Description = $"{product?.Name ?? root} · {exch} (mes activo)",
+                Description = $"{product?.Name ?? root} · {exch} (front month)",
             });
         }
 
@@ -427,7 +427,7 @@ public sealed partial class RithmicFeed : IMarketDataFeed
         return new TickerSubscription(_ticker, instrument, sink);
     }
 
-    /// <summary>Un gráfico suscripto a la sesión de cotizaciones compartida.</summary>
+    /// <summary>A chart subscribed to the shared quote session.</summary>
     private sealed class TickerSubscription(RithmicTickerPlant ticker, Instrument instrument, IMarketDataSink sink) : IDisposable, IReconnectable
     {
         private int _disposed;

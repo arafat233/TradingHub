@@ -18,7 +18,7 @@ using TradingHub.Trading;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Lo que el gráfico le ofrece a un indicador. Lo implementa el motor de gráficos.</summary>
+    /// <summary>What the chart offers an indicator. The charting engine implements it.</summary>
     public interface IIndicatorHost
     {
         int BarCount { get; }
@@ -42,13 +42,13 @@ namespace TradingHub.Indicators
         void UnsubscribeTimer(Indicator indicator, TimeSpan interval, Action action);
         void RequestCumulativeTrades(Indicator indicator, CumulativeTradesRequest request);
 
-        /// <summary>Pide el perfil de un período (respuesta en OnFixedProfilesResponse).</summary>
+        /// <summary>Requests a period's profile (the answer arrives in OnFixedProfilesResponse).</summary>
         void RequestFixedProfile(Indicator indicator, FixedProfileRequest request)
         {
         }
     }
 
-    /// <summary>Argumento de RedrawChart.</summary>
+    /// <summary>Argument of RedrawChart.</summary>
     public class RedrawArg
     {
         public RedrawArg()
@@ -68,7 +68,7 @@ namespace TradingHub.Indicators
     }
 
     /// <summary>
-    /// Clase base de todos los indicadores. API compatible con la de ATAS: OnCalculate(bar, value),
+    /// Base class of every indicator. API compatible with ATAS's: OnCalculate(bar, value),
     /// DataSeries, OnRender(RenderContext, DrawingLayouts), GetCandle(bar), etc.
     /// </summary>
     public abstract class Indicator : INotifyPropertyChanged, IDisposable
@@ -101,7 +101,7 @@ namespace TradingHub.Indicators
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        // ================================================================ identidad y configuración
+        // ================================================================ identity and configuration
 
         [Browsable(false)]
         [JsonIgnore]
@@ -128,7 +128,7 @@ namespace TradingHub.Indicators
         [JsonIgnore]
         public IndicatorDataSeriesCollection DataSeries { get; }
 
-        /// <summary>Serie de entrada (por defecto, el cierre de cada vela).</summary>
+        /// <summary>Input series (by default, the close of each candle).</summary>
         [Browsable(false)]
         [JsonIgnore]
         public IDataSeries SourceDataSeries
@@ -144,7 +144,7 @@ namespace TradingHub.Indicators
 
         private CandleSourceSeries _hostSource;
 
-        /// <summary>Panel: IndicatorDataProvider.CandlesPanel (sobre el precio) o NewPanel.</summary>
+        /// <summary>Panel: IndicatorDataProvider.CandlesPanel (over the price) or NewPanel.</summary>
         [Browsable(false)]
         public string Panel
         {
@@ -184,7 +184,7 @@ namespace TradingHub.Indicators
         [JsonIgnore]
         public DrawingLayouts SubscribedLayouts => _layouts;
 
-        // ================================================================ objetos de dibujo
+        // ================================================================ drawing objects
 
         [Browsable(false)]
         [JsonIgnore]
@@ -206,7 +206,7 @@ namespace TradingHub.Indicators
         [JsonIgnore]
         public Dictionary<string, DrawingText> Labels { get; } = new();
 
-        // ================================================================ contexto del gráfico
+        // ================================================================ chart context
 
         internal IIndicatorHost Host => _host ?? _parent?.Host;
 
@@ -247,7 +247,7 @@ namespace TradingHub.Indicators
         [JsonIgnore]
         public MouseLocationInfo MouseLocationInfo => ChartInfo?.MouseLocationInfo ?? new MouseLocationInfo();
 
-        /// <summary>Área completa del gráfico en píxeles (como en ATAS).</summary>
+        /// <summary>Full chart area in pixels (as in ATAS).</summary>
         [Browsable(false)]
         public Rectangle ChartArea
         {
@@ -258,14 +258,14 @@ namespace TradingHub.Indicators
             }
         }
 
-        /// <summary>Tipo de gráfico ("TimeFrame", "Tick", "Volume"…). En ATAS está marcado como obsoleto.</summary>
+        /// <summary>Chart type ("TimeFrame", "Tick", "Volume"…). In ATAS it is marked as obsolete.</summary>
         [Browsable(false)]
-        [Obsolete("Usá ChartInfo.ChartType")]
+        [Obsolete("Use ChartInfo.ChartType")]
         public string? ChartType => ChartInfo?.ChartType;
 
-        /// <summary>Período del gráfico ("M5", "H1", "Daily"…). En ATAS está marcado como obsoleto.</summary>
+        /// <summary>Chart period ("M5", "H1", "Daily"…). In ATAS it is marked as obsolete.</summary>
         [Browsable(false)]
-        [Obsolete("Usá ChartInfo.TimeFrame")]
+        [Obsolete("Use ChartInfo.TimeFrame")]
         public string? TimeFrame => ChartInfo?.TimeFrame;
 
         [Browsable(false)]
@@ -276,7 +276,7 @@ namespace TradingHub.Indicators
         [JsonIgnore]
         public int LastVisibleBarNumber => Host?.LastVisibleBar ?? 0;
 
-        /// <summary>Valor de la serie principal en una barra.</summary>
+        /// <summary>Value of the main series on a bar.</summary>
         public decimal this[int bar]
         {
             get => DataSeries.Count > 0 && DataSeries[0] is ValueDataSeries v ? v[bar] : 0m;
@@ -286,7 +286,7 @@ namespace TradingHub.Indicators
             }
         }
 
-        // ================================================================ ciclo de vida (lo que sobrescriben los indicadores)
+        // ================================================================ lifecycle (what the indicators override)
 
         protected abstract void OnCalculate(int bar, decimal value);
 
@@ -341,8 +341,8 @@ namespace TradingHub.Indicators
         }
 
         /// <summary>
-        /// Perfil del período pedido: <paramref name="fixedProfileScaled"/> agrupado como el gráfico y
-        /// <paramref name="fixedProfileOriginScale"/> a precio de tick.
+        /// Profile of the requested period: <paramref name="fixedProfileScaled"/> grouped like the chart and
+        /// <paramref name="fixedProfileOriginScale"/> at tick price.
         /// </summary>
         protected virtual void OnFixedProfilesResponse(IndicatorCandle fixedProfileScaled, IndicatorCandle fixedProfileOriginScale, FixedProfilePeriods period)
         {
@@ -406,12 +406,12 @@ namespace TradingHub.Indicators
         public virtual bool ProcessKeyUp(Avalonia.Input.KeyEventArgs e) => false;
         public virtual StdCursor GetCursor(RenderControlMouseEventArgs e) => StdCursor.None;
 
-        // ================================================================ servicios para los indicadores
+        // ================================================================ services for the indicators
 
         public IndicatorCandle GetCandle(int bar)
         {
             var h = Host;
-            if (h == null || h.BarCount == 0) throw new InvalidOperationException("El indicador no está en un gráfico.");
+            if (h == null || h.BarCount == 0) throw new InvalidOperationException("The indicator is not on a chart.");
             bar = Math.Clamp(bar, 0, h.BarCount - 1);
             return h.GetCandle(bar);
         }
@@ -420,7 +420,7 @@ namespace TradingHub.Indicators
         public bool IsNewWeek(int bar) => bar > 0 && (Host?.IsNewWeek(bar) ?? false);
         public bool IsNewMonth(int bar) => bar > 0 && (Host?.IsNewMonth(bar) ?? false);
 
-        /// <summary>Pide recalcular el indicador completo (se hace en el próximo ciclo).</summary>
+        /// <summary>Asks for the whole indicator to be recalculated (it happens on the next cycle).</summary>
         public void RecalculateValues()
         {
             var root = this;
@@ -450,14 +450,14 @@ namespace TradingHub.Indicators
 
         protected void RequestForCumulativeTrades(CumulativeTradesRequest request) => Host?.RequestCumulativeTrades(this, request);
 
-        /// <summary>Pide el perfil fijo de un período; llega en <see cref="OnFixedProfilesResponse"/>.</summary>
+        /// <summary>Requests a period's fixed profile; it arrives in <see cref="OnFixedProfilesResponse"/>.</summary>
         protected void GetFixedProfile(FixedProfileRequest request) => Host?.RequestFixedProfile(this, request);
 
         protected void SubscribeToTimer(TimeSpan interval, Action action) => Host?.SubscribeTimer(this, interval, action);
 
         protected void UnsubscribeFromTimer(TimeSpan interval, Action action) => Host?.UnsubscribeTimer(this, interval, action);
 
-        /// <summary>Registra un indicador hijo que comparte los datos del gráfico (se calcula con child.Calculate).</summary>
+        /// <summary>Registers a child indicator that shares the chart's data (it is computed with child.Calculate).</summary>
         protected void Add(Indicator child)
         {
             if (child == null || _children.Contains(child)) return;
@@ -465,7 +465,7 @@ namespace TradingHub.Indicators
             _children.Add(child);
         }
 
-        /// <summary>Calcula una barra "a mano" (indicadores usados como calculadoras dentro de otros).</summary>
+        /// <summary>Computes a bar "by hand" (indicators used as calculators inside others).</summary>
         public decimal Calculate(int bar, decimal value)
         {
             if (_sourceSeries is ValueDataSeries own && _sourceSeries != _hostSource) own[bar] = value;
@@ -510,7 +510,7 @@ namespace TradingHub.Indicators
 
         protected void ClearHorizontalLinesTillTouch() => HorizontalLinesTillTouch.Clear();
 
-        // ================================================================ propiedades / notificaciones
+        // ================================================================ properties / notifications
 
         public void RaisePropertyChanged([CallerMemberName] string propertyName = null)
         {
@@ -540,12 +540,12 @@ namespace TradingHub.Indicators
             return true;
         }
 
-        /// <summary>Avisa que cambió una propiedad (nombre de ATAS).</summary>
+        /// <summary>Reports that a property changed (ATAS's name).</summary>
         protected void OnChangeProperty([CallerMemberName] string propertyName = null) => RaisePropertyChanged(propertyName);
 
         protected void RaisePanelPropertyChanged(string propertyName) => RaisePropertyChanged(propertyName);
 
-        /// <summary>Borra los valores de todas las series.</summary>
+        /// <summary>Clears the values of every series.</summary>
         protected void Clear()
         {
             foreach (var s in DataSeries) s.Clear();
@@ -556,12 +556,12 @@ namespace TradingHub.Indicators
             if (index >= 0 && index < HorizontalLinesTillTouch.Count) HorizontalLinesTillTouch[index] = line;
         }
 
-        /// <summary>Ventana de configuración abierta (Trading Hub no la expone a los indicadores).</summary>
+        /// <summary>Open settings window (Trading Hub does not expose it to the indicators).</summary>
         [Browsable(false)]
         [JsonIgnore]
         public IPropertiesEditor PropertiesEditor { get; set; }
 
-        /// <summary>Hora actual del mercado (UTC).</summary>
+        /// <summary>Current market time (UTC).</summary>
         [Browsable(false)]
         [JsonIgnore]
         public DateTime MarketTime => DateTime.UtcNow;
@@ -588,7 +588,7 @@ namespace TradingHub.Indicators
 
         private readonly Dictionary<FixedProfilePeriods, TaskCompletionSource<FixedProfileResponse>> _pendingProfiles = new();
 
-        /// <summary>Pide un perfil fijo y espera la respuesta.</summary>
+        /// <summary>Requests a fixed profile and waits for the response.</summary>
         protected Task<FixedProfileResponse> RequestFixedProfileAsync(FixedProfileRequest request)
         {
             if (Host == null) return Task.FromResult<FixedProfileResponse>(null);
@@ -616,8 +616,8 @@ namespace TradingHub.Indicators
         }
 
         /// <summary>
-        /// Asigna una propiedad y, si el valor notifica cambios (filtros, lápices...), se suscribe para
-        /// llamar a <paramref name="onChanged"/> cuando cambie algo adentro.
+        /// Assigns a property and, if the value reports changes (filters, pens...), subscribes so that
+        /// <paramref name="onChanged"/> is called when something inside it changes.
         /// </summary>
         protected bool SetTrackedProperty<T>(ref T field, T value, Action<string> onChanged = null, [CallerMemberName] string propertyName = null)
         {
@@ -645,10 +645,10 @@ namespace TradingHub.Indicators
         public virtual void Dispose()
         {
             try { OnDispose(); }
-            catch (Exception ex) { this.LogError("Error al liberar el indicador", ex); }
+            catch (Exception ex) { this.LogError("Error while disposing the indicator", ex); }
         }
 
-        // ================================================================ motor (lo llama el gráfico)
+        // ================================================================ engine (the chart calls it)
 
         internal void HostAttach(IIndicatorHost host)
         {
@@ -702,7 +702,7 @@ namespace TradingHub.Indicators
             }
         }
 
-        /// <summary>Recalcula todas las barras.</summary>
+        /// <summary>Recalculates every bar.</summary>
         internal void HostRecalculate()
         {
             ClearForRecalc();
@@ -712,7 +712,7 @@ namespace TradingHub.Indicators
             OnFinishRecalculate();
         }
 
-        /// <summary>Calcula desde una barra hasta la última (tiempo real).</summary>
+        /// <summary>Computes from one bar to the last (real time).</summary>
         internal void HostCalculate(int fromBar)
         {
             int n = CurrentBar;
@@ -730,7 +730,7 @@ namespace TradingHub.Indicators
         internal void HostPositionChanged(Position p) => OnPositionChanged(p);
         internal void HostOrderChanged(Order o) => OnOrderChanged(o);
 
-        /// <summary>Serie de entrada respaldada por las velas del gráfico.</summary>
+        /// <summary>Input series backed by the chart's candles.</summary>
         private sealed class CandleSourceSeries : IDataSeries
         {
             private readonly Indicator _owner;

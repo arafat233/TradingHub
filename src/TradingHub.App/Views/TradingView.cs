@@ -21,15 +21,15 @@ using TradingHub.Trading;
 
 namespace TradingHub.App.Views;
 
-/// <summary>Un gráfico: vive en una pestaña de la ventana principal o en una ventana aparte.</summary>
+/// <summary>A chart: it lives in a tab of the main window or in a separate window.</summary>
 public sealed class ChartTab
 {
     public required ChartView View { get; init; }
 
-    /// <summary>Marco del gráfico (encabezado + gráfico); es lo que se mueve entre pestañas y ventanas.</summary>
+    /// <summary>Chart frame (header + chart); it is what moves between tabs and windows.</summary>
     public required Border Frame { get; init; }
 
-    /// <summary>Encabezado del marco (se ve en los diseños de varios gráficos).</summary>
+    /// <summary>Header of the frame (visible in multi-chart layouts).</summary>
     public required Control Header { get; init; }
 
     public required TextBlock Title { get; init; }
@@ -39,48 +39,48 @@ public sealed class ChartTab
     public string AccountId { get; set; } = "sim";
     public double HistoryHours { get; set; }
 
-    /// <summary>Grupo de vinculación por color (0 = sin vincular).</summary>
+    /// <summary>Link group by color (0 = not linked).</summary>
     public int LinkGroup { get; set; }
 
     internal LinkButton? LinkButton { get; set; }
 
-    /// <summary>Cantidad para operar desde este gráfico (Chart Trader, DOM y atajos cuando es el activo).</summary>
+    /// <summary>Quantity to trade from this chart (Chart Trader, DOM and hotkeys when it is the active one).</summary>
     public decimal Quantity { get; set; }
 
-    /// <summary>Cross trading: instrumento donde se ejecutan las órdenes de este gráfico (null = el del gráfico).</summary>
+    /// <summary>Cross trading: instrument this chart's orders are executed on (null = the chart's own).</summary>
     public string? CrossSymbol { get; set; }
 
     internal TradingHub.Data.InstrumentData? CrossData { get; set; }
 
-    /// <summary>Si el Chart Trader de este gráfico está desplegado.</summary>
+    /// <summary>Whether this chart's Chart Trader is expanded.</summary>
     public bool TraderVisible { get; set; } = true;
 
     internal ChartTraderPanel? Trader { get; set; }
 
-    /// <summary>Barra de dibujos propia del gráfico (a la izquierda).</summary>
+    /// <summary>The chart's own drawing toolbar (on the left).</summary>
     internal DrawingToolStrip? Tools { get; set; }
 
     internal ChartPage? Page { get; set; }
     internal ChartWindow? Window { get; set; }
 
-    /// <summary>Botón de agrandar / achicar de la barra del marco.</summary>
+    /// <summary>Maximize / restore button of the frame's bar.</summary>
     internal Avalonia.Controls.Button? MaximizeButton { get; set; }
 
-    /// <summary>Se llama al cerrar el gráfico (por ejemplo, para cerrar el feed de un replay).</summary>
+    /// <summary>Called when the chart is closed (for example, to close a replay's feed).</summary>
     internal Action? OnClosed { get; set; }
 
     public bool IsReplay => Model?.Data.Feed is ReplayFeed;
 
     public string Caption => Model == null ? Symbol : $"{(IsReplay ? "▶ " : "")}{Symbol} · {Model.Period.DisplayName}";
 
-    /// <summary>Estrategias puestas en este gráfico (como indicadores: visuales o ejecutando en una cuenta).</summary>
+    /// <summary>Strategies placed on this chart (like indicators: visual or running on an account).</summary>
     public List<ChartStrategy> Strategies { get; } = new();
 
-    /// <summary>Qué ejecuciones están marcadas en el gráfico (cuenta, instrumento y cantidad) para no rehacerlas.</summary>
+    /// <summary>Which fills are already marked on the chart (account, instrument and quantity) so they are not redone.</summary>
     public string MarksKey { get; set; } = "";
 }
 
-/// <summary>Cómo se reparten los gráficos dentro de una pestaña.</summary>
+/// <summary>How the charts are arranged inside a tab.</summary>
 public enum PaneLayout
 {
     One,
@@ -93,7 +93,7 @@ public enum PaneLayout
     Six,
 }
 
-/// <summary>Una pestaña de la ventana principal: uno o varios gráficos con un diseño.</summary>
+/// <summary>A tab of the main window: one or several charts with a layout.</summary>
 internal sealed class ChartPage
 {
     public required TabItem Item { get; init; }
@@ -103,12 +103,12 @@ internal sealed class ChartPage
     public List<ChartTab> Charts { get; } = new();
     public ChartTab? Active { get; set; }
 
-    /// <summary>Gráfico agrandado: ocupa toda la pestaña hasta que lo achicás (los otros siguen ahí).</summary>
+    /// <summary>Maximized chart: it fills the whole tab until you restore it (the others are still there).</summary>
     public ChartTab? Maximized { get; set; }
     public int VisibleCount => Maximized != null ? 1 : Math.Min(Charts.Count, TradingView.PaneCount(Layout));
 }
 
-/// <summary>Espacio de trabajo de trading: pestañas con uno o varios gráficos, DOM, ticket y cinta.</summary>
+/// <summary>Trading workspace: tabs with one or several charts, DOM, ticket and tape.</summary>
 public sealed partial class TradingView : UserControl
 {
     private readonly AppServices _svc;
@@ -124,14 +124,14 @@ public sealed partial class TradingView : UserControl
 
     internal static readonly (PaneLayout Layout, string Label, string Short)[] Layouts =
     {
-        (PaneLayout.One, "Un gráfico", "1"),
-        (PaneLayout.TwoColumns, "Dos, uno al lado del otro", "2 ‖"),
-        (PaneLayout.TwoRows, "Dos, uno arriba del otro", "2 ═"),
-        (PaneLayout.ThreeColumns, "Tres en columnas", "3 ‖"),
-        (PaneLayout.OneLeftTwoRight, "Uno grande y dos a la derecha", "1+2"),
-        (PaneLayout.OneTopTwoBottom, "Uno grande arriba y dos abajo", "1+2 ═"),
-        (PaneLayout.Four, "Cuatro (2 × 2)", "4"),
-        (PaneLayout.Six, "Seis (3 × 2)", "6"),
+        (PaneLayout.One, "One chart", "1"),
+        (PaneLayout.TwoColumns, "Two, side by side", "2 ‖"),
+        (PaneLayout.TwoRows, "Two, one above the other", "2 ═"),
+        (PaneLayout.ThreeColumns, "Three in columns", "3 ‖"),
+        (PaneLayout.OneLeftTwoRight, "One big plus two on the right", "1+2"),
+        (PaneLayout.OneTopTwoBottom, "One big on top plus two below", "1+2 ═"),
+        (PaneLayout.Four, "Four (2 × 2)", "4"),
+        (PaneLayout.Six, "Six (3 × 2)", "6"),
     };
 
     public TradingView(AppServices svc, Action<string> status)
@@ -139,10 +139,10 @@ public sealed partial class TradingView : UserControl
         _svc = svc;
         _status = status;
         _layoutChoice = new ChoiceButton<PaneLayout>(MaterialIconKind.ViewGridOutline, Layouts.Select(l => (l.Layout, l.Label)),
-            "Diseño: cuántos gráficos ver a la vez en esta pestaña", l => Layouts.First(x => x.Layout == l).Short);
+            "Layout: how many charts to see at once in this tab", l => Layouts.First(x => x.Layout == l).Short);
         _layoutChoice.Changed += l => _ = SetLayoutAsync(l);
-        var popOut = Ui.IconButton(MaterialIconKind.OpenInNew, "Sacar el gráfico a una ventana aparte (⇧⌘D)", () => DetachActive());
-        var newTab = Ui.IconButton(MaterialIconKind.Plus, "Nueva pestaña (⌘T)", () => _ = NewChartAsync());
+        var popOut = Ui.IconButton(MaterialIconKind.OpenInNew, "Pull the chart into a separate window (⇧⌘D)", () => DetachActive());
+        var newTab = Ui.IconButton(MaterialIconKind.Plus, "New tab (⌘T)", () => _ = NewChartAsync());
         _toolbar = new ChartToolbar(this, false, Ui.Divider(true), _layoutChoice, BuildPanelsButton(), popOut, newTab);
         _svc.BracketsCreated += HookBrackets;
         Content = BuildLayout();
@@ -150,7 +150,7 @@ public sealed partial class TradingView : UserControl
 
     internal IEnumerable<ChartTab> AllCharts => _pages.SelectMany(p => p.Charts).Concat(_floating.Select(w => w.Chart));
 
-    /// <summary>Todos los gráficos abiertos (pestañas y ventanas aparte).</summary>
+    /// <summary>Every open chart (tabs and separate windows).</summary>
     internal IReadOnlyList<ChartTab> Tabs => AllCharts.ToList();
 
     internal IReadOnlyList<ChartPage> Pages => _pages;
@@ -167,7 +167,7 @@ public sealed partial class TradingView : UserControl
 
     private readonly Grid _body = new() { ColumnDefinitions = new ColumnDefinitions("Auto,*,340") };
 
-    // el divisor va encima del borde del panel (6 px para agarrarlo con el mouse, sin dejar un hueco entre el gráfico y el panel)
+    // the splitter sits on top of the panel's border (6 px to grab it with the mouse, without leaving a gap between the chart and the panel)
     private readonly GridSplitter _sideSplitter = new()
     {
         ResizeDirection = GridResizeDirection.Columns,
@@ -187,7 +187,7 @@ public sealed partial class TradingView : UserControl
 
         _tabControl.SelectionChanged += (_, _) => OnPageChanged();
         _tabControl.Margin = new Thickness(0);
-        // la tira de pestañas solo aparece cuando hay más de una pestaña
+        // the tab strip only appears when there is more than one tab
         _tabControl.Classes.Add("single");
         ((System.Collections.Specialized.INotifyCollectionChanged)_tabControl.Items).CollectionChanged += (_, _) =>
             _tabControl.Classes.Set("single", _tabControl.ItemCount <= 1);
@@ -209,7 +209,7 @@ public sealed partial class TradingView : UserControl
         return root;
     }
 
-    // ===================================================================== diseños de varios gráficos
+    // ===================================================================== multi-chart layouts
 
     internal static int PaneCount(PaneLayout l) => l switch
     {
@@ -220,7 +220,7 @@ public sealed partial class TradingView : UserControl
         _ => 6,
     };
 
-    /// <summary>Columnas, filas y celdas (columna, fila, ancho, alto) de cada diseño.</summary>
+    /// <summary>Columns, rows and cells (column, row, width, height) of each layout.</summary>
     private static (int Cols, int Rows, (int C, int R, int CS, int RS)[] Cells) LayoutGrid(PaneLayout l) => l switch
     {
         PaneLayout.One => (1, 1, new[] { (0, 0, 1, 1) }),
@@ -233,7 +233,7 @@ public sealed partial class TradingView : UserControl
         _ => (3, 2, new[] { (0, 0, 1, 1), (1, 0, 1, 1), (2, 0, 1, 1), (0, 1, 1, 1), (1, 1, 1, 1), (2, 1, 1, 1) }),
     };
 
-    /// <summary>Acomoda los gráficos de una pestaña según su diseño (con divisores para cambiar tamaños).</summary>
+    /// <summary>Arranges a tab's charts according to its layout (with splitters to resize them).</summary>
     private void Arrange(ChartPage page)
     {
         var host = page.Host;
@@ -243,7 +243,7 @@ public sealed partial class TradingView : UserControl
         if (page.Maximized is { } big && !page.Charts.Contains(big)) page.Maximized = null;
         if (page.Maximized is { } max)
         {
-            // agrandado: solo ese gráfico, con su barra (para volver a achicarlo)
+            // maximized: only that chart, with its bar (to restore it)
             host.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             host.RowDefinitions.Add(new RowDefinition(GridLength.Star));
             max.Header.IsVisible = true;
@@ -292,7 +292,7 @@ public sealed partial class TradingView : UserControl
             host.Children.Add(cell);
         }
 
-        // divisores: entre columnas (en las filas que corresponda) y entre filas
+        // splitters: between columns (on the rows that need them) and between rows
         void VSplit(int col, int row, int rowSpan)
         {
             var s = new GridSplitter { ResizeDirection = GridResizeDirection.Columns, Background = Ui.Bg0 };
@@ -332,7 +332,7 @@ public sealed partial class TradingView : UserControl
         UpdatePageHeader(page);
     }
 
-    /// <summary>Agranda un gráfico para que ocupe toda la pestaña (o lo vuelve a su lugar).</summary>
+    /// <summary>Maximizes a chart so it fills the whole tab (or puts it back).</summary>
     internal void ToggleMaximize(ChartTab chart)
     {
         if (chart.Page is not { } page) return;
@@ -346,10 +346,10 @@ public sealed partial class TradingView : UserControl
         if (chart.MaximizeButton is not { } b) return;
         bool big = chart.Page?.Maximized != null && ReferenceEquals(chart.Page.Maximized, chart);
         b.Content = Ui.Icon(big ? MaterialIconKind.ArrowCollapse : MaterialIconKind.ArrowExpand, 14);
-        ToolTip.SetTip(b, big ? "Volver a mostrar todos los gráficos" : "Agrandar este gráfico (ocupa toda la pestaña)");
+        ToolTip.SetTip(b, big ? "Show every chart again" : "Enlarge this chart (it takes over the whole tab)");
     }
 
-    /// <summary>Diseño justo para la cantidad de gráficos que quedan (al cerrar o sacar uno no quedan lugares vacíos).</summary>
+    /// <summary>Layout that fits exactly the number of charts left (closing or pulling one out leaves no empty slots).</summary>
     private static PaneLayout FitLayout(PaneLayout current, int count) => count switch
     {
         <= 1 => PaneLayout.One,
@@ -359,7 +359,7 @@ public sealed partial class TradingView : UserControl
         _ => current,
     };
 
-    /// <summary>Si quedaron lugares vacíos en la pestaña, el diseño se achica a lo que hay.</summary>
+    /// <summary>If empty slots were left in the tab, the layout shrinks to what is there.</summary>
     private void ShrinkLayout(ChartPage page)
     {
         if (PaneCount(page.Layout) <= page.Charts.Count) return;
@@ -369,7 +369,7 @@ public sealed partial class TradingView : UserControl
 
     private Control EmptyPane(ChartPage page)
     {
-        var add = Ui.Button("Agregar gráfico", MaterialIconKind.Plus, () => _ = AddClonedChartAsync(page));
+        var add = Ui.Button("Add chart", MaterialIconKind.Plus, () => _ = AddClonedChartAsync(page));
         var box = Ui.V(10, Ui.Icon(MaterialIconKind.ChartBoxOutline, 34, Ui.Text2), add);
         box.HorizontalAlignment = HorizontalAlignment.Center;
         box.VerticalAlignment = VerticalAlignment.Center;
@@ -377,16 +377,16 @@ public sealed partial class TradingView : UserControl
     }
 
     /// <summary>
-    /// Resalta el gráfico activo cuando hay varios: borde fino con el acento suave y el título encendido (los otros con
-    /// el borde de siempre y el título apagado). Antes era un borde ámbar fuerte que recargaba la pantalla.
+    /// Highlights the active chart when there are several: a thin border in the soft accent and the title lit up (the others with
+    /// the usual border and the title dimmed). It used to be a strong amber border that cluttered the screen.
     /// </summary>
     private void UpdateFrames(ChartPage page)
     {
         bool multi = PaneCount(page.Layout) > 1;
-        // un solo gráfico: ocupa todo, de borde a borde (sin margen, sin marco ni esquinas redondeadas)
+        // a single chart: it fills everything, edge to edge (no margin, no frame and no rounded corners)
         bool alone = page.Maximized != null || !multi;
-        // con el panel derecho a la vista, los gráficos de la última columna quedan pegados a él: sin hueco, sin esquinas
-        // redondeadas de ese lado y con una sola línea entre los dos (la del panel)
+        // with the right panel visible, the charts of the last column sit flush against it: no gap, no rounded
+        // corners on that side and a single line between the two (the panel's)
         page.Host.Margin = alone ? new Thickness(0) : _sideVisible ? new Thickness(6, 6, 0, 6) : new Thickness(6);
         int cols = page.Host.ColumnDefinitions.Count;
         foreach (var c in page.Charts)
@@ -407,10 +407,10 @@ public sealed partial class TradingView : UserControl
     {
         var main = page.Active ?? page.Charts.FirstOrDefault();
         int n = page.VisibleCount;
-        page.HeaderText.Text = main == null ? "Vacía" : n > 1 ? $"{main.Caption}  +{n - 1}" : main.Caption;
+        page.HeaderText.Text = main == null ? "Empty" : n > 1 ? $"{main.Caption}  +{n - 1}" : main.Caption;
     }
 
-    /// <summary>Actualiza los títulos donde aparece un gráfico (marco, pestaña y ventana).</summary>
+    /// <summary>Updates the titles wherever a chart appears (frame, tab and window).</summary>
     internal void UpdateTitles(ChartTab chart)
     {
         chart.Title.Text = chart.Caption;
@@ -423,25 +423,25 @@ public sealed partial class TradingView : UserControl
         var page = _page;
         if (page == null) return;
         page.Layout = layout;
-        page.Maximized = null; // elegir un diseño vuelve a mostrar todos
+        page.Maximized = null; // picking a layout shows them all again
         _layoutChoice.Select(layout);
         int need = PaneCount(layout);
-        // el gráfico que estabas usando sigue a la vista aunque el diseño tenga menos lugares
+        // the chart you were using stays visible even if the layout has fewer slots
         if (page.Active is { } act && page.Charts.IndexOf(act) is var ai && ai >= need)
         {
             page.Charts.RemoveAt(ai);
             page.Charts.Insert(0, act);
         }
 
-        // los gráficos que sobran quedan guardados en la pestaña (vuelven al elegir un diseño más grande)
+        // the charts that do not fit stay stored in the tab (they come back when a bigger layout is picked)
         while (page.Charts.Count < need)
             if (await AddClonedChartAsync(page, arrange: false) == null) break;
         Arrange(page);
         if (page.Active == null || page.Charts.IndexOf(page.Active) >= need) Activate(page.Charts.FirstOrDefault());
-        _status(need == 1 ? "Un gráfico por pestaña" : $"{need} gráficos en la pestaña: hacé clic en uno para elegirlo y cambiarle el instrumento o el período");
+        _status(need == 1 ? "One chart per tab" : $"{need} charts in the tab: click one to select it and change its instrument or period");
     }
 
-    /// <summary>Agrega a la pestaña una copia del gráfico activo con otro período.</summary>
+    /// <summary>Adds a copy of the active chart with another period to the tab.</summary>
     private async Task<ChartTab?> AddClonedChartAsync(ChartPage page, bool arrange = true)
     {
         var src = page.Active ?? page.Charts.FirstOrDefault() ?? _active;
@@ -456,9 +456,9 @@ public sealed partial class TradingView : UserControl
         return chart;
     }
 
-    // ===================================================================== gráficos y pestañas
+    // ===================================================================== charts and tabs
 
-    /// <summary>Crea un gráfico vacío (marco, encabezado y eventos). Después se abre con OpenInTabAsync.</summary>
+    /// <summary>Creates an empty chart (frame, header and events). It is opened afterwards with OpenInTabAsync.</summary>
     private ChartTab CreateChart(string feedId, string symbol, string accountId, double historyHours)
     {
         var view = new ChartView();
@@ -473,12 +473,12 @@ public sealed partial class TradingView : UserControl
         DockPanel.SetDock(headerBorder, Dock.Top);
         body.Children.Add(headerBorder);
         body.Children.Add(view);
-        // el contenido se recorta con el radio de adentro del borde: el gráfico acompaña la curva de la esquina (sin puntas)
+        // the content is clipped with the border's inner radius: the chart follows the corner's curve (no sharp tips)
         var inner = new Border { Child = body, CornerRadius = new CornerRadius(7), ClipToBounds = true };
         var frame = new Border { Child = inner, ClipToBounds = true, CornerRadius = new CornerRadius(8), Background = Ui.Bg0, BorderBrush = Ui.Line, BorderThickness = new Thickness(1) };
         var chart = new ChartTab { View = view, Frame = frame, Header = headerBorder, Title = title, FeedId = feedId, Symbol = symbol, AccountId = accountId, HistoryHours = historyHours };
 
-        // cada gráfico con su barra de dibujos (izquierda) y su Chart Trader (derecha), como en ATAS
+        // each chart with its drawing toolbar (left) and its Chart Trader (right), as in ATAS
         var tools = new DrawingToolStrip();
         chart.Tools = tools;
         DockPanel.SetDock(tools, Dock.Left);
@@ -504,7 +504,7 @@ public sealed partial class TradingView : UserControl
         DockPanel.SetDock(trader, Dock.Right);
         body.Children.Insert(body.Children.IndexOf(view), trader);
 
-        // color de vinculación en la esquina de la barrita del gráfico
+        // link color in the corner of the chart's little bar
         var link = new LinkButton(this, () => chart) { Margin = new Thickness(0, 0, 6, 0) };
         chart.LinkButton = link;
         DockPanel.SetDock(link, Dock.Left);
@@ -523,12 +523,12 @@ public sealed partial class TradingView : UserControl
             return b;
         }
 
-        chart.MaximizeButton = Small(MaterialIconKind.ArrowExpand, "Agrandar este gráfico (ocupa toda la pestaña)", () => ToggleMaximize(chart));
+        chart.MaximizeButton = Small(MaterialIconKind.ArrowExpand, "Enlarge this chart (it takes over the whole tab)", () => ToggleMaximize(chart));
         headerRight.Children.Add(chart.MaximizeButton);
-        headerRight.Children.Add(Small(MaterialIconKind.OpenInNew, "Sacar a una ventana aparte", () => Detach(chart)));
-        headerRight.Children.Add(Small(MaterialIconKind.Close, "Cerrar este gráfico", () => CloseChart(chart)));
+        headerRight.Children.Add(Small(MaterialIconKind.OpenInNew, "Move to a separate window", () => Detach(chart)));
+        headerRight.Children.Add(Small(MaterialIconKind.Close, "Close this chart", () => CloseChart(chart)));
 
-        // clic en cualquier parte del gráfico: pasa a ser el activo
+        // a click anywhere on the chart: it becomes the active one
         frame.AddHandler(PointerPressedEvent, (_, _) => Activate(chart), RoutingStrategies.Tunnel, handledEventsToo: true);
         view.ToolFinished += () => chart.Tools?.Check(null);
         view.DrawingsChanged += () => DrawingsTouched(chart);
@@ -554,7 +554,7 @@ public sealed partial class TradingView : UserControl
     {
         var headerText = new TextBlock { Text = "…", VerticalAlignment = VerticalAlignment.Center };
         var close = new Button { Content = Ui.Icon(MaterialIconKind.Close, 13), Width = 20, Height = 20, MinHeight = 0, Padding = new Thickness(0) }.Classes("icon");
-        ToolTip.SetTip(close, "Cerrar la pestaña");
+        ToolTip.SetTip(close, "Close the tab");
         var item = new TabItem { Header = Ui.H(8, headerText, close) };
         var page = new ChartPage { Item = item, HeaderText = headerText };
         item.Content = page.Host;
@@ -566,7 +566,7 @@ public sealed partial class TradingView : UserControl
         return page;
     }
 
-    /// <summary>Pestaña nueva con un gráfico.</summary>
+    /// <summary>New tab with one chart.</summary>
     internal async Task<ChartTab> NewTabAsync(string feedId, string symbol, ChartPeriod period, ChartSettings? settings = null, bool activate = true, string accountId = "sim", double historyHours = 0, PaneLayout layout = PaneLayout.One)
     {
         var page = CreatePage();
@@ -583,7 +583,7 @@ public sealed partial class TradingView : UserControl
         return chart;
     }
 
-    /// <summary>Agrega un gráfico a una pestaña existente (lo usa la restauración del espacio de trabajo).</summary>
+    /// <summary>Adds a chart to an existing tab (used by the workspace restore).</summary>
     internal async Task<ChartTab> AddToPageAsync(ChartPage page, string feedId, string symbol, ChartPeriod period, ChartSettings? settings, string accountId, double historyHours)
     {
         var chart = CreateChart(feedId, symbol, accountId, historyHours);
@@ -597,7 +597,7 @@ public sealed partial class TradingView : UserControl
     internal async Task OpenInTabAsync(ChartTab tab, string feedId, string symbol, ChartPeriod period, ChartSettings? settings) =>
         await OpenInTabAsync(tab, feedId, symbol, period, settings, copyIndicatorsFrom: tab);
 
-    /// <summary>Carga (o cambia) el instrumento de un gráfico. Copia los indicadores del gráfico indicado.</summary>
+    /// <summary>Loads (or changes) a chart's instrument. Copies the indicators of the chart given.</summary>
     private async Task OpenInTabAsync(ChartTab tab, string feedId, string symbol, ChartPeriod period, ChartSettings? settings, ChartTab? copyIndicatorsFrom)
     {
         try
@@ -605,7 +605,7 @@ public sealed partial class TradingView : UserControl
             var profile = _svc.Connections.Find(feedId);
             if (profile == null)
             {
-                _status($"La conexión {feedId} no existe; revisá Conexiones.");
+                _status($"The connection {feedId} does not exist; check Connections.");
                 return;
             }
 
@@ -613,7 +613,7 @@ public sealed partial class TradingView : UserControl
             var inst = instruments.FirstOrDefault(i => i.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase));
             if (inst == null)
             {
-                _status($"No encontré {symbol} en {profile.Name}");
+                _status($"{symbol} was not found in {profile.Name}");
                 return;
             }
 
@@ -633,7 +633,7 @@ public sealed partial class TradingView : UserControl
             tab.FeedId = profile.Id;
             tab.Symbol = inst.Symbol;
             tab.View.Model = model;
-            // una cuenta de Rithmic se mantiene aunque su sesión todavía se esté conectando
+            // a Rithmic account is kept even while its session is still connecting
             if (!tab.AccountId.StartsWith("rithmic|", StringComparison.Ordinal) && !_svc.AccountsFor(data).Any(a => a.Id == tab.AccountId)) tab.AccountId = "sim";
             if (instrumentChanged && tab.CrossSymbol != null)
             {
@@ -662,27 +662,27 @@ public sealed partial class TradingView : UserControl
             if (ReferenceEquals(tab, _active)) _toolbar.Chart = tab;
             tab.Window?.Toolbar.Sync();
             if (!_linkSync) _ = PropagateSymbolAsync(tab);
-            _status($"Abriendo {inst.Symbol} en {profile.Name}…");
+            _status($"Opening {inst.Symbol} on {profile.Name}…");
             void Ready()
             {
                 data.HistoryLoaded -= Ready;
                 if (tab.Model?.Data != data) return;
                 var from = TimeZoneInfo.ConvertTimeFromUtc(data.Trades.Count > 0 ? data.Trades.FirstTime : DateTime.UtcNow, model.Settings.TimeZone);
                 _status(data.HistoryError != null
-                    ? $"{inst.Symbol}: no se pudo traer toda la historia ({data.HistoryError})"
-                    : $"{inst.Symbol} listo · {data.Trades.Count:N0} operaciones desde {from:dd/MM HH:mm}");
+                    ? $"{inst.Symbol}: the full history could not be fetched ({data.HistoryError})"
+                    : $"{inst.Symbol} ready · {data.Trades.Count:N0} trades from {from:dd/MM HH:mm}");
             }
 
             if (data.IsLoadingHistory) data.HistoryLoaded += Ready;
         }
         catch (Exception ex)
         {
-            _status("Error al abrir: " + ex.Message);
+            _status("Error while opening: " + ex.Message);
             CrashLog.Write(ex);
         }
     }
 
-    /// <summary>Hace activo un gráfico de la ventana principal (barra, DOM y ticket pasan a él).</summary>
+    /// <summary>Makes a chart of the main window active (bar, DOM and ticket move to it).</summary>
     internal void Activate(ChartTab? chart)
     {
         if (chart == null || chart.Window != null) return;
@@ -714,14 +714,14 @@ public sealed partial class TradingView : UserControl
         _page = _pages.FirstOrDefault(p => ReferenceEquals(p.Item, _tabControl.SelectedItem));
         if (_page == null) return;
         var chart = _page.Active ?? _page.Charts.FirstOrDefault();
-        _active = null; // fuerza a reenganchar barra y panel
+        _active = null; // forces the toolbar and panel to re-attach
         Activate(chart);
         _layoutChoice.Select(_page.Layout);
     }
 
     private void DisposeChart(ChartTab chart)
     {
-        // las estrategias del gráfico se detienen (las posiciones abiertas quedan como están)
+        // the chart's strategies are stopped (open positions are left as they are)
         foreach (var cs in chart.Strategies) StopStrategy(cs);
         chart.Model?.Dispose();
         chart.OnClosed?.Invoke();
@@ -729,7 +729,7 @@ public sealed partial class TradingView : UserControl
         chart.Window = null;
     }
 
-    /// <summary>Cierra un gráfico (de una pestaña o de una ventana aparte).</summary>
+    /// <summary>Closes a chart (from a tab or from a separate window).</summary>
     internal void CloseChart(ChartTab chart)
     {
         if (chart.Window is { } w)
@@ -763,7 +763,7 @@ public sealed partial class TradingView : UserControl
     {
         if (_pages.Count <= 1)
         {
-            _status("Tiene que quedar al menos una pestaña abierta.");
+            _status("At least one tab has to stay open.");
             return;
         }
 
@@ -773,13 +773,13 @@ public sealed partial class TradingView : UserControl
         _tabControl.Items.Remove(page.Item);
     }
 
-    /// <summary>Cierra el gráfico activo (⌘W).</summary>
+    /// <summary>Closes the active chart (Cmd+W).</summary>
     internal void CloseActiveTab()
     {
         if (_active != null) CloseChart(_active);
     }
 
-    /// <summary>Saca el gráfico de su pestaña y lo deja solo en una pestaña nueva.</summary>
+    /// <summary>Pulls the chart out of its tab and leaves it alone in a new tab.</summary>
     internal async Task MoveToNewPageAsync(ChartTab chart)
     {
         var from = chart.Page;
@@ -801,14 +801,14 @@ public sealed partial class TradingView : UserControl
         await Task.CompletedTask;
     }
 
-    // ===================================================================== ventanas aparte
+    // ===================================================================== separate windows
 
     internal void DetachActive()
     {
         if (_active != null) Detach(_active);
     }
 
-    /// <summary>Saca un gráfico a su propia ventana (se puede llevar a otro monitor).</summary>
+    /// <summary>Pulls a chart out into its own window (it can be moved to another monitor).</summary>
     internal ChartWindow? Detach(ChartTab chart, PixelPoint? position = null, Size? size = null)
     {
         var page = chart.Page;
@@ -817,13 +817,13 @@ public sealed partial class TradingView : UserControl
         page.Charts.Remove(chart);
         if (ReferenceEquals(page.Active, chart)) page.Active = page.Charts.FirstOrDefault();
         chart.Page = null;
-        // en su ventana vuelve a tener las cuatro esquinas redondeadas (pegado al panel derecho no las tenía)
+        // in its own window it has all four rounded corners again (flush against the right panel it did not)
         chart.Frame.BorderThickness = new Thickness(1);
         chart.Frame.CornerRadius = new CornerRadius(8);
         if (chart.Frame.Child is Border innerFrame) innerFrame.CornerRadius = new CornerRadius(7);
 
         var w = new ChartWindow(this, chart);
-        // solo vuelve a la posición guardada si ese lugar sigue en alguna pantalla
+        // it only returns to the stored position if that spot is still on some screen
         if (position is { } p && w.Screens.All.Any(sc => sc.WorkingArea.Contains(p))) w.Position = p;
         if (size is { } s)
         {
@@ -839,7 +839,7 @@ public sealed partial class TradingView : UserControl
         {
             if (lastChart)
             {
-                // la ventana principal nunca queda sin gráficos: deja una copia
+                // the main window is never left with no charts: it keeps a copy
                 _pages.Remove(page);
                 _tabControl.Items.Remove(page.Item);
                 _ = NewTabAsync(chart.FeedId, chart.Symbol, chart.Model?.Period ?? ChartPeriod.M5, chart.Model?.Settings.Clone(), accountId: chart.AccountId);
@@ -860,18 +860,18 @@ public sealed partial class TradingView : UserControl
             }
         }
 
-        _status($"{chart.Caption} en una ventana aparte: movela a otro monitor si querés. Para volver, usá «Volver a la ventana principal».");
+        _status($"{chart.Caption} in a separate window: move it to another monitor if you like. To go back, use “Back to the main window”.");
         return w;
     }
 
-    /// <summary>Devuelve un gráfico de una ventana aparte a la pestaña activa (o a una nueva si está llena).</summary>
+    /// <summary>Returns a chart from a separate window to the active tab (or to a new one if it is full).</summary>
     internal void DockBack(ChartWindow w)
     {
         var chart = w.Chart;
         w.ReleaseChart();
         _floating.Remove(w);
         chart.Window = null;
-        chart.Frame.Margin = new Thickness(0); // en la pestaña el espacio lo da la grilla
+        chart.Frame.Margin = new Thickness(0); // in a tab the spacing comes from the grid
         var page = _page;
         if (page != null && page.Charts.Count < PaneCount(page.Layout))
         {
@@ -900,7 +900,7 @@ public sealed partial class TradingView : UserControl
         if (!w.Released) DisposeChart(w.Chart);
     }
 
-    /// <summary>Cierra las ventanas aparte (al salir de la app).</summary>
+    /// <summary>Closes the separate windows (when quitting the app).</summary>
     internal void CloseFloating()
     {
         foreach (var w in _floating.ToList()) w.Close();
@@ -959,11 +959,11 @@ public sealed partial class TradingView : UserControl
         _replayPlay.Content = Ui.Icon(r.Paused || r.IsFinished ? MaterialIconKind.Play : MaterialIconKind.Pause, 18);
         _replaySpeed?.Select(r.Speed);
         var local = TimeZoneInfo.ConvertTimeFromUtc(r.Clock, _active.Model.Settings.TimeZone);
-        _replayClock.Text = r.IsFinished ? "Terminado" : local.ToString("ddd dd/MM HH:mm:ss", CultureInfo.GetCultureInfo("es-AR"));
+        _replayClock.Text = r.IsFinished ? "Finished" : local.ToString("ddd dd/MM HH:mm:ss", CultureInfo.GetCultureInfo("en-US"));
         _replayProgress.Value = r.Progress;
     }
 
-    /// <summary>Abre un replay en una pestaña nueva.</summary>
+    /// <summary>Opens a replay in a new tab.</summary>
     internal async Task OpenReplayAsync(Instrument source, DateTime startUtc, DateTime endUtc, ChartPeriod period)
     {
         var data = _svc.OpenReplay(source, startUtc, endUtc, TimeSpan.FromHours(3));
@@ -995,15 +995,15 @@ public sealed partial class TradingView : UserControl
         _tabControl.Items.Add(page.Item);
         _tabControl.SelectedItem = page.Item;
         UpdateTitles(chart);
-        _status($"Replay de {source.Symbol} desde {TimeZoneInfo.ConvertTimeFromUtc(startUtc, model.Settings.TimeZone):dd/MM HH:mm}: operá con la cuenta simulada como si fuera en vivo.");
+        _status($"Replay of {source.Symbol} from {TimeZoneInfo.ConvertTimeFromUtc(startUtc, model.Settings.TimeZone):dd/MM HH:mm}: trade with the simulated account as if it were live.");
         await Task.CompletedTask;
     }
 
-    // ===================================================================== historia
+    // ===================================================================== history
 
     /// <summary>
-    /// Carga historia hasta <paramref name="hours"/> atrás (o todo el historial). Si todavía se está cargando
-    /// algo, espera y sigue. Lo que no está en disco se trae del exchange: lo reciente en ticks y lo viejo en velas.
+    /// Loads history up to <paramref name="hours"/> back (or the whole history). If something is still
+    /// loading, it waits and carries on. What is not on disk is fetched from the exchange: the recent part as ticks and the old part as candles.
     /// </summary>
     internal async Task LoadHistoryAsync(ChartTab chart, double hours, bool quiet = false)
     {
@@ -1016,40 +1016,40 @@ public sealed partial class TradingView : UserControl
         {
             if (hours == ChartToolbar.AllHistory)
             {
-                if (!quiet) _status($"Buscando dónde empieza el historial de {chart.Symbol}…");
+                if (!quiet) _status($"Looking for where {chart.Symbol}'s history starts…");
                 from = data.Feed is IKlineHistory k ? await k.FirstAvailableAsync(data.Instrument, CancellationToken.None) ?? data.Feed.Now.AddYears(-5) : data.Feed.Now.AddYears(-5);
             }
             else from = data.Feed.Now.AddHours(-hours);
         }
         catch (Exception ex)
         {
-            _status($"No se pudo consultar el historial de {chart.Symbol}: {ex.Message}");
+            _status($"Could not query {chart.Symbol}'s history: {ex.Message}");
             return;
         }
 
-        // espera a que termine lo que se esté cargando (por ejemplo, la historia inicial)
+        // waits for whatever is loading to finish (for example, the initial history)
         for (int i = 0; i < 2400 && (data.IsLoadingHistory || data.IsExtending); i++) await Task.Delay(250);
         if (!ReferenceEquals(chart.Model?.Data, data)) return;
         if (!data.ExtendHistory(from))
         {
-            if (!quiet) _status($"{chart.Symbol}: la historia pedida ({what}) ya está cargada.");
+            if (!quiet) _status($"{chart.Symbol}: the requested history ({what}) is already loaded.");
             return;
         }
 
-        if (!quiet || hours > 24) _status($"Cargando {what} de {chart.Symbol}: lo que no está guardado se trae del exchange…");
+        if (!quiet || hours > 24) _status($"Loading {what} of {chart.Symbol}: whatever is not stored is fetched from the exchange…");
         for (int i = 0; i < 24000 && data.IsExtending; i++) await Task.Delay(250);
         if (!ReferenceEquals(chart.Model?.Data, data)) return;
         var tz = chart.Model!.Settings.TimeZone;
         string fromText = TimeZoneInfo.ConvertTimeFromUtc(data.Trades.Count > 0 ? data.Trades.FirstTime : from, tz).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
         string ticks = data.RealTicksFrom < DateTime.MaxValue
-            ? $" · footprint (ticks) desde {TimeZoneInfo.ConvertTimeFromUtc(data.RealTicksFrom, tz):dd/MM HH:mm}; antes, velas de 1 minuto del exchange (para más footprint, bajá días en Datos)"
+            ? $" · footprint (ticks) from {TimeZoneInfo.ConvertTimeFromUtc(data.RealTicksFrom, tz):dd/MM HH:mm}; before that, 1 minute candles from the exchange (for more footprint, download days in Data)"
             : "";
         _status(data.HistoryError != null
-            ? $"{chart.Symbol}: no se pudo traer toda la historia ({data.HistoryError})"
-            : $"{chart.Symbol}: historia desde {fromText} · {data.Trades.Count:N0} operaciones{ticks}");
+            ? $"{chart.Symbol}: the full history could not be fetched ({data.HistoryError})"
+            : $"{chart.Symbol}: history from {fromText} · {data.Trades.Count:N0} trades{ticks}");
     }
 
-    // ===================================================================== herramientas y ventanas auxiliares
+    // ===================================================================== tools and auxiliary windows
 
     internal void OpenIndicators() => OpenIndicators(_active);
 
@@ -1063,7 +1063,7 @@ public sealed partial class TradingView : UserControl
         if (slot != null) w.Select(slot);
     }
 
-    /// <summary>Cambió un dibujo: se guarda y se redibujan todos los gráficos del mismo instrumento.</summary>
+    /// <summary>A drawing changed: it is saved and every chart of the same instrument is redrawn.</summary>
     internal void DrawingsTouched(ChartTab chart)
     {
         if (!chart.IsReplay) Workspace.SaveDrawings(chart);
@@ -1074,8 +1074,8 @@ public sealed partial class TradingView : UserControl
     }
 
     /// <summary>
-    /// Marca en el gráfico las ejecuciones de su cuenta en el instrumento donde opera (con cross trading, las del otro):
-    /// salen del historial guardado, así se ven también las de días anteriores.
+    /// Marks on the chart the fills of its account on the instrument it trades (with cross trading, the other one's):
+    /// they come from the stored history, so previous days' fills are visible too.
     /// </summary>
     private void UpdateTradeMarks(ChartTab c)
     {
@@ -1103,7 +1103,7 @@ public sealed partial class TradingView : UserControl
         m.Invalidate();
     }
 
-    /// <summary>Cambió el modo claro/oscuro: cada gráfico rearma sus colores sobre la base nueva y se redibuja todo.</summary>
+    /// <summary>Light/dark mode changed: each chart rebuilds its colors on the new base and everything is redrawn.</summary>
     internal void OnThemeChanged()
     {
         foreach (var c in AllCharts) c.Model?.ApplyColors();
@@ -1112,14 +1112,14 @@ public sealed partial class TradingView : UserControl
         InvalidateVisual();
     }
 
-    /// <summary>Pestaña nueva (botón + o ⌘T): copia el gráfico activo, o usa la plantilla para pestañas nuevas si hay una.</summary>
+    /// <summary>New tab (+ button or Cmd+T): copies the active chart, or uses the new-tab template if there is one.</summary>
     internal async Task NewChartAsync()
     {
         var tab = await NewTabAsync(_active?.FeedId ?? SimulatedFeed.FeedId, _active?.Symbol ?? "SIM-BTC", _active?.Model?.Period ?? ChartPeriod.M5, _active?.Model?.Settings.Clone());
         if (_svc.Settings.DefaultChartTemplate is { } t && Workspace.ApplyChartTemplate(this, tab, t)) AfterTemplate(tab);
     }
 
-    // ===================================================================== plantillas de gráfico
+    // ===================================================================== chart templates
 
     private void AfterTemplate(ChartTab tab)
     {
@@ -1132,31 +1132,31 @@ public sealed partial class TradingView : UserControl
     {
         if (tab.Model == null || TopLevel.GetTopLevel(tab.Window ?? (Control)this) is not Window owner) return;
         string suggested = $"{tab.Symbol} {(tab.Model.Settings.Style == ChartStyle.Footprint ? "footprint" : tab.Model.Settings.Style.ToString().ToLowerInvariant())}";
-        var name = await PromptDialog.ShowAsync(owner, "Guardar plantilla de gráfico",
-            "Nombre de la plantilla. Guarda el estilo, el footprint, los colores, lo que se muestra y los indicadores (no el instrumento ni el período).", suggested, "Guardar");
+        var name = await PromptDialog.ShowAsync(owner, "Save chart template",
+            "The template's name. It stores the style, the footprint, the colors, what is shown and the indicators (not the instrument or the period).", suggested, "Save");
         if (string.IsNullOrWhiteSpace(name)) return;
         try
         {
             Workspace.SaveChartTemplate(tab, name);
-            _status($"Plantilla de gráfico «{name.Trim()}» guardada · aplicala a cualquier gráfico desde Plantillas");
+            _status($"Chart template “{name.Trim()}” saved · apply it to any chart from Templates");
         }
         catch (Exception ex)
         {
-            _status("No se pudo guardar la plantilla: " + ex.Message);
+            _status("Could not save the template: " + ex.Message);
         }
     }
 
-    /// <summary>Opciones de plantillas de un gráfico (para el botón de la barra y el menú del clic derecho).</summary>
+    /// <summary>Template options for a chart (for the toolbar button and the right-click menu).</summary>
     internal List<Control> ChartTemplateItems(ChartTab tab)
     {
         var items = new List<Control>();
-        var save = new MenuItem { Header = "Guardar este gráfico como plantilla…", Icon = Ui.Icon(MaterialIconKind.ContentSaveOutline, 16) };
+        var save = new MenuItem { Header = "Save this chart as a template…", Icon = Ui.Icon(MaterialIconKind.ContentSaveOutline, 16) };
         save.Click += (_, _) => _ = SaveChartTemplateAsync(tab);
         items.Add(save);
         var names = Workspace.ChartTemplateNames();
         if (names.Count == 0)
         {
-            items.Add(new MenuItem { Header = "Todavía no hay plantillas guardadas", IsEnabled = false });
+            items.Add(new MenuItem { Header = "There are no stored templates yet", IsEnabled = false });
             return items;
         }
 
@@ -1164,19 +1164,19 @@ public sealed partial class TradingView : UserControl
         string? def = _svc.Settings.DefaultChartTemplate;
         foreach (var n in names)
         {
-            var apply = new MenuItem { Header = n == def ? $"{n}  · pestañas nuevas" : n, Icon = Ui.Icon(MaterialIconKind.BookmarkOutline, 16) };
-            ToolTip.SetTip(apply, $"Aplicar «{n}» a este gráfico (reemplaza su estilo, colores e indicadores)");
+            var apply = new MenuItem { Header = n == def ? $"{n}  · new tabs" : n, Icon = Ui.Icon(MaterialIconKind.BookmarkOutline, 16) };
+            ToolTip.SetTip(apply, $"Apply “{n}” to this chart (it replaces its style, colors and indicators)");
             apply.Click += (_, _) =>
             {
                 if (!Workspace.ApplyChartTemplate(this, tab, n)) return;
                 AfterTemplate(tab);
-                _status($"Plantilla «{n}» aplicada a {tab.Symbol}");
+                _status($"Template “{n}” applied to {tab.Symbol}");
             };
             items.Add(apply);
         }
 
         items.Add(new Separator());
-        var forNew = new MenuItem { Header = "Para las pestañas nuevas", Icon = Ui.Icon(MaterialIconKind.StarOutline, 16) };
+        var forNew = new MenuItem { Header = "For new tabs", Icon = Ui.Icon(MaterialIconKind.StarOutline, 16) };
         MenuItem Choice(string header, string? value)
         {
             var mi = new MenuItem { Header = header, Icon = value == def ? Ui.Icon(MaterialIconKind.Check, 15, Ui.Accent) : null };
@@ -1184,16 +1184,16 @@ public sealed partial class TradingView : UserControl
             {
                 _svc.Settings.DefaultChartTemplate = value;
                 _svc.Settings.Save();
-                _status(value == null ? "Las pestañas nuevas copian el gráfico activo" : $"Las pestañas nuevas arrancan con «{value}»");
+                _status(value == null ? "New tabs copy the active chart" : $"New tabs start with “{value}”");
             };
             return mi;
         }
 
-        forNew.Items.Add(Choice("Copiar el gráfico activo (sin plantilla)", null));
+        forNew.Items.Add(Choice("Copy the active chart (no template)", null));
         foreach (var n in names) forNew.Items.Add(Choice(n, n));
         items.Add(forNew);
 
-        var delete = new MenuItem { Header = "Borrar una plantilla", Icon = Ui.Icon(MaterialIconKind.DeleteOutline, 16) };
+        var delete = new MenuItem { Header = "Delete a template", Icon = Ui.Icon(MaterialIconKind.DeleteOutline, 16) };
         foreach (var n in names)
         {
             var mi = new MenuItem { Header = n };
@@ -1206,7 +1206,7 @@ public sealed partial class TradingView : UserControl
                     _svc.Settings.Save();
                 }
 
-                _status($"Plantilla «{n}» borrada");
+                _status($"Template “{n}” deleted");
             };
             delete.Items.Add(mi);
         }
@@ -1225,7 +1225,7 @@ public sealed partial class TradingView : UserControl
 
     private readonly Dictionary<ChartTab, Window> _settingsWindows = new();
 
-    /// <summary>Configuración del gráfico (colores, fondo, velas…). Si ya está abierta, la trae al frente.</summary>
+    /// <summary>Chart settings (colors, background, candles…). If it is already open, it is brought to the front.</summary>
     internal void OpenChartSettings(ChartTab? chart)
     {
         if (chart?.Model == null) return;
@@ -1242,7 +1242,7 @@ public sealed partial class TradingView : UserControl
         w.Show(owner);
     }
 
-    /// <summary>Copia los colores y lo que se muestra de un gráfico a todos los demás. Devuelve cuántos cambió.</summary>
+    /// <summary>Copies a chart's colors and what it shows to all the others. Returns how many it changed.</summary>
     internal int ApplyChartLook(ChartTab source)
     {
         if (source.Model is not { } src) return 0;
@@ -1266,7 +1266,7 @@ public sealed partial class TradingView : UserControl
 
     private readonly Dictionary<Guid, Window> _drawingWindows = new();
 
-    /// <summary>Panel completo de un dibujo (doble clic o menú). Si ya está abierto, lo trae al frente.</summary>
+    /// <summary>Full panel of a drawing (double click or menu). If it is already open, it is brought to the front.</summary>
     internal void EditDrawing(ChartTab chart, ChartDrawing d)
     {
         if (chart.Model == null) return;
@@ -1343,12 +1343,12 @@ public sealed partial class TradingView : UserControl
         RestorePanelWindows();
     }
 
-    // ===================================================================== ciclo (lo llama la ventana a 60 Hz)
+    // ===================================================================== loop (the window calls it at 60 Hz)
 
     private readonly Dictionary<ChartDrawing, decimal> _alertLast = new();
     private int _frame;
 
-    /// <summary>Actualiza los gráficos. Con la sección oculta, los de la ventana principal van más lento.</summary>
+    /// <summary>Refreshes the charts. With the section hidden, the main window's ones go slower.</summary>
     internal void Tick(bool mainVisible = true)
     {
         _frame++;
@@ -1422,7 +1422,7 @@ public sealed partial class TradingView : UserControl
                 d.Dashed = false;
                 d.LineStyle = LineStyleKind.Solid;
                 DrawingsTouched(t);
-                _status($"🔔 {t.Symbol} tocó {m.Instrument.FormatPrice(level)}");
+                _status($"🔔 {t.Symbol} touched {m.Instrument.FormatPrice(level)}");
                 Sound.Play();
                 m.Invalidate();
             }
@@ -1432,7 +1432,7 @@ public sealed partial class TradingView : UserControl
     }
 }
 
-/// <summary>Sonido de alerta del sistema.</summary>
+/// <summary>System alert sound.</summary>
 internal static class Sound
 {
     public static void Play(string file = "/System/Library/Sounds/Glass.aiff")
@@ -1444,7 +1444,7 @@ internal static class Sound
         }
         catch
         {
-            // sin sonido
+            // no sound
         }
     }
 }

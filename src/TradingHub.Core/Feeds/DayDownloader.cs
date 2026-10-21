@@ -2,23 +2,23 @@ using TradingHub.Market;
 
 namespace TradingHub.Feeds;
 
-/// <summary>Feeds que pueden bajar un día completo de historia (para la sección Datos y los backtests).</summary>
+/// <summary>Feeds that can download a whole day of history (for the Data section and the backtests).</summary>
 public interface IDayDownloader
 {
-    /// <summary>Un día UTC completo en orden cronológico; null si ese día no hay datos.</summary>
+    /// <summary>A whole UTC day in chronological order; null if there is no data that day.</summary>
     Task<List<Trade>?> DownloadDayAsync(Instrument instrument, DateOnly day, IProgress<double>? progress, CancellationToken ct);
 
-    /// <summary>El mercado no opera los sábados (futuros, CFDs, acciones): no hace falta pedirlos.</summary>
+    /// <summary>The market does not trade on Saturdays (futures, CFDs, stocks): there is no need to request them.</summary>
     bool ClosedOnSaturdays => true;
 
-    /// <summary>Texto corto sobre de dónde sale la historia (para mostrar antes de bajar).</summary>
+    /// <summary>Short text about where the history comes from (to show before downloading).</summary>
     string HistoryNote => "";
 }
 
-/// <summary>Ayudas para armar historia: ids crecientes por tiempo, lado por regla del tick y velas cortas a operaciones.</summary>
+/// <summary>Helpers for building history: ids increasing by time, side by the tick rule and short candles to trades.</summary>
 public static class HistoryBuilder
 {
-    /// <summary>Id creciente a partir del tiempo (microsegundos Unix × 8, igual que Rithmic): nunca repite ni retrocede.</summary>
+    /// <summary>Id increasing from the time (Unix microseconds x 8, same as Rithmic): it never repeats or goes backwards.</summary>
     public static long TimeId(DateTime utc, ref long last)
     {
         long us = (utc.Ticks - DateTime.UnixEpoch.Ticks) / 10;
@@ -28,7 +28,7 @@ public static class HistoryBuilder
         return id;
     }
 
-    /// <summary>Lado de una cotización sin operaciones reales (CFDs, forex): sube = compra, baja = venta, igual = el anterior.</summary>
+    /// <summary>Side of a quote with no real trades (CFDs, forex): up = a buy, down = a sell, equal = the previous one.</summary>
     public static TradeSide TickRule(decimal price, ref decimal lastPrice, ref TradeSide lastSide)
     {
         var side = lastPrice == 0 ? TradeSide.Buy : price > lastPrice ? TradeSide.Buy : price < lastPrice ? TradeSide.Sell : lastSide;
@@ -38,9 +38,9 @@ public static class HistoryBuilder
     }
 
     /// <summary>
-    /// Velas de pocos segundos (por ejemplo las de 5 s de OANDA) a cuatro operaciones cada una: apertura, el extremo
-    /// que se tocó primero según la dirección, el otro extremo y el cierre. El volumen (de ticks) se reparte entre las
-    /// cuatro: así el OHLC queda exacto en cualquier período y los stops del backtest ven el recorrido dentro de la vela.
+    /// Candles of a few seconds (for example OANDA's 5 s ones) to four trades each: the open, the extreme
+    /// touched first based on the direction, the other extreme and the close. The (tick) volume is split among the
+    /// four: that way the OHLC comes out exact on any period and the backtest's stops see the path inside the candle.
     /// </summary>
     public static void Synthesize(DateTime open, TimeSpan length, decimal o, decimal h, decimal l, decimal c, decimal volume, Instrument inst, ref long lastId, List<Trade> output)
     {

@@ -2,42 +2,42 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Marca una propiedad como parámetro de cálculo.</summary>
+    /// <summary>Marks a property as a calculation parameter.</summary>
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
     public sealed class ParameterAttribute : Attribute
     {
     }
 
-    /// <summary>Cómo se dibuja una serie de valores.</summary>
+    /// <summary>How a value series is drawn.</summary>
     public enum VisualMode
     {
-        [Display(Name = "Línea")] Line,
-        [Display(Name = "Histograma")] Histogram,
+        [Display(Name = "Line")] Line,
+        [Display(Name = "Histogram")] Histogram,
         [Display(Name = "Hash")] Hash,
-        [Display(Name = "Cruz")] Cross,
-        [Display(Name = "Puntos")] Dots,
-        [Display(Name = "Bloque")] Block,
-        [Display(Name = "Cuadrado")] Square,
-        [Display(Name = "Flecha arriba")] UpArrow,
-        [Display(Name = "Flecha abajo")] DownArrow,
-        [Display(Name = "Solo valor en eje")] OnlyValueOnAxis,
-        [Display(Name = "Oculto")] Hide,
-        [Display(Name = "Bandas")] Bands,
-        [Display(Name = "Puntos (línea)")] Points,
-        [Display(Name = "Niveles")] Levels,
+        [Display(Name = "Cross")] Cross,
+        [Display(Name = "Dots")] Dots,
+        [Display(Name = "Block")] Block,
+        [Display(Name = "Square")] Square,
+        [Display(Name = "Arrow up")] UpArrow,
+        [Display(Name = "Arrow down")] DownArrow,
+        [Display(Name = "Value on the axis only")] OnlyValueOnAxis,
+        [Display(Name = "Hidden")] Hide,
+        [Display(Name = "Bands")] Bands,
+        [Display(Name = "Dots (line)")] Points,
+        [Display(Name = "Levels")] Levels,
         [Display(Name = "Escalones")] Steps,
     }
 
     public enum LineDashStyle
     {
-        [Display(Name = "Sólida")] Solid,
+        [Display(Name = "Solid")] Solid,
         [Display(Name = "Guiones")] Dash,
-        [Display(Name = "Puntos")] Dot,
-        [Display(Name = "Guión-punto")] DashDot,
-        [Display(Name = "Guión-punto-punto")] DashDotDot,
+        [Display(Name = "Dot")] Dot,
+        [Display(Name = "Dash-dot")] DashDot,
+        [Display(Name = "Dash-dot-dot")] DashDotDot,
     }
 
-    /// <summary>Valor de la vela que recibe OnCalculate como "value".</summary>
+    /// <summary>Candle value OnCalculate receives as "value".</summary>
     public enum DataSeriesType
     {
         Open,
@@ -54,7 +54,7 @@ namespace TradingHub.Indicators
         Ask,
     }
 
-    /// <summary>Lado de una operación (como lo reportan los indicadores).</summary>
+    /// <summary>Side of a trade (as the indicators report it).</summary>
     public enum TradeDirection
     {
         Between = 0,

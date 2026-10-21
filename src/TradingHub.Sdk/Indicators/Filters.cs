@@ -7,7 +7,7 @@ using TradingHub.Trading;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Filtro genérico: un valor con un interruptor (checkbox + valor en el editor).</summary>
+    /// <summary>Generic filter: a value with a switch (checkbox + value in the editor).</summary>
     public class Filter<T> : INotifyPropertyChanged
     {
         private T _value;
@@ -30,7 +30,7 @@ namespace TradingHub.Indicators
             _value = value;
         }
 
-        /// <summary>Como en ATAS: (si el interruptor se puede cambiar, si está activado).</summary>
+        /// <summary>As in ATAS: (whether the switch can be changed, whether it is on).</summary>
         protected Filter(bool isEnabledEditable, bool isEnabled, int marker)
         {
             _isEnabledEditable = isEnabledEditable;
@@ -41,7 +41,7 @@ namespace TradingHub.Indicators
 
         private Func<ValueChangingArgs<T>, T> _coerce;
 
-        [Display(Name = "Valor")]
+        [Display(Name = "Value")]
         public virtual T Value
         {
             get => _value;
@@ -55,7 +55,7 @@ namespace TradingHub.Indicators
             }
         }
 
-        [Display(Name = "Activado")]
+        [Display(Name = "Enabled")]
         public bool Enabled
         {
             get => _enabled;
@@ -67,7 +67,7 @@ namespace TradingHub.Indicators
             }
         }
 
-        /// <summary>Si el usuario puede cambiar el interruptor.</summary>
+        /// <summary>Whether the user can change the switch.</summary>
         [Browsable(false)]
         public bool IsEnabledEditable => _isEnabledEditable;
 
@@ -77,14 +77,14 @@ namespace TradingHub.Indicators
             OnPropertyChanged(nameof(IsEnabledEditable));
         }
 
-        /// <summary>Corrige el valor antes de aplicarlo (por ejemplo, limitarlo a positivos).</summary>
+        /// <summary>Corrects the value before applying it (for example, clamping it to positives).</summary>
         public Filter<T> ValueOnChanging(Func<ValueChangingArgs<T>, T> coerce)
         {
             _coerce = coerce;
             return this;
         }
 
-        /// <summary>Registra una acción a ejecutar cuando cambia el valor.</summary>
+        /// <summary>Registers an action to run when the value changes.</summary>
         public Filter<T> ValueOnChanged(Action<T> handler)
         {
             if (handler != null) _valueHandlers.Add(handler);
@@ -97,7 +97,7 @@ namespace TradingHub.Indicators
         public override string ToString() => Enabled ? $"{Value}" : "-";
     }
 
-    /// <summary>Valor anterior y nuevo de un filtro que está por cambiar.</summary>
+    /// <summary>Previous and new value of a filter that is about to change.</summary>
     public readonly record struct ValueChangingArgs<T>(T OldValue, T NewValue);
 
     public class FilterInt : Filter<int>
@@ -157,7 +157,7 @@ namespace TradingHub.Indicators
         public FilterKey(bool isEnabledEditable, bool isEnabled) : base(isEnabledEditable, isEnabled, 0) { }
     }
 
-    /// <summary>Escalar para filtros en dinero (no se usa en esta plataforma: siempre volumen).</summary>
+    /// <summary>Scalar for money filters (not used on this platform: always volume).</summary>
     public class MoneyScalar
     {
         public decimal Amount { get; set; }
@@ -167,16 +167,16 @@ namespace TradingHub.Indicators
         public override string ToString() => Amount.ToString(CultureInfo.InvariantCulture);
     }
 
-    /// <summary>En qué se expresa un filtro de volumen.</summary>
+    /// <summary>What a volume filter is expressed in.</summary>
     public enum VolumeFilterUnit
     {
-        [Display(Name = "Volumen")] Volume,
-        [Display(Name = "Dinero")] Money,
+        [Display(Name = "Volume")] Volume,
+        [Display(Name = "Money")] Money,
     }
 
     /// <summary>
-    /// Filtro de volumen (umbral) en volumen o en dinero. Compare(volumen, precio) devuelve -1/0/1
-    /// comparando contra el umbral.
+    /// Volume (threshold) filter in volume or in money. Compare(volume, price) returns -1/0/1
+    /// comparing against the threshold.
     /// </summary>
     public class VolumeFilter : Filter<decimal>
     {
@@ -207,11 +207,11 @@ namespace TradingHub.Indicators
             set => Unit = value ? VolumeFilterUnit.Money : VolumeFilterUnit.Volume;
         }
 
-        /// <summary>Monto en dinero (cuando el filtro está en dinero).</summary>
+        /// <summary>Amount in money (when the filter is in money).</summary>
         [Browsable(false)]
         public decimal Amount { get; set; }
 
-        /// <summary>Monto en dinero como texto, tal como lo edita el usuario ("1000", "1.5k"…).</summary>
+        /// <summary>Amount in money as text, exactly as the user edits it ("1000", "1.5k"…).</summary>
         [Browsable(false)]
         public string MoneyScalar
         {
@@ -228,7 +228,7 @@ namespace TradingHub.Indicators
 
         public bool IsMoneyApplied() => Unit == VolumeFilterUnit.Money && Amount != 0;
 
-        /// <summary>Factor para pasar de volumen a dinero.</summary>
+        /// <summary>Factor for going from volume to money.</summary>
         public bool TryGetMoneyFactor(Valuation valuation, out VolumeValueFactor factor)
         {
             var v = valuation ?? Valuation;
@@ -237,14 +237,14 @@ namespace TradingHub.Indicators
             return IsMoneyApplied();
         }
 
-        /// <summary>Umbral expresado en volumen para un precio dado.</summary>
+        /// <summary>Threshold expressed in volume for a given price.</summary>
         public decimal GetVolumeThreshold(decimal price, Valuation valuation = null)
         {
             if (!IsMoneyApplied()) return Value;
             return TryGetMoneyFactor(valuation, out var f) ? f.ToVolume(Amount, price) : Value;
         }
 
-        /// <summary>Compara un volumen (o su valor en dinero si el filtro es en dinero) contra el umbral.</summary>
+        /// <summary>Compares a volume (or its money value if the filter is in money) against the threshold.</summary>
         public int Compare(decimal volume, decimal price)
         {
             if (IsMoneyApplied()) return (volume * price).CompareTo(Amount);

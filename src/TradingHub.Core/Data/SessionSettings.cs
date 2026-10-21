@@ -1,8 +1,8 @@
 namespace TradingHub.Data;
 
 /// <summary>
-/// Define dónde empieza cada "día de trading" (para velas diarias, VWAP de sesión, perfiles, IsNewSession).
-/// Por defecto: 00:00 UTC, como en los mercados cripto.
+/// Defines where each "trading day" starts (for daily candles, session VWAP, profiles, IsNewSession).
+/// By default: 00:00 UTC, as in the crypto markets.
 /// </summary>
 public sealed class SessionSettings
 {
@@ -11,7 +11,7 @@ public sealed class SessionSettings
     public TimeZoneInfo TimeZone { get; init; } = TimeZoneInfo.Utc;
     public TimeSpan Start { get; init; } = TimeSpan.Zero;
 
-    /// <summary>Fecha de sesión (en la zona de la sesión) a la que pertenece un instante UTC.</summary>
+    /// <summary>Session date (in the session's zone) a UTC instant belongs to.</summary>
     public DateOnly SessionDate(DateTime utc)
     {
         var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), TimeZone);
@@ -19,7 +19,7 @@ public sealed class SessionSettings
         return DateOnly.FromDateTime(shifted);
     }
 
-    /// <summary>Instante UTC en el que empieza la sesión de una fecha.</summary>
+    /// <summary>UTC instant a date's session starts at.</summary>
     public DateTime SessionStartUtc(DateOnly date)
     {
         var local = date.ToDateTime(TimeOnly.MinValue) + Start;
@@ -46,7 +46,7 @@ public sealed class SessionSettings
 
     public static DateOnly WeekStart(DateOnly d)
     {
-        int diff = ((int)d.DayOfWeek + 6) % 7; // lunes = 0
+        int diff = ((int)d.DayOfWeek + 6) % 7; // Monday = 0
         return d.AddDays(-diff);
     }
 }

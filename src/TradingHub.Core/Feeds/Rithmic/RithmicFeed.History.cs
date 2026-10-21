@@ -3,16 +3,16 @@ using TradingHub.Market;
 
 namespace TradingHub.Feeds.Rithmic;
 
-/// <summary>Campos de la planta de historia (definiciones oficiales de R|Protocol).</summary>
+/// <summary>Fields of the history plant (official R|Protocol definitions).</summary>
 internal static class RpH
 {
-    // plantillas
+    // templates
     public const int RequestTimeBarReplay = 202;
     public const int ResponseTimeBarReplay = 203;
     public const int RequestTickBarReplay = 206;
     public const int ResponseTickBarReplay = 207;
 
-    // pedido
+    // request
     public const int BarType = 119200;
     public const int BarSubType = 119208;
     public const int BarTypeSpecifier = 148162;
@@ -21,7 +21,7 @@ internal static class RpH
     public const int FinishIndex = 153003;
     public const int TimeOrder = 149307;
 
-    // respuesta
+    // response
     public const int RqHandlerRpCode = 132764;
     public const int DataBarSsboe = 119202;
     public const int DataBarUsecs = 119203;
@@ -40,20 +40,20 @@ internal static class RpH
 }
 
 /// <summary>
-/// Historia de Rithmic (planta de historia): tick a tick para lo reciente (footprint completo) y velas de
-/// 1 minuto para lo viejo. Con el mercado cerrado se muestra la última sesión.
+/// Rithmic history (history plant): tick by tick for the recent part (full footprint) and 1-minute
+/// candles for the old part. With the market closed, the last session is shown.
 /// </summary>
 public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDayDownloader
 {
-    /// <summary>Contrato del mes de cada instrumento (lo informa la sesión de cotizaciones compartida).</summary>
+    /// <summary>Front-month contract of each instrument (reported by the shared quote session).</summary>
     private readonly ConcurrentDictionary<string, RithmicContract> _contracts = new();
 
-    /// <summary>Último error al pedir historia (para mostrar).</summary>
+    /// <summary>Last error when requesting history (to display).</summary>
     public string? LastHistoryError { get; private set; }
 
     /// <summary>
-    /// Id según la hora (microsegundos × 8 + desempate): crece con el tiempo y es el mismo en la historia y en el
-    /// vivo, así al empalmar no se duplican operaciones.
+    /// Id based on the time (microseconds x 8 + tie-breaker): it grows with time and is the same in the history and in the
+    /// live feed, so no trades are duplicated when they are spliced.
     /// </summary>
     internal static long TimeId(long ssboe, long usecs, ref long last)
     {
@@ -63,7 +63,7 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
         return id;
     }
 
-    /// <summary>Lee mensajes con un plazo que se renueva en cada uno (un solo temporizador por pedido, no uno por mensaje).</summary>
+    /// <summary>Reads messages with a deadline that is renewed on each one (a single timer per request, not one per message).</summary>
     private sealed class Reader(RithmicClient client, CancellationToken ct) : IDisposable
     {
         private readonly CancellationTokenSource _watchdog = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -86,12 +86,12 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
 
     private void EnsureUser()
     {
-        if (string.IsNullOrWhiteSpace(_settings.User)) throw new InvalidOperationException("Configurá tu usuario de Rithmic en Conexiones");
+        if (string.IsNullOrWhiteSpace(_settings.User)) throw new InvalidOperationException("Set your Rithmic user in Connections");
     }
 
     /// <summary>
-    /// Contrato del mes y última operación, por la sesión de cotizaciones compartida (de la suscripción en vivo si
-    /// el gráfico está abierto; si no, una consulta corta por la misma sesión).
+    /// Front-month contract and last trade, via the shared quote session (from the live subscription if
+    /// the chart is open; otherwise, a short query over the same session).
     /// </summary>
     private async Task<RithmicContract> ResolveAsync(Instrument instrument, CancellationToken ct, bool fresh = false)
     {
@@ -103,26 +103,26 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
         return c;
     }
 
-    /// <summary>¿La respuesta es del pedido actual? (en la sesión compartida cada pedido lleva su etiqueta)</summary>
+    /// <summary>Is the response from the current request? (on the shared session each request carries its own tag)</summary>
     private static bool Mine(ProtoMessage m, string tag) => m.Strings(Rp.UserMsg).FirstOrDefault() is not { } t || t == tag;
 
     private static long Ssboe(DateTime utc) => new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeSeconds();
 
-    /// <summary>Contrato donde se opera un instrumento (ES → ESZ6 en CME).</summary>
+    /// <summary>Contract an instrument trades on (ES -> ESZ6 on CME).</summary>
     public async Task<(string Symbol, string Exchange)> ContractAsync(Instrument instrument, CancellationToken ct)
     {
         var c = await ResolveAsync(instrument, ct).ConfigureAwait(false);
         return (c.Symbol, c.Exchange);
     }
 
-    /// <summary>Hora de la última operación (con el mercado cerrado, la historia termina ahí).</summary>
+    /// <summary>Time of the last trade (with the market closed, the history ends there).</summary>
     public async Task<DateTime?> LastTradeTimeAsync(Instrument instrument, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_settings.User)) return null;
         return (await ResolveAsync(instrument, ct, fresh: true).ConfigureAwait(false)).LastTrade;
     }
 
-    /// <summary>Operaciones tick a tick (cada tick con su lado: al ask compra, al bid vende), página por página.</summary>
+    /// <summary>Trades tick by tick (each tick with its side: at the ask a buy, at the bid a sell), page by page.</summary>
     public async Task LoadTradesAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc, long? fromId,
         Func<IReadOnlyList<Trade>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
     {
@@ -148,20 +148,20 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
         progress?.Report(1);
     }
 
-    /// <summary>Progreso de un tramo dentro del total.</summary>
+    /// <summary>Progress of one stretch within the total.</summary>
     private sealed class Scaled(IProgress<double>? inner, double from, double width) : IProgress<double>
     {
         public void Report(double value) => inner?.Report(from + Math.Clamp(value, 0, 1) * width);
     }
 
     /// <summary>
-    /// Tramos del rango con su contrato. En los índices de la CME cada fecha va con el contrato que operaba ese día
-    /// (ESU6 hasta el roll de septiembre, ESZ6 después…): sin eso la historia vieja salía del contrato actual, que
-    /// entonces casi no operaba. El tramo de hoy usa el contrato que informa Rithmic, igual que el vivo.
+    /// Stretches of the range with their contract. On the CME indices each date goes with the contract that traded that day
+    /// (ESU6 until the September roll, ESZ6 afterwards…): without that, the old history came from the current contract, which
+    /// back then barely traded. Today's stretch uses the contract Rithmic reports, same as the live feed.
     /// </summary>
     private readonly HashSet<string> _missingContracts = new();
 
-    /// <summary>Contratos vencidos que Rithmic devolvió vacíos (no guarda su historia) en la última descarga.</summary>
+    /// <summary>Expired contracts Rithmic returned empty (it does not keep their history) in the last download.</summary>
     public IReadOnlyList<string> MissingContracts
     {
         get
@@ -176,8 +176,8 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
     }
 
     /// <summary>
-    /// Corre un tramo; si es de un contrato vencido y vuelve vacío, prueba el símbolo con el año en dos cifras
-    /// (NQU26) y si tampoco hay nada lo anota (Rithmic no guarda la historia de los vencidos).
+    /// Runs one stretch; if it belongs to an expired contract and comes back empty, it tries the symbol with the two-digit
+    /// year (NQU26) and if there is nothing there either it notes it down (Rithmic does not keep the history of expired ones).
     /// </summary>
     private async Task<bool> SegmentAsync(RithmicContract contract, DateTime from, bool expired,
         Func<RithmicContract, Func<IReadOnlyList<Trade>, bool>?, Func<IReadOnlyList<Kline>, bool>?, Task> run,
@@ -235,15 +235,15 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
         return plan;
     }
 
-    /// <summary>Desde cuándo opera el contrato actual (Rithmic no da historia de los vencidos); null si no se sabe.</summary>
+    /// <summary>Since when the current contract has traded (Rithmic gives no history for expired ones); null if it is not known.</summary>
     public static DateTime? CurrentContractSince(Instrument instrument) =>
         FuturesRolls.Supports(instrument.Symbol) ? FuturesRolls.On(instrument.Symbol, DateTime.UtcNow).From : null;
 
-    /// <summary>Contrato con el que se baja la historia de una fecha (para mostrarlo).</summary>
+    /// <summary>Contract the history of a date is downloaded with (to display it).</summary>
     public static string ContractNameOn(Instrument instrument, DateTime utc) =>
-        FuturesRolls.Supports(instrument.Symbol) ? FuturesRolls.On(instrument.Symbol, utc).Symbol : instrument.Symbol + " (mes activo)";
+        FuturesRolls.Supports(instrument.Symbol) ? FuturesRolls.On(instrument.Symbol, utc).Symbol : instrument.Symbol + " (active month)";
 
-    /// <summary>Un día completo tick a tick (UTC) con el contrato que operaba ese día; null si Rithmic no tiene operaciones.</summary>
+    /// <summary>A whole day tick by tick (UTC) with the contract that traded that day; null if Rithmic has no trades.</summary>
     public async Task<List<Trade>?> DownloadDayAsync(Instrument instrument, DateOnly day, IProgress<double>? progress, CancellationToken ct)
     {
         var list = new List<Trade>();
@@ -256,10 +256,10 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
         return list.Count > 0 ? list : null;
     }
 
-    /// <summary>La caché de velas se separa de la vieja (armada con un solo contrato, sin los rolls).</summary>
+    /// <summary>The candle cache is kept separate from the old one (built with a single contract, without the rolls).</summary>
     public string CacheTag => "continuo";
 
-    public string HistoryNote => "tick a tick desde Rithmic (solo desde el último vencimiento: no guarda los contratos vencidos)";
+    public string HistoryNote => "tick by tick from Rithmic (only since the last expiry: it does not keep expired contracts)";
 
     private async Task TicksAsync(RithmicClient client, string tag, Instrument instrument, RithmicContract contract, long start, long end,
         Func<IReadOnlyList<Trade>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
@@ -279,19 +279,19 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
             while (true)
             {
                 var m = await reader.NextAsync(TimeSpan.FromSeconds(25)).ConfigureAwait(false)
-                        ?? throw new TimeoutException("Rithmic dejó de mandar la historia");
+                        ?? throw new TimeoutException("Rithmic stopped sending the history");
                 if (m.Int(Rp.TemplateId) != RpH.ResponseTickBarReplay || !Mine(m, tag)) continue;
                 var rp = m.Strings(Rp.RpCode).ToList();
                 if (rp.Count > 0 || !m.Strings(RpH.RqHandlerRpCode).Any())
                 {
-                    // fin de la página; un código distinto de 0 es un rechazo (permiso, símbolo…)
+                    // end of the page; a code other than 0 is a rejection (permission, symbol…)
                     if (rp.Count > 0 && rp[0] != "0" && page == 0 && rows == 0) LastHistoryError = string.Join(" ", rp);
                     break;
                 }
 
                 rows++;
                 long ssboe = m.Ints(RpH.DataBarSsboe).FirstOrDefault(), us = m.Ints(RpH.DataBarUsecs).FirstOrDefault();
-                if (ssboe < lastSsboe || (ssboe == lastSsboe && us <= lastUs)) continue; // ya estaba (página que repite el último segundo)
+                if (ssboe < lastSsboe || (ssboe == lastSsboe && us <= lastUs)) continue; // already there (a page repeating the last second)
                 var time = DateTimeOffset.FromUnixTimeSeconds(ssboe).UtcDateTime.AddTicks(us * 10);
                 decimal price = instrument.TickSize > 0
                     ? Math.Round((decimal)m.Double(RpH.Close) / instrument.TickSize) * instrument.TickSize
@@ -312,7 +312,7 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
 
             if (fresh == 0)
             {
-                // nada nuevo: o no hay más o la página repitió el último segundo entero
+                // nothing new: either there is no more or the page repeated the whole last second
                 if (rows == 0 || ++emptyPages >= 2) break;
                 cursor = lastSsboe + 1;
                 continue;
@@ -321,14 +321,14 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
             emptyPages = 0;
             progress?.Report(Math.Clamp((lastSsboe - start) / (double)(end - start), 0, 1));
             if (lastSsboe >= end) break;
-            cursor = lastSsboe; // la próxima página arranca en el mismo segundo: no se pierden ticks
+            cursor = lastSsboe; // the next page starts on the same second: no ticks are lost
         }
 
         if (batch.Count > 0) onBatch(batch.ToArray());
         progress?.Report(1);
     }
 
-    /// <summary>Velas de 1 minuto (o más) para la historia larga, con volumen comprador y vendedor.</summary>
+    /// <summary>1-minute (or longer) candles for the long history, with buy and sell volume.</summary>
     public async Task LoadKlinesAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc, int minutes, decimal endPrice,
         Func<IReadOnlyList<Kline>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
     {
@@ -370,7 +370,7 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
             while (true)
             {
                 var m = await reader.NextAsync(TimeSpan.FromSeconds(25)).ConfigureAwait(false)
-                        ?? throw new TimeoutException("Rithmic dejó de mandar las velas");
+                        ?? throw new TimeoutException("Rithmic stopped sending the candles");
                 if (m.Int(Rp.TemplateId) != RpH.ResponseTimeBarReplay || !Mine(m, tag)) continue;
                 var rp = m.Strings(Rp.RpCode).ToList();
                 if (rp.Count > 0 || !m.Strings(RpH.RqHandlerRpCode).Any())
@@ -383,7 +383,7 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
                 if (marker <= lastMarker) continue;
                 lastMarker = marker;
                 fresh++;
-                // la marca es el cierre de la vela
+                // the stamp is the candle's close
                 long openMs = (marker - period * 60L) * 1000;
                 long ask = m.Int(RpH.BarAskVolume), bid = m.Int(RpH.BarBidVolume), vol = m.Int(RpH.BarVolume);
                 batch.Add(new Kline(openMs, (decimal)m.Double(RpH.Open), (decimal)m.Double(RpH.High), (decimal)m.Double(RpH.Low),
@@ -405,6 +405,6 @@ public sealed partial class RithmicFeed : IKlineHistory, ISessionAwareFeed, IDay
         progress?.Report(1);
     }
 
-    /// <summary>No se sabe de antemano: «todo el historial» trae lo que el contrato tenga.</summary>
+    /// <summary>Not known in advance: "the whole history" brings whatever the contract has.</summary>
     public Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct) => Task.FromResult<DateTime?>(null);
 }

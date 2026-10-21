@@ -7,9 +7,9 @@ using TradingHub.App.Views;
 namespace TradingHub.App.Windows;
 
 /// <summary>
-/// Gráfico en su propia ventana (como en ATAS): se puede llevar a otro monitor. Tiene su barra; las
-/// herramientas de dibujo y el Chart Trader viajan con el marco del gráfico. «Volver a la ventana
-/// principal» lo devuelve a una pestaña.
+/// Chart in its own window (as in ATAS): it can be moved to another monitor. It has its own toolbar; the
+/// drawing tools and the Chart Trader travel with the chart frame. "Back to the main
+/// window" returns it to a tab.
 /// </summary>
 internal sealed class ChartWindow : Window
 {
@@ -28,12 +28,12 @@ internal sealed class ChartWindow : Window
         Background = Ui.Bg0;
         Icon = AppIcon.Window;
 
-        var dock = Ui.IconButton(MaterialIconKind.DockWindow, "Volver a la ventana principal", () => _host.DockBack(this));
+        var dock = Ui.IconButton(MaterialIconKind.DockWindow, "Back to the main window", () => _host.DockBack(this));
         Toolbar = new ChartToolbar(host, true, dock) { Chart = chart };
         DockPanel.SetDock(Toolbar, Dock.Top);
         _content.Children.Add(Toolbar);
 
-        // el marco del gráfico se mueve tal cual (sin encabezado: la ventana ya tiene título)
+        // the chart frame moves as it is (with no header: the window already has a title)
         chart.Header.IsVisible = false;
         chart.Frame.BorderThickness = new Thickness(1);
         chart.Frame.BorderBrush = Ui.Line;
@@ -63,19 +63,19 @@ internal sealed class ChartWindow : Window
     public ChartTab Chart { get; }
     public ChartToolbar Toolbar { get; }
 
-    /// <summary>True si el gráfico volvió a la ventana principal (al cerrar no se descarta).</summary>
+    /// <summary>True if the chart went back to the main window (it is not discarded on close).</summary>
     public bool Released { get; private set; }
 
     public void UpdateTitle() => Title = $"Trading Hub — {Chart.Caption}";
 
-    /// <summary>Suelta el marco del gráfico para que vuelva a una pestaña.</summary>
+    /// <summary>Releases the chart frame so it can go back to a tab.</summary>
     public void ReleaseChart()
     {
         Released = true;
         _content.Children.Remove(Chart.Frame);
     }
 
-    /// <summary>Comando simple para atajos de teclado.</summary>
+    /// <summary>Simple command for keyboard shortcuts.</summary>
     private sealed class Relay : System.Windows.Input.ICommand
     {
         private readonly Action _run;

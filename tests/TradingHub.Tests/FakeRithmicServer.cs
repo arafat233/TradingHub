@@ -5,9 +5,9 @@ using TradingHub.Feeds.Rithmic;
 namespace TradingHub.Tests;
 
 /// <summary>
-/// Servidor de Rithmic de mentira (R|Protocol por WebSocket) para probar sin cuenta real: login, contrato del mes,
-/// historia tick a tick en páginas chicas, velas de 1 minuto, cuentas, rutas, órdenes con ejecuciones, cancelaciones,
-/// modificaciones y posiciones. Usa los mismos números de campo que el servidor real.
+/// Fake Rithmic server (R|Protocol over WebSocket) for testing without a real account: login, front-month contract,
+/// tick-by-tick history in small pages, 1-minute candles, accounts, routes, orders with fills, cancellations,
+/// modifications and positions. It uses the same field numbers as the real server.
 /// </summary>
 internal sealed class FakeRithmicServer : IDisposable
 {
@@ -19,13 +19,13 @@ internal sealed class FakeRithmicServer : IDisposable
 
     public string Uri { get; }
 
-    /// <summary>Operaciones de la historia: (segundos, microsegundos, precio, cantidad, compra).</summary>
+    /// <summary>History trades: (seconds, microseconds, price, quantity, buy).</summary>
     public List<(long Ssboe, int Us, double Price, int Size, bool Buy)> Ticks { get; } = new();
 
-    /// <summary>Velas de 1 minuto: (marca de cierre, apertura, máximo, mínimo, cierre, volumen, volumen al ask).</summary>
+    /// <summary>1-minute candles: (close stamp, open, high, low, close, volume, volume at the ask).</summary>
     public List<(long Marker, double O, double H, double L, double C, int V, int Ask)> Bars { get; } = new();
 
-    /// <summary>Filas por página de historia (el real corta en miles; acá pocas para probar el paginado).</summary>
+    /// <summary>Rows per history page (the real one cuts at thousands; here few, to test the pagination).</summary>
     public int PageSize { get; set; } = 7;
 
     public long LastTradeSsboe { get; set; }
@@ -34,10 +34,10 @@ internal sealed class FakeRithmicServer : IDisposable
     public double AvgPrice { get; private set; }
     public List<string> Received { get; } = new();
 
-    /// <summary>Inicios de sesión por planta (1 cotizaciones, 2 órdenes, 3 historia, 4 PnL).</summary>
+    /// <summary>Logins per plant (1 quotes, 2 orders, 3 history, 4 PnL).</summary>
     public Dictionary<int, int> Logins { get; } = new();
 
-    /// <summary>Sesiones cortadas porque entró otra con el mismo usuario en la misma planta (como hace Rithmic).</summary>
+    /// <summary>Sessions cut because another one logged in with the same user on the same plant (as Rithmic does).</summary>
     public int Kicks { get; private set; }
 
     private readonly Dictionary<int, WebSocket> _sessions = new();
@@ -133,7 +133,7 @@ internal sealed class FakeRithmicServer : IDisposable
                         WebSocket? kicked = null;
                         if (ok)
                         {
-                            // una sola sesión por usuario en cada planta: la nueva corta la anterior
+                            // a single session per user on each plant: the new one cuts the previous
                             lock (_gate)
                             {
                                 Logins[infra] = Logins.GetValueOrDefault(infra) + 1;
@@ -172,7 +172,7 @@ internal sealed class FakeRithmicServer : IDisposable
                     case 12:
                         return;
                     case 113:
-                        // contrato del mes: la raíz pedida + Z6 (ES → ESZ6, MES → MESZ6)
+                        // front-month contract: the requested root + Z6 (ES -> ESZ6, MES -> MESZ6)
                         await Send(ws, Msg(114, m).String(132766, "0").String(157095, (m.String(110100) ?? "ES") + "Z6").String(157096, m.String(110101) ?? "CME"));
                         break;
                     case 100:
@@ -236,14 +236,14 @@ internal sealed class FakeRithmicServer : IDisposable
         }
         catch
         {
-            // conexión cerrada
+            // connection closed
         }
     }
 
-    /// <summary>Pedidos de historia tick a tick: (contrato, desde, hasta) en segundos.</summary>
+    /// <summary>Tick-by-tick history requests: (contract, from, to) in seconds.</summary>
     public List<(string Symbol, long Start, long End)> TickRequests { get; } = new();
 
-    /// <summary>Si se pone, solo hay historia de ese contrato (como Rithmic, que no guarda los vencidos).</summary>
+    /// <summary>If set, there is history for that contract only (like Rithmic, which does not keep the expired ones).</summary>
     public string? OnlySymbol { get; set; }
 
     private async Task TickReplay(WebSocket ws, ProtoMessage m)
@@ -296,7 +296,7 @@ internal sealed class FakeRithmicServer : IDisposable
         await Send(ws, Notify(351, 13, basket, o).Int(154112, o.Qty).Int(154111, 0));
         if (o.Type == 2)
         {
-            // mercado: se llena al toque
+            // market: it fills right away
             double px = MarketPrice;
             await Send(ws, Notify(352, 5, basket, o).Double(110307, px).Int(110308, o.Qty).Int(154111, o.Qty).Int(154112, 0).Double(110322, px)
                 .Int(150100, DateTimeOffset.UtcNow.ToUnixTimeSeconds()).Int(150101, 250000));
@@ -343,7 +343,7 @@ internal sealed class FakeRithmicServer : IDisposable
         await Send(ws, Notify(351, 14, basket, o).Int(154112, o.Qty));
     }
 
-    /// <summary>Resultado cerrado del día (en dólares, ES = 50 por punto).</summary>
+    /// <summary>Closed result of the day (in dollars, ES = 50 per point).</summary>
     public double ClosedPnl { get; private set; }
 
     public double StartBalance { get; set; } = 50_000;
@@ -369,14 +369,14 @@ internal sealed class FakeRithmicServer : IDisposable
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         await Send(ws, new ProtoWriter().Int(154467, 450).Int(110121, snapshot ? 1 : 0).String(154008, "ACC1").String(110100, "ESZ6").String(110101, "CME")
             .Int(156967, Position).Double(154434, AvgPrice).String(156961, open.ToString(inv)).Double(157955, ClosedPnl));
-        // saldo de la cuenta: como el real, unos campos en texto y otros en double
+        // account balance: like the real one, some fields as text and others as double
         await Send(ws, new ProtoWriter().Int(154467, 451).Int(110121, snapshot ? 1 : 0).String(154008, "ACC1")
             .String(156970, (StartBalance + ClosedPnl).ToString("0.00", inv)).String(156971, (StartBalance + ClosedPnl).ToString("0.00", inv))
             .String(157015, (StartBalance + ClosedPnl - Math.Abs(Position) * 500).ToString("0.00", inv)).String(156961, open.ToString("0.00", inv))
             .Double(157955, ClosedPnl).Double(157956, ClosedPnl + open));
     }
 
-    /// <summary>Manda una operación en vivo a las sesiones de cotizaciones suscriptas a ese contrato.</summary>
+    /// <summary>Sends a live trade to the quote sessions subscribed to that contract.</summary>
     public async Task PushTrade(string symbol, double price, int size, bool buy)
     {
         WebSocket[] targets;

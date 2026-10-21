@@ -1,5 +1,5 @@
-// Tipos auxiliares de compatibilidad para compilar los indicadores públicos de ATAS sobre Trading Hub.
-// Implementaciones propias y mínimas: solo lo que esos indicadores necesitan.
+// Auxiliary compatibility types for compiling the public ATAS indicators on top of Trading Hub.
+// Our own minimal implementations: only what those indicators need.
 
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -9,7 +9,7 @@ using TradingHub.Rendering.Context;
 
 namespace TradingHub.Indicators
 {
-    /// <summary>Filtro decimal (versión no genérica).</summary>
+    /// <summary>Decimal filter (non-generic version).</summary>
     public class Filter : Filter<decimal>
     {
         public Filter() { }
@@ -18,7 +18,7 @@ namespace TradingHub.Indicators
         public Filter(bool isEnabledEditable, bool isEnabled) : base(isEnabledEditable, isEnabled, 0) { }
     }
 
-    /// <summary>Filtro de un valor de enumeración.</summary>
+    /// <summary>Filter of an enumeration value.</summary>
     public class FilterEnum<TEnum> : Filter<TEnum> where TEnum : struct, Enum
     {
         public FilterEnum() { }
@@ -29,16 +29,16 @@ namespace TradingHub.Indicators
 
     public enum FixedProfilePeriods
     {
-        [Display(Name = "Día actual")] CurrentDay,
-        [Display(Name = "Día anterior")] LastDay,
-        [Display(Name = "Semana actual")] CurrentWeek,
-        [Display(Name = "Semana anterior")] LastWeek,
-        [Display(Name = "Mes actual")] CurrentMonth,
-        [Display(Name = "Mes anterior")] LastMonth,
-        [Display(Name = "Contrato")] Contract,
+        [Display(Name = "Current day")] CurrentDay,
+        [Display(Name = "Previous day")] LastDay,
+        [Display(Name = "Current week")] CurrentWeek,
+        [Display(Name = "Previous week")] LastWeek,
+        [Display(Name = "Current month")] CurrentMonth,
+        [Display(Name = "Previous month")] LastMonth,
+        [Display(Name = "Contract")] Contract,
     }
 
-    /// <summary>Pedido de perfil fijo de un período (día, semana, mes, contrato).</summary>
+    /// <summary>Request for a period's fixed profile (day, week, month, contract).</summary>
     public sealed class FixedProfileRequest
     {
         public FixedProfileRequest(FixedProfilePeriods period)
@@ -62,7 +62,7 @@ namespace TradingHub.Indicators
         public TradingSessionDescription Session { get; }
     }
 
-    /// <summary>Respuesta a un pedido de perfil fijo.</summary>
+    /// <summary>Response to a fixed profile request.</summary>
     public sealed class FixedProfileResponse
     {
         public FixedProfileResponse(IndicatorCandle scaled, IndicatorCandle original, FixedProfilePeriods period)
@@ -72,10 +72,10 @@ namespace TradingHub.Indicators
             Period = period;
         }
 
-        /// <summary>Perfil agrupado como las filas del gráfico.</summary>
+        /// <summary>Profile grouped like the chart's rows.</summary>
         public IndicatorCandle Scaled { get; }
 
-        /// <summary>Perfil a precio de tick.</summary>
+        /// <summary>Profile at tick price.</summary>
         public IndicatorCandle Original { get; }
 
         public FixedProfilePeriods Period { get; }
@@ -83,12 +83,12 @@ namespace TradingHub.Indicators
 
     public enum ContractRolloverType
     {
-        [Display(Name = "Vencimiento")] ExpirationDate,
-        [Display(Name = "Por volumen (fin del actual)")] VolumeBasedCurrentEnd,
-        [Display(Name = "Por volumen (inicio del siguiente)")] VolumeBasedNextStart,
+        [Display(Name = "Expiration")] ExpirationDate,
+        [Display(Name = "By volume (end of the current one)")] VolumeBasedCurrentEnd,
+        [Display(Name = "By volume (start of the next one)")] VolumeBasedNextStart,
     }
 
-    /// <summary>Cambio de contrato de un futuro.</summary>
+    /// <summary>Contract change of a future.</summary>
     public sealed class ContractRollover
     {
         public DateTime Date { get; init; }
@@ -100,13 +100,13 @@ namespace TradingHub.Indicators
         public ContractRollover[] Rollovers { get; init; } = Array.Empty<ContractRollover>();
     }
 
-    /// <summary>Datos que se piden en línea al proveedor (rollovers de contratos, etc.).</summary>
+    /// <summary>Data requested online from the provider (contract rollovers, etc.).</summary>
     public interface IOnlineDataProvider
     {
         Task<ContractRollovers> GetContractRolloversAsync(DateTime from, DateTime to, ContractRolloverType type);
     }
 
-    /// <summary>Proveedor sin datos en línea (cripto y simulador no tienen rollovers).</summary>
+    /// <summary>Provider with no online data (crypto and the simulator have no rollovers).</summary>
     public sealed class EmptyOnlineDataProvider : IOnlineDataProvider
     {
         public static readonly EmptyOnlineDataProvider Instance = new();
@@ -114,7 +114,7 @@ namespace TradingHub.Indicators
         public Task<ContractRollovers> GetContractRolloversAsync(DateTime from, DateTime to, ContractRolloverType type) => Task.FromResult(new ContractRollovers());
     }
 
-    /// <summary>Base para objetos de configuración que avisan cuando cambia una propiedad.</summary>
+    /// <summary>Base for configuration objects that report when a property changes.</summary>
     public abstract class NotifyPropertyChangedBase : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -142,11 +142,11 @@ namespace TradingHub.Indicators
 
     public enum CandleVisualMode
     {
-        [Display(Name = "Velas")] Candles,
-        [Display(Name = "Barras")] Bars,
+        [Display(Name = "Candles")] Candles,
+        [Display(Name = "Bars")] Bars,
     }
 
-    /// <summary>Lo que un indicador puede pedirle al proveedor de datos del gráfico.</summary>
+    /// <summary>What an indicator can ask the chart's data provider for.</summary>
     public interface IIndicatorDataProvider
     {
         ChartInfo ChartInfo { get; }
@@ -154,24 +154,24 @@ namespace TradingHub.Indicators
         int CandlesCount { get; }
         IndicatorCandle GetCandle(int bar);
 
-        /// <summary>Datos en línea del proveedor (rollovers…).</summary>
+        /// <summary>Online data from the provider (rollovers…).</summary>
         IOnlineDataProvider OnlineDataProvider => EmptyOnlineDataProvider.Instance;
 
         bool IsNewSession(int bar);
         bool IsNewWeek(int bar);
         bool IsNewMonth(int bar);
 
-        /// <summary>Si entre dos instantes empezó una sesión, semana o mes nuevos.</summary>
+        /// <summary>Whether a new session, week or month started between two instants.</summary>
         bool IsNewSession(DateTime previous, DateTime current);
         bool IsNewWeek(DateTime previous, DateTime current);
         bool IsNewMonth(DateTime previous, DateTime current);
 
-        /// <summary>Inicio del período de largo <paramref name="period"/> que contiene a <paramref name="time"/>.</summary>
+        /// <summary>Start of the period of length <paramref name="period"/> containing <paramref name="time"/>.</summary>
         DateTime GetCustomStartTime(DateTime time, TimeSpan period) =>
             period <= TimeSpan.Zero ? time : new DateTime(time.Ticks - time.Ticks % period.Ticks, time.Kind);
     }
 
-    /// <summary>Editor de propiedades (la ventana de configuración).</summary>
+    /// <summary>Property editor (the settings window).</summary>
     public interface IPropertiesEditor
     {
         object EditedObject { get; }
@@ -194,7 +194,7 @@ namespace TradingHub.Indicators
     }
 
 
-    /// <summary>Validación: el valor debe ser mayor que otra propiedad.</summary>
+    /// <summary>Validation: the value must be greater than another property.</summary>
     [AttributeUsage(AttributeTargets.Property)]
     public sealed class GreaterThanAttribute<T> : ValidationAttribute where T : IComparable<T>
     {
@@ -213,7 +213,7 @@ namespace TradingHub.Indicators
         }
     }
 
-    /// <summary>Validación: el valor debe ser menor que otra propiedad.</summary>
+    /// <summary>Validation: the value must be less than another property.</summary>
     [AttributeUsage(AttributeTargets.Property)]
     public sealed class LessThanAttribute<T> : ValidationAttribute where T : IComparable<T>
     {
@@ -235,7 +235,7 @@ namespace TradingHub.Indicators
 
 namespace TradingHub.Common
 {
-    /// <summary>Base con INotifyPropertyChanged.</summary>
+    /// <summary>Base with INotifyPropertyChanged.</summary>
     public abstract class NotifyPropertyChangedBase : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
@@ -259,7 +259,7 @@ namespace TradingHub.Common
 
 namespace TradingHub.Common.Collections.Synchronized
 {
-    /// <summary>Lista con bloqueo (en Trading Hub todo corre en el hilo de UI, así que es una List común).</summary>
+    /// <summary>List with locking (in Trading Hub everything runs on the UI thread, so it is a plain List).</summary>
     public class SyncList<T> : List<T>
     {
         public SyncList()
@@ -301,16 +301,16 @@ namespace TradingHub.Rendering.Heatmap
 {
     public enum HeatmapTypes
     {
-        [Display(Name = "Rojo → oscuro → verde")] RedToDarkToGreen,
-        [Display(Name = "Rojo → verde")] RedToGreen,
-        [Display(Name = "Azul → rojo")] BlueToRed,
-        [Display(Name = "Escala de grises")] Grayscale,
-        [Display(Name = "Personalizado")] Custom,
+        [Display(Name = "Red → dark → green")] RedToDarkToGreen,
+        [Display(Name = "Red → green")] RedToGreen,
+        [Display(Name = "Blue → red")] BlueToRed,
+        [Display(Name = "Grayscale")] Grayscale,
+        [Display(Name = "Custom")] Custom,
     }
 
     public static class HeatmapColors
     {
-        /// <summary>Color en la escala (t de 0 a 1).</summary>
+        /// <summary>Color on the scale (t from 0 to 1).</summary>
         public static Color GetColor(HeatmapTypes type, double t)
         {
             t = Math.Clamp(t, 0, 1);
@@ -329,7 +329,7 @@ namespace TradingHub.Rendering.Heatmap
 
 namespace TradingHub.Rendering.Helpers
 {
-    /// <summary>Acumula barras horizontales de un histograma y las dibuja juntas.</summary>
+    /// <summary>Accumulates a histogram's horizontal bars and draws them together.</summary>
     public class HistogramRender
     {
         private readonly bool _leftToRight;
@@ -359,7 +359,7 @@ namespace TradingHub.Rendering.Helpers
         public void Clear() => _rects.Clear();
     }
 
-    /// <summary>Histograma donde cada barra puede tener su propio color.</summary>
+    /// <summary>Histogram where each bar can have its own color.</summary>
     public class MultiColorsHistogramRender
     {
         private readonly Color _defaultColor;
@@ -396,7 +396,7 @@ namespace TradingHub.Rendering.Helpers
 
 namespace TradingHub.Rendering.Settings
 {
-    /// <summary>Relleno listo para dibujar (color inicial y final si es degradé).</summary>
+    /// <summary>Fill ready to draw (start and end color if it is a gradient).</summary>
     public sealed class RenderBrush
     {
         public RenderBrush(Color startColor, Color endColor)
@@ -411,7 +411,7 @@ namespace TradingHub.Rendering.Settings
         public static implicit operator Color(RenderBrush b) => b.StartColor;
     }
 
-    /// <summary>Configuración editable de un relleno.</summary>
+    /// <summary>Editable configuration of a fill.</summary>
     public class BrushSettings : INotifyPropertyChanged
     {
         private Color _startColor = Color.FromArgb(60, 30, 144, 255);
@@ -430,7 +430,7 @@ namespace TradingHub.Rendering.Settings
             }
         }
 
-        [Display(Name = "Color final", Order = 20)]
+        [Display(Name = "End color", Order = 20)]
         public Color EndColor
         {
             get => _endColor;
@@ -448,7 +448,7 @@ namespace TradingHub.Rendering.Settings
             set => StartColor = value;
         }
 
-        /// <summary>Usa degradé desde StartColor hasta EndColor.</summary>
+        /// <summary>Uses a gradient from StartColor to EndColor.</summary>
         [Browsable(false)]
         public bool UseEndColor { get; set; }
 

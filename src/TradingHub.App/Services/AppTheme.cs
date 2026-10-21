@@ -6,13 +6,16 @@ using Avalonia.Styling;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Modo oscuro (negro) y claro (blanco) de toda la plataforma. Los colores de Styles/TradingHubTheme.axaml son pinceles con
-/// nombre: acá se les cambia el color en el lugar, así todo lo que ya está en pantalla se actualiza al instante sin
-/// reiniciar. Los gráficos toman su base (fondo, ejes, textos) de <see cref="TradingHub.Charting.ChartTheme.Base"/>.
+/// Dark (black) and light (white) mode for the whole platform. The colors in Styles/TradingHubTheme.axaml are named
+/// brushes: their color is changed in place here, so everything already on screen updates instantly without
+/// restarting. The charts take their base (background, axes, texts) from <see cref="TradingHub.Charting.ChartTheme.Base"/>.
 /// </summary>
 public static class AppTheme
 {
-    public const string Dark = "oscuro", Light = "claro";
+    public const string Dark = "dark", Light = "light";
+
+    /// <summary>Older settings stored the mode in Spanish; it is still accepted.</summary>
+    private const string LegacyLight = "claro";
 
     private sealed record Palette(
         Color Bg0, Color Bg1, Color Bg2, Color Bg3, Color Bg4, Color Input, Color Line, Color LineStrong,
@@ -28,7 +31,7 @@ public static class AppTheme
 
     private static Color A(Color c, byte alpha) => new(alpha, c.R, c.G, c.B);
 
-    /// <summary>Negro: fondos neutros (sin azul), textos blancos y grises, acento ámbar.</summary>
+    /// <summary>Black: neutral backgrounds (no blue), white and grey texts, amber accent.</summary>
     private static readonly Palette DarkPalette = new(
         C("#000000"), C("#0A0A0A"), C("#111111"), C("#1A1A1A"), C("#242424"), C("#0C0C0C"), C("#1E1E1E"), C("#2E2E2E"),
         C("#EDEDED"), C("#A8A8A8"), C("#727272"), C("#F2B53A"), C("#FFC757"), C("#1A1206"), C("#F2B53A"), C("#E0A52F"),
@@ -39,7 +42,7 @@ public static class AppTheme
         C("#0F2E22"), C("#8FE3BC"), C("#1E5E44"), C("#17503A"),
         C("#331417"), C("#FFB0B4"), C("#64252B"), C("#55202A"), C("#FFFFFF"));
 
-    /// <summary>Blanco: fondos claros, textos casi negros, acento ámbar más oscuro para que se lea sobre blanco.</summary>
+    /// <summary>White: light backgrounds, almost black texts, a darker amber accent so it reads on white.</summary>
     private static readonly Palette LightPalette = new(
         C("#F3F3F4"), C("#FAFAFA"), C("#FFFFFF"), C("#EFEFF1"), C("#E4E4E7"), C("#FFFFFF"), C("#E3E3E6"), C("#D2D2D7"),
         C("#111111"), C("#4A4A4F"), C("#8A8A90"), C("#E8A21C"), C("#F0B030"), C("#1A1206"), C("#9A6400"), C("#D49012"),
@@ -54,12 +57,12 @@ public static class AppTheme
 
     public static bool IsLight => Current == Light;
 
-    /// <summary>Cambió el modo (la app actualiza gráficos, DOM y lo que dibuja con Skia).</summary>
+    /// <summary>The mode changed (the app refreshes charts, DOM and whatever it draws with Skia).</summary>
     public static event Action? Changed;
 
     public static void Apply(string mode)
     {
-        Current = mode == Light ? Light : Dark;
+        Current = mode is Light or LegacyLight ? Light : Dark;
         var p = IsLight ? LightPalette : DarkPalette;
         if (Application.Current is not { } app) return;
         app.RequestedThemeVariant = IsLight ? ThemeVariant.Light : ThemeVariant.Dark;
@@ -107,7 +110,7 @@ public static class AppTheme
         foreach (var (key, color) in brushes)
             if (app.TryFindResource(key, out var r) && r is SolidColorBrush b) b.Color = color;
 
-        // los colores sueltos (Ui.Color los lee)
+        // the loose colors (Ui.Color reads them)
         var colors = new (string Key, Color Color)[]
         {
             ("Bg0", p.Bg0), ("Bg1", p.Bg1), ("Bg2", p.Bg2), ("Bg3", p.Bg3), ("Bg4", p.Bg4), ("InputBg", p.Input), ("Line", p.Line), ("LineStrong", p.LineStrong),

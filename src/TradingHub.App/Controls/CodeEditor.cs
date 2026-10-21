@@ -11,7 +11,7 @@ using TradingHub.Scripting;
 
 namespace TradingHub.App.Controls;
 
-/// <summary>Editor de C# con resaltado, números de línea y lista de errores de compilación.</summary>
+/// <summary>C# editor with highlighting, line numbers and a list of compilation errors.</summary>
 public sealed class CodeEditor : UserControl
 {
     private readonly TextEditor _editor;
@@ -49,7 +49,7 @@ public sealed class CodeEditor : UserControl
         }
         catch
         {
-            // sin resaltado si falta la gramática
+            // no highlighting if the grammar is missing
         }
 
         _editor.TextChanged += (_, _) =>
@@ -91,13 +91,13 @@ public sealed class CodeEditor : UserControl
         Content = root;
     }
 
-    /// <summary>Cambió el texto.</summary>
+    /// <summary>The text changed.</summary>
     public event Action? Changed;
 
-    /// <summary>⌘S dentro del editor.</summary>
+    /// <summary>⌘S inside the editor.</summary>
     public event Action? SaveRequested;
 
-    /// <summary>⌘B dentro del editor.</summary>
+    /// <summary>⌘B inside the editor.</summary>
     public event Action? CompileRequested;
 
     public bool IsDirty { get; set; }
@@ -130,7 +130,7 @@ public sealed class CodeEditor : UserControl
         _editor.Focus();
     }
 
-    /// <summary>Muestra los errores y advertencias (solo los del archivo indicado, si se pasa).</summary>
+    /// <summary>Shows the errors and warnings (only those of the given file, if one is passed).</summary>
     public void ShowDiagnostics(IEnumerable<ScriptDiagnostic> diagnostics, string? file = null)
     {
         var list = diagnostics.Where(d => file == null || string.IsNullOrEmpty(d.File) || Path.GetFullPath(d.File) == Path.GetFullPath(file) || d.File.EndsWith("GlobalUsings.g.cs")).ToList();
@@ -140,13 +140,13 @@ public sealed class CodeEditor : UserControl
             bool error = d.Severity == "error";
             var row = Ui.H(8,
                 Ui.Icon(error ? MaterialIconKind.CloseCircle : MaterialIconKind.AlertOutline, 14, error ? Ui.Down : Ui.Warn),
-                new TextBlock { Text = $"Línea {d.Line}", Classes = { "faint", "small" }, Width = 64 },
+                new TextBlock { Text = $"Line {d.Line}", Classes = { "faint", "small" }, Width = 64 },
                 new TextBlock { Text = $"{d.Message}  ({d.Id})", TextTrimming = TextTrimming.CharacterEllipsis, FontSize = 12 });
             _errors.Items.Add(new ListBoxItem { Content = row, Tag = d, Padding = new Thickness(12, 4) });
         }
 
         int errors = list.Count(d => d.Severity == "error");
-        _errorsTitle.Text = errors > 0 ? $"{errors} error{(errors == 1 ? "" : "es")}" + (list.Count > errors ? $" · {list.Count - errors} advertencia(s)" : "") : $"{list.Count} advertencia(s)";
+        _errorsTitle.Text = errors > 0 ? $"{errors} error{(errors == 1 ? "" : "s")}" + (list.Count > errors ? $" · {list.Count - errors} warning(s)" : "") : $"{list.Count} warning(s)";
         _errorsPanel.IsVisible = list.Count > 0;
     }
 

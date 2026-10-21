@@ -12,9 +12,9 @@ using TradingHub.Trading.Statistics;
 namespace TradingHub.App.Views;
 
 /// <summary>
-/// Una estrategia puesta en un gráfico. Siempre marca lo que habría hecho con la historia del gráfico (backtest) y
-/// después sigue en vivo: en modo visual con una cuenta simulada propia (no toca la tuya) y en modo ejecutar con la
-/// cuenta elegida, mandando órdenes de verdad.
+/// A strategy placed on a chart. It always marks what it would have done with the chart's history (backtest) and
+/// then carries on live: in visual mode with its own simulated account (it does not touch yours) and in execute mode with the
+/// chosen account, sending real orders.
 /// </summary>
 public sealed class ChartStrategy
 {
@@ -23,7 +23,7 @@ public sealed class ChartStrategy
     public bool Live { get; set; }
     public string AccountId { get; set; } = "sim";
 
-    /// <summary>Estaba ejecutando y se volvió a abrir Trading Hub: espera que la reanudes (no opera sola al abrir).</summary>
+    /// <summary>It was executing and Trading Hub was reopened: it waits for you to resume it (it does not trade on its own at startup).</summary>
     public bool Paused { get; set; }
 
     public StrategyOverlay Overlay { get; } = new();
@@ -33,11 +33,11 @@ public sealed class ChartStrategy
     internal OpenPosition? HistoryOpen;
     internal PerformanceMetrics? HistoryMetrics;
 
-    /// <summary>La curva de capital de la historia (con comisiones y deslizamiento) y el capital con que arrancó.</summary>
+    /// <summary>The equity curve of the history (with commissions and slippage) and the capital it started with.</summary>
     internal List<EquityPoint> HistoryEquity = new();
     internal decimal HistoryCapital;
 
-    /// <summary>Los costos con que se calculó la historia (para contarlos en su configuración).</summary>
+    /// <summary>The costs the history was computed with (to show them in its settings).</summary>
     internal MarketCosts? HistoryCosts;
     internal List<StrategySignal> BaseSignals = new();
     internal List<TradeLink> BaseLinks = new();
@@ -46,10 +46,10 @@ public sealed class ChartStrategy
     internal string SignalsKey = "";
     internal bool Busy;
 
-    /// <summary>Ejecutaba y espera que la reanudes: su contabilidad guardada (para dibujar la posición abierta igual).</summary>
+    /// <summary>It was executing and waits for you to resume it: its stored bookkeeping (to draw the open position all the same).</summary>
     internal LiveLedger? SavedLedger;
 
-    /// <summary>Lo que dibujó la estrategia sobre la historia (rangos, niveles, líneas…).</summary>
+    /// <summary>What the strategy drew over the history (ranges, levels, lines…).</summary>
     internal StrategyCanvas? HistoryCanvas;
     internal string DrawingsKey = "";
 }
@@ -63,7 +63,7 @@ public sealed partial class TradingView
 
     internal StrategyCatalog StrategyCatalog => _svc.Strategies;
 
-    /// <summary>La estrategia (archivo) por su id; la compila si hace falta.</summary>
+    /// <summary>The strategy (file) by its id; it compiles it if needed.</summary>
     private async Task<StrategyFile?> StrategyFileAsync(string id)
     {
         var catalog = _svc.Strategies;
@@ -74,14 +74,14 @@ public sealed partial class TradingView
         return file;
     }
 
-    /// <summary>Pone una estrategia en el gráfico (arranca en modo visual) y abre su configuración.</summary>
+    /// <summary>Places a strategy on the chart (it starts in visual mode) and opens its settings.</summary>
     internal async Task AddStrategyAsync(ChartTab chart, StrategyFile file, IReadOnlyDictionary<string, object?>? parameters = null, bool openSettings = true)
     {
         if (chart.Model == null) return;
         if (file.Type == null) await Task.Run(() => _svc.Strategies.Compile(file));
         if (file.Type == null)
         {
-            _status($"«{file.FileName}» tiene errores: arreglala en Estrategias antes de ponerla en el gráfico");
+            _status($"“{file.FileName}” has errors: fix it in Strategies before putting it on the chart");
             return;
         }
 
@@ -97,7 +97,7 @@ public sealed partial class TradingView
         if (openSettings) OpenStrategySettings(chart, cs);
     }
 
-    /// <summary>Parámetros con los que se configuró en Estrategias (o los de la clase).</summary>
+    /// <summary>Parameters it was configured with in Strategies (or the class's).</summary>
     private static Dictionary<string, object?> StrategyDefaults(StrategyFile file)
     {
         var values = file.Create().GetParameters();
@@ -112,13 +112,13 @@ public sealed partial class TradingView
         }
         catch (Exception)
         {
-            // sin estado guardado: los de la clase
+            // with no stored state: the class's
         }
 
         return values;
     }
 
-    /// <summary>Detiene lo que esté corriendo de la estrategia (no toca la posición abierta).</summary>
+    /// <summary>Stops whatever is running of the strategy (it does not touch the open position).</summary>
     private void StopStrategy(ChartStrategy cs)
     {
         cs.Cts?.Cancel();
@@ -135,8 +135,8 @@ public sealed partial class TradingView
     }
 
     /// <summary>
-    /// Corre la estrategia: primero sobre la historia del gráfico (marcas históricas) y después en vivo. Con
-    /// <paramref name="historyOnly"/> solo rehace las marcas históricas (por ejemplo si se cargó más historia).
+    /// Runs the strategy: first over the chart's history (historical marks) and then live. With
+    /// <paramref name="historyOnly"/> it only redoes the historical marks (for example if more history was loaded).
     /// </summary>
     internal async Task RunStrategyAsync(ChartTab chart, ChartStrategy cs, bool historyOnly = false)
     {
@@ -151,23 +151,23 @@ public sealed partial class TradingView
             var file = await StrategyFileAsync(cs.StrategyId);
             if (file?.Type == null)
             {
-                cs.Overlay.Error = file == null ? "no encuentro la estrategia" : "tiene errores";
+                cs.Overlay.Error = file == null ? "the strategy was not found" : "it has errors";
                 cs.Overlay.Status = cs.Overlay.Error;
                 return;
             }
 
             cs.Overlay.Name = file.DisplayName;
             var data = model.Data;
-            cs.Overlay.Status = "esperando la historia…";
+            cs.Overlay.Status = "waiting for the history…";
             model.Invalidate();
             while (data.IsLoadingHistory && !cts.IsCancellationRequested) await Task.Delay(300);
             if (cts.IsCancellationRequested) return;
 
-            // 1) lo histórico: backtest sobre lo que tiene cargado el gráfico
-            cs.Overlay.Status = "calculando…";
+            // 1) the historical part: a backtest over whatever the chart has loaded
+            cs.Overlay.Status = "calculating…";
             model.Invalidate();
             var ticks = TickData.FromStore(data.Trades);
-            // con la comisión y el deslizamiento de ese mercado (los mismos del backtest): el resultado que habría dado de verdad
+            // with that market's commission and slippage (the same as the backtest's): the result it really would have given
             var costs = MarketInfo.Costs(data.Instrument.FeedId, data.Instrument.Symbol);
             var settings = new BacktestSettings
             {
@@ -201,12 +201,12 @@ public sealed partial class TradingView
             cs.SignalsKey = "";
             if (historyOnly) return;
 
-            // 2) en vivo
+            // 2) live
             if (cs.Live && cs.Paused)
             {
-                cs.Overlay.Status = "en vivo · pausada (abrí la configuración para reanudar)";
+                cs.Overlay.Status = "live · paused (open the settings to resume)";
                 cs.Overlay.Live = false;
-                // la posición que tiene abierta en la cuenta se dibuja igual mientras espera
+                // the position it has open on the account is drawn all the same while it waits
                 cs.SavedLedger = _svc.Live.Entries().FirstOrDefault(e => ReferenceEquals(e.ChartStrategy, cs))?.Ledger;
                 cs.SignalsKey = "";
                 return;
@@ -222,9 +222,9 @@ public sealed partial class TradingView
             {
                 account = _svc.AccountFor(data, cs.AccountId);
                 if (account.IsReal && TopLevel.GetTopLevel(chart.Window ?? (Control)this) is Window w &&
-                    !await ConfirmDialog.ShowAsync(w, "Ejecutar en cuenta REAL",
-                        $"«{file.DisplayName}» va a operar {data.Instrument.Symbol} en {account.Name} con órdenes reales y sin confirmación individual. La detenés desde la leyenda del gráfico.",
-                        "Ejecutar con dinero real", danger: true))
+                    !await ConfirmDialog.ShowAsync(w, "Run on a REAL account",
+                        $"“{file.DisplayName}” will trade {data.Instrument.Symbol} on {account.Name} with real orders and no individual confirmation. You stop it from the chart legend.",
+                        "Run with real money", danger: true))
                 {
                     cs.Live = false;
                     account = cs.Shadow = NewShadow(data);
@@ -240,14 +240,14 @@ public sealed partial class TradingView
                 Source = "chart",
                 AccountId = cs.Live ? cs.AccountId : "",
                 ProfileId = chart.FeedId,
-                Persist = cs.Live, // las visuales no ensucian la cartera
+                Persist = cs.Live, // the visual ones do not pollute the portfolio
                 ProtectOnStart = cs.Live,
             };
             if (cs.Live) LiveCenter.Restore(runner);
             if (cs.Live && _svc.Settings.SmartContracts)
             {
-                // contrato inteligente, igual que en el panel: con el tamaño guardado, si el tamaño pide fracciones del mini
-                // ejecuta la misma exposición en el micro (×0,5 de 1 NQ = 5 MNQ); con una posición abierta sigue en su contrato
+                // smart contract, same as in the panel: with the stored size, if the size asks for fractions of the mini
+                // it executes the same exposure on the micro (x0.5 of 1 NQ = 5 MNQ); with an open position it stays on its contract
                 var (execInst, ratio) = await _svc.Live.ExecutionContractForAsync(chart.FeedId, data.Instrument, cs.Parameters, runner.SizeMultiplier, strategy, account.Name);
                 if (!execInst.Symbol.Equals(data.Instrument.Symbol, StringComparison.OrdinalIgnoreCase))
                 {
@@ -269,9 +269,9 @@ public sealed partial class TradingView
             }
             else if (cs.HistoryOpen is { } open && account is SimBroker shadow)
             {
-                // en visual sigue desde donde quedó la historia: si el backtest terminó con una posición abierta, la
-                // simulada propia la abre y la estrategia la sigue gestionando (la salida se une a esa entrada)
-                shadow.Market(open.IsLong ? OrderDirections.Buy : OrderDirections.Sell, open.Quantity, "Posición de la historia");
+                // in visual mode it carries on from where the history left off: if the backtest ended with an open position, its own
+                // simulated account opens it and the strategy keeps managing it (the exit is tied to that entry)
+                shadow.Market(open.IsLong ? OrderDirections.Buy : OrderDirections.Sell, open.Quantity, "Position from the history");
                 if (shadow.Position?.Volume is { } v && v != 0)
                     runner.SeedPosition(new LiveFill(open.EntryTime, open.IsLong, open.Quantity, open.AveragePrice));
             }
@@ -288,7 +288,7 @@ public sealed partial class TradingView
 
             cs.Overlay.Live = cs.Live;
             cs.Overlay.Status = cs.Live ? LiveStatus(cs, runner) : "visual";
-            _status(cs.Live ? $"{file.DisplayName} ejecutando en {account.Name} sobre {data.Instrument.Symbol}" : $"{file.DisplayName} en el gráfico (solo visual)");
+            _status(cs.Live ? $"{file.DisplayName} executing on {account.Name} over {data.Instrument.Symbol}" : $"{file.DisplayName} on the chart (visual only)");
         }
         catch (OperationCanceledException)
         {
@@ -307,7 +307,7 @@ public sealed partial class TradingView
         }
     }
 
-    /// <summary>Cuenta simulada propia de la estrategia visual: no se mezcla con la tuya ni con tu historial.</summary>
+    /// <summary>The visual strategy's own simulated account: it does not mix with yours or with your history.</summary>
     private static SimBroker NewShadow(InstrumentData data) =>
         new(data, new Portfolio { AccountID = "VISUAL", Name = "Visual", BeginBalance = 10_000m, Balance = 10_000m }, new TradingStatistics()) { Name = "Visual" };
 
@@ -319,10 +319,10 @@ public sealed partial class TradingView
         chart.Model?.Strategies.Remove(cs.Overlay);
         chart.Model?.Invalidate();
         Workspace.Save(this);
-        _status(hadPosition ? $"{cs.Overlay.Name} detenida y quitada: la posición abierta queda como está (cerrala desde el Chart Trader si querés)" : $"{cs.Overlay.Name} quitada del gráfico");
+        _status(hadPosition ? $"{cs.Overlay.Name} stopped and removed: the open position is left as it is (close it from the Chart Trader if you like)" : $"{cs.Overlay.Name} removed from the chart");
     }
 
-    /// <summary>Cambió el período o el instrumento: las visuales se recalculan; las que ejecutan se pausan si cambió el instrumento.</summary>
+    /// <summary>The period or the instrument changed: the visual ones are recalculated; the executing ones are paused if the instrument changed.</summary>
     internal void RestartStrategies(ChartTab chart, bool instrumentChanged)
     {
         if (chart.Model == null) return;
@@ -336,17 +336,17 @@ public sealed partial class TradingView
     }
 
     /// <summary>
-    /// Marcas de cada estrategia: las operaciones históricas y las nuevas (de su cuenta), con la posición abierta si hay.
-    /// Se llama unas veces por segundo; solo se rehace si cambió algo.
+    /// Marks of each strategy: the historical trades and the new ones (from its account), with the open position if there is one.
+    /// It is called a few times per second; it is only redone if something changed.
     /// </summary>
     private void UpdateStrategySignals(ChartTab chart)
     {
         if (chart.Model is not { } model || chart.Strategies.Count == 0) return;
         foreach (var cs in chart.Strategies)
         {
-            // se cargó más historia (el gráfico arranca con poca y después trae el largo elegido): las visuales se rehacen
-            // enteras, así su simulada sigue la posición que deja abierta la historia completa (antes solo se rehacían las
-            // marcas viejas y la operación abierta no aparecía hasta tocar «Aplicar»); las que ejecutan, solo las marcas
+            // more history was loaded (the chart starts with little and afterwards fetches the chosen length): the visual ones are redone
+            // entirely, so their simulated account follows the position the full history leaves open (before, only the old marks were
+            // redone and the open trade did not show up until you hit "Apply"); the executing ones, only the marks
             if (!cs.Busy && model.Data.HistoryFrom < cs.HistoryFrom && !model.Data.IsLoadingHistory && !model.Data.IsExtending)
                 _ = RunStrategyAsync(chart, cs, historyOnly: cs.Live);
             if (cs.Live && cs.Runner is { IsRunning: true } running && LiveStatus(cs, running) is var status && status != cs.Overlay.Status)
@@ -357,12 +357,12 @@ public sealed partial class TradingView
 
             UpdateStrategyDrawings(model, cs);
             var ledger = cs.Runner?.Ledger ?? cs.SavedLedger;
-            // la visual todavía no tomó la posición de la historia (por ejemplo, sin precio en vivo): se dibuja la de la historia
+            // the visual one has not taken the history's position yet (for example, with no live price): the history's one is drawn
             var historyOpen = !cs.Live && cs.HistoryOpen != null && (ledger == null || ledger.Fills.Count == 0) ? cs.HistoryOpen : null;
             string key = $"{cs.History.Count}|{ledger?.Fills.Count ?? 0}|{ledger?.Position ?? 0}|{historyOpen?.EntryTime.Ticks ?? 0}";
             if (key == cs.SignalsKey)
             {
-                // con una posición abierta, la línea de la entrada al precio actual se mueve con el mercado
+                // with an open position, the line from the entry to the current price moves with the market
                 if (ledger is { Position: not 0 }) SetOpenLink(model, cs, ledger);
                 else if (historyOpen != null) SetOpenLink(model, cs, historyOpen);
                 continue;
@@ -384,7 +384,7 @@ public sealed partial class TradingView
             if (ledger != null)
             {
                 foreach (var t in ledger.Trades.ToList()) AddTrade(t);
-                // posición abierta: la entrada desde la última vez que estuvo plana
+                // open position: the entry from the last time it was flat
                 if (ledger.Position != 0)
                 {
                     decimal pos = 0;
@@ -414,9 +414,9 @@ public sealed partial class TradingView
     }
 
     /// <summary>
-    /// Lo que dibuja la estrategia (sus rangos, niveles, flechas, textos y líneas): lo de la historia hasta donde arrancó
-    /// la que corre en vivo y, desde ahí, lo que va dibujando en vivo (el mismo id reemplaza al de la historia). Solo se
-    /// rehace si cambió algo.
+    /// What the strategy draws (its ranges, levels, arrows, texts and lines): the history's part up to where the live
+    /// one started and, from there on, whatever it draws live (the same id replaces the history's). It is only
+    /// redone if something changed.
     /// </summary>
     private static void UpdateStrategyDrawings(ChartModel model, ChartStrategy cs)
     {
@@ -425,7 +425,7 @@ public sealed partial class TradingView
         string key = $"{history?.Version ?? -1}|{(live != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(live) : 0)}:{live?.Version ?? -1}|{cs.Overlay.Color}";
         if (key == cs.DrawingsKey) return;
         cs.DrawingsKey = key;
-        // desde que la estrategia corre de verdad (antes calentó con la historia sin operar: ahí valen los dibujos del backtest)
+        // from when the strategy really runs (before that it warmed up with the history without trading: there the backtest drawings count)
         DateTime liveStart = live != null && cs.Runner is { } running ? running.LiveFrom : DateTime.MaxValue;
         var color = cs.Overlay.Color;
 
@@ -461,15 +461,15 @@ public sealed partial class TradingView
         model.Invalidate();
     }
 
-    /// <summary>Estado de una que ejecuta, con cuántos contratos y de cuál manda cada orden («en vivo · Cuenta simulada · 1 NQ por orden»).</summary>
+    /// <summary>State of an executing one, with how many contracts and of which one each order sends ("live · Simulated account · 1 NQ per order").</summary>
     private string LiveStatus(ChartStrategy cs, LiveStrategyRunner runner)
     {
         decimal units = runner.UnitsFor(LiveCenter.QuantityOf(runner.StrategyInstance.GetParameters()));
-        string each = units > 0 ? $"{units.ToString("0.####", CultureInfo.GetCultureInfo("es-AR"))} {runner.ExecInstrument.Symbol} por orden" : "tamaño en cero";
-        return $"en vivo · {runner.Account.Name} · {each}";
+        string each = units > 0 ? $"{units.ToString("0.####", CultureInfo.GetCultureInfo("en-US"))} {runner.ExecInstrument.Symbol} per order" : "size at zero";
+        return $"live · {runner.Account.Name} · {each}";
     }
 
-    /// <summary>Posición abierta: línea punteada de la entrada al precio actual, del color del resultado abierto.</summary>
+    /// <summary>Open position: a dotted line from the entry to the current price, in the color of the open result.</summary>
     private static void SetOpenLink(ChartModel model, ChartStrategy cs, LiveLedger ledger)
     {
         DateTime opened = DateTime.MinValue;
@@ -485,7 +485,7 @@ public sealed partial class TradingView
         SetOpenLink(model, cs, opened, ledger.AveragePrice, ledger.Position > 0, ledger.OpenPnL);
     }
 
-    /// <summary>La posición que deja abierta la historia (mientras la simulada de la visual todavía no la tomó).</summary>
+    /// <summary>The position the history leaves open (while the visual one's simulated account has not taken it yet).</summary>
     private static void SetOpenLink(ChartModel model, ChartStrategy cs, OpenPosition open)
     {
         decimal pv = model.Instrument.PointValue > 0 ? model.Instrument.PointValue : 1;
@@ -511,7 +511,7 @@ public sealed partial class TradingView
         new StrategyChartWindow(this, chart, cs).Show(owner);
     }
 
-    /// <summary>Menú para poner una estrategia en el gráfico (las de Estrategias).</summary>
+    /// <summary>Menu to place a strategy on the chart (the ones from Strategies).</summary>
     internal List<Control> StrategyMenuItems(ChartTab tab)
     {
         var items = new List<Control>();
@@ -525,13 +525,13 @@ public sealed partial class TradingView
             items.Add(mi);
         }
 
-        if (items.Count == 0) items.Add(new MenuItem { Header = "Todavía no hay estrategias: creá una en Estrategias", IsEnabled = false });
+        if (items.Count == 0) items.Add(new MenuItem { Header = "There are no strategies yet: create one in Strategies", IsEnabled = false });
         if (tab.Strategies.Count > 0)
         {
             items.Add(new Separator());
             foreach (var cs in tab.Strategies.ToList())
             {
-                var mi = new MenuItem { Header = $"Configurar «{cs.Overlay.Name}» · {cs.Overlay.Status}", Icon = Ui.Icon(Material.Icons.MaterialIconKind.CogOutline, 16) };
+                var mi = new MenuItem { Header = $"Configure “{cs.Overlay.Name}” · {cs.Overlay.Status}", Icon = Ui.Icon(Material.Icons.MaterialIconKind.CogOutline, 16) };
                 mi.Click += (_, _) => OpenStrategySettings(tab, cs);
                 items.Add(mi);
             }

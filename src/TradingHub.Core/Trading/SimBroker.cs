@@ -5,12 +5,12 @@ using TradingHub.Trading.Statistics;
 namespace TradingHub.Trading;
 
 /// <summary>
-/// Broker simulado (paper trading) para un instrumento. Llena órdenes contra el tape real:
-/// - Mercado: al mejor bid/ask del libro (o al último precio si no hay libro).
-/// - Límite: si el precio opera a través del límite, o si en el límite se operó más volumen
-///   que el que había adelante en la cola al momento de enviar la orden.
-/// - Stop: se dispara cuando opera en el precio de disparo y llena a mercado.
-/// Se usa desde el hilo de UI.
+/// Simulated broker (paper trading) for one instrument. It fills orders against the real tape:
+/// - Market: at the best bid/ask of the book (or at the last price if there is no book).
+/// - Limit: if the price trades through the limit, or if more volume traded at the limit
+///   than there was ahead in the queue at the time the order was sent.
+/// - Stop: it triggers when trading happens at the trigger price and fills at market.
+/// It is used from the UI thread.
 /// </summary>
 public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
 {
@@ -20,7 +20,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
     private readonly Dictionary<long, decimal> _queueAhead = new();
     private readonly TradingStatistics _stats;
 
-    // operación abierta para las estadísticas (entrada → salida)
+    // open trade for the statistics (entry -> exit)
     private DateTime _openTime;
     private decimal _openPrice;
     private decimal _openVolume;
@@ -46,17 +46,17 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
 
     public Instrument Instrument => _data.Instrument;
 
-    /// <summary>Nombre de la cuenta (cada estrategia puede usar una propia).</summary>
-    public string Name { get; init; } = "Cuenta simulada";
+    /// <summary>Name of the account (each strategy can use its own).</summary>
+    public string Name { get; init; } = "Simulated account";
     public bool IsReal => false;
     public decimal LastPrice => _data.LastPrice;
     public string? LastError { get; private set; }
     Position ITradingAccount.Position => Position!;
 
-    /// <summary>Comisión por unidad de volumen (en moneda).</summary>
+    /// <summary>Commission per unit of volume (in currency).</summary>
     public decimal CommissionPerUnit { get; set; }
 
-    /// <summary>Comisión como fracción del nominal (0.0004 = 0.04%).</summary>
+    /// <summary>Commission as a fraction of the notional (0.0004 = 0.04%).</summary>
     public decimal CommissionRate { get; set; }
 
     public override IReadOnlyList<Order> Orders => _orders;
@@ -65,7 +65,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
 
     public event Action? Changed;
 
-    // ===================================================================== API de órdenes
+    // ===================================================================== order API
 
     public Order Market(OrderDirections dir, decimal qty, string comment = "") =>
         Submit(new Order { Direction = dir, Type = OrderTypes.Market, QuantityToFill = qty, Comment = comment });
@@ -81,7 +81,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
             ? new Order { Direction = dir, Type = OrderTypes.Stop, QuantityToFill = qty, TriggerPrice = Instrument.RoundPrice(price), Comment = comment, ReduceOnly = true }
             : new Order { Direction = dir, Type = OrderTypes.Limit, QuantityToFill = qty, Price = Instrument.RoundPrice(price), Comment = comment, ReduceOnly = true });
 
-    /// <summary>Cambia precio y cantidad en el lugar (la orden conserva su identidad).</summary>
+    /// <summary>Changes price and quantity in place (the order keeps its identity).</summary>
     public Order Replace(Order o, decimal newPrice, decimal newQuantity)
     {
         if (o.State != OrderStates.Active) return o;
@@ -139,7 +139,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
                 break;
             case OrderTypes.Limit:
             {
-                // si el límite ya cruza el mercado, llena como mercado al mejor precio
+                // if the limit already crosses the market, it fills like a market order at the best price
                 var best = MarketPrice(o.Direction);
                 bool marketable = o.Direction == OrderDirections.Buy ? o.Price >= best : o.Price <= best;
                 if (marketable && best > 0) Fill(o, best, o.Unfilled);
@@ -188,24 +188,24 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
         Changed?.Invoke();
     }
 
-    /// <summary>Cierra la posición a mercado y cancela todas las órdenes.</summary>
+    /// <summary>Closes the position at market and cancels every order.</summary>
     public void Flatten()
     {
         CancelAll();
         var pos = Position!.Volume;
-        if (pos > 0) Market(OrderDirections.Sell, pos, "Cerrar");
-        else if (pos < 0) Market(OrderDirections.Buy, -pos, "Cerrar");
+        if (pos > 0) Market(OrderDirections.Sell, pos, "Close");
+        else if (pos < 0) Market(OrderDirections.Buy, -pos, "Close");
     }
 
-    /// <summary>Da vuelta la posición (de largo a corto o viceversa).</summary>
+    /// <summary>Reverses the position (from long to short or the other way round).</summary>
     public void Reverse()
     {
         var pos = Position!.Volume;
-        if (pos > 0) Market(OrderDirections.Sell, pos * 2, "Revertir");
-        else if (pos < 0) Market(OrderDirections.Buy, -pos * 2, "Revertir");
+        if (pos > 0) Market(OrderDirections.Sell, pos * 2, "Reverse");
+        else if (pos < 0) Market(OrderDirections.Buy, -pos * 2, "Reverse");
     }
 
-    // ===================================================================== motor de llenado
+    // ===================================================================== fill engine
 
     private decimal MarketPrice(OrderDirections dir)
     {
@@ -237,7 +237,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
             decimal vol = store.GetVolume(i);
             foreach (var o in _orders.Where(o => o.State == OrderStates.Active).ToList())
             {
-                // una ejecución anterior pudo cancelar esta orden (OCO)
+                // an earlier fill may have cancelled this order (OCO)
                 if (o.State != OrderStates.Active) continue;
                 switch (o.Type)
                 {
@@ -275,7 +275,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
         if (qty <= 0) return;
         qty = Math.Min(qty, o.Unfilled);
 
-        // solo-reducir: nunca abre ni da vuelta la posición
+        // reduce-only: it never opens or reverses the position
         if (o.ReduceOnly)
         {
             decimal open = Position!.Volume;
@@ -306,7 +306,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
         decimal before = pos.Volume;
         if (before == 0 || Math.Sign(before) == Math.Sign(signed))
         {
-            // abre o agranda
+            // opens or increases
             decimal newVol = before + signed;
             pos.AveragePrice = before == 0 ? price : (pos.AveragePrice * Math.Abs(before) + price * qty) / Math.Abs(newVol);
             pos.Volume = newVol;
@@ -325,7 +325,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
         }
         else
         {
-            // reduce, cierra o revierte
+            // reduces, closes or reverses
             decimal closing = Math.Min(Math.Abs(before), qty);
             realized = (price - pos.AveragePrice) * closing * Math.Sign(before) * Instrument.PointValue;
             decimal newVol = before + signed;
@@ -341,7 +341,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
             }
             else
             {
-                // revirtió: el resto abre en sentido contrario
+                // it reversed: the remainder opens in the opposite direction
                 pos.Volume = newVol;
                 pos.AveragePrice = price;
                 _openTime = DateTime.UtcNow;
@@ -376,7 +376,7 @@ public sealed class SimBroker : TradingManager, ITradingAccount, IDisposable
         UpdateUnrealized();
         Changed?.Invoke();
 
-        // solo-reducir: lo que sobra de la orden no puede abrir una posición nueva
+        // reduce-only: whatever is left of the order cannot open a new position
         if (o.ReduceOnly && o.State == OrderStates.Active && pos.Volume == 0) Cancel(o);
     }
 

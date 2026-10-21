@@ -7,8 +7,8 @@ using TradingHub.Rendering.Tools;
 namespace TradingHub.Rendering.Context
 {
     /// <summary>
-    /// Superficie de dibujo que reciben los indicadores en OnRender. API al estilo GDI+
-    /// (Rectangle, Point, Color, RenderFont, RenderPen) implementada sobre SkiaSharp.
+    /// Drawing surface the indicators receive in OnRender. GDI+ style API
+    /// (Rectangle, Point, Color, RenderFont, RenderPen) implemented on top of SkiaSharp.
     /// </summary>
     public class RenderContext
     {
@@ -30,7 +30,7 @@ namespace TradingHub.Rendering.Context
             _clip = fullBounds;
         }
 
-        /// <summary>Canvas de Skia subyacente (para dibujo avanzado).</summary>
+        /// <summary>Underlying Skia canvas (for advanced drawing).</summary>
         public SKCanvas Canvas => _canvas;
 
         public Rectangle ClipBounds => _clip;
@@ -39,7 +39,7 @@ namespace TradingHub.Rendering.Context
 
         public void SetTextRenderingHint(RenderTextRenderingHint hint) => TextRenderingHint = hint;
 
-        // ------------------------------------------------------------------ fuentes
+        // ------------------------------------------------------------------ fonts
 
         public static SKTypeface GetTypeface(string family, bool bold, bool italic)
         {
@@ -70,7 +70,7 @@ namespace TradingHub.Rendering.Context
 
         private static readonly ConcurrentDictionary<SKFont, SKPaint> MeasurePaints = new();
 
-        /// <summary>Ancho en píxeles de un texto con una fuente.</summary>
+        /// <summary>Width in pixels of a text with a font.</summary>
         public static float MeasureWidth(SKFont font, string text)
         {
             if (string.IsNullOrEmpty(text)) return 0;
@@ -84,7 +84,7 @@ namespace TradingHub.Rendering.Context
             lock (paint) return paint.MeasureText(text);
         }
 
-        // ------------------------------------------------------------------ medición
+        // ------------------------------------------------------------------ measurement
 
         public Size MeasureString(string text, RenderFont font)
         {
@@ -104,7 +104,7 @@ namespace TradingHub.Rendering.Context
             return new SizeF(s.Width, s.Height);
         }
 
-        // ------------------------------------------------------------------ texto
+        // ------------------------------------------------------------------ text
 
         public void DrawString(string text, RenderFont font, Color color, int x, int y) => DrawStringCore(text, font, color, x, y);
 
@@ -191,7 +191,7 @@ namespace TradingHub.Rendering.Context
                 _canvas.DrawText(lines[i], x, y + i * f.Spacing - f.Metrics.Ascent, f, _text);
         }
 
-        // ------------------------------------------------------------------ líneas
+        // ------------------------------------------------------------------ lines
 
         private SKPaint Stroke(RenderPen pen)
         {
@@ -260,7 +260,7 @@ namespace TradingHub.Rendering.Context
             _canvas.DrawPath(path, Stroke(pen));
         }
 
-        // ------------------------------------------------------------------ rectángulos
+        // ------------------------------------------------------------------ rectangles
 
         public void FillRectangle(Color color, Rectangle rect)
         {
@@ -332,7 +332,7 @@ namespace TradingHub.Rendering.Context
             DrawRectangle(pen, rect, radius);
         }
 
-        // ------------------------------------------------------------------ elipses y polígonos
+        // ------------------------------------------------------------------ ellipses and polygons
 
         public void FillEllipse(Color color, Rectangle rect)
         {
@@ -395,7 +395,7 @@ namespace TradingHub.Rendering.Context
             _canvas.DrawPath(path, Stroke(pen));
         }
 
-        // ------------------------------------------------------------------ recorte
+        // ------------------------------------------------------------------ clipping
 
         public void SetClip(Rectangle rect)
         {
@@ -418,7 +418,7 @@ namespace TradingHub.Rendering.Context
 
         public void DrawStaticImage(object image, Rectangle rect)
         {
-            // Las imágenes estáticas (logos) no se soportan todavía.
+            // Static images (logos) are not supported yet.
         }
 
         public void Flush()

@@ -1,6 +1,6 @@
 namespace TradingHub.Strategies;
 
-/// <summary>Trazo de una línea o borde.</summary>
+/// <summary>Dash of a line or border.</summary>
 public enum LineStyle
 {
     Solid,
@@ -8,7 +8,7 @@ public enum LineStyle
     Dotted,
 }
 
-/// <summary>Forma de una marca en el gráfico.</summary>
+/// <summary>Shape of a marker on the chart.</summary>
 public enum MarkerShape
 {
     ArrowUp,
@@ -19,7 +19,7 @@ public enum MarkerShape
     Cross,
 }
 
-/// <summary>Qué es un dibujo de la estrategia.</summary>
+/// <summary>What a strategy drawing is.</summary>
 public enum DrawingKind
 {
     Line,
@@ -30,9 +30,9 @@ public enum DrawingKind
 }
 
 /// <summary>
-/// Un dibujo de la estrategia en el gráfico (rango, nivel, flecha, texto…). Los tiempos son UTC (como Bar.Time) y los
-/// colores, "#RRGGBB", "#AARRGGBB" o un nombre ("verde", "rojo", "azul", "amarillo", "naranja", "violeta", "gris",
-/// "blanco", "celeste", "rosa"); sin color, el de la estrategia.
+/// A strategy drawing on the chart (range, level, arrow, text…). The times are UTC (like Bar.Time) and the
+/// colors, "#RRGGBB", "#AARRGGBB" or a name ("green", "red", "blue", "yellow", "orange", "purple", "gray",
+/// "white", "cyan", "pink"); with no color, the strategy's own.
 /// </summary>
 public sealed class StrategyDrawing
 {
@@ -44,7 +44,7 @@ public sealed class StrategyDrawing
     public decimal Price2 { get; init; }
     public string? Color { get; init; }
 
-    /// <summary>Relleno de los rectángulos: opacidad de 0 a 100.</summary>
+    /// <summary>Fill of the rectangles: opacity from 0 to 100.</summary>
     public int FillOpacity { get; init; }
 
     public int Width { get; init; } = 1;
@@ -52,11 +52,11 @@ public sealed class StrategyDrawing
     public MarkerShape Shape { get; init; }
     public string Text { get; init; } = "";
 
-    /// <summary>La línea horizontal sigue hasta el borde derecho del gráfico.</summary>
+    /// <summary>The horizontal line carries on to the chart's right edge.</summary>
     public bool ExtendRight { get; init; }
 }
 
-/// <summary>Una línea continua que la estrategia traza vela a vela (por ejemplo el techo y el piso de un canal).</summary>
+/// <summary>A continuous line the strategy traces candle by candle (for example a channel's ceiling and floor).</summary>
 public sealed class StrategyPlot
 {
     public required string Name { get; init; }
@@ -64,13 +64,13 @@ public sealed class StrategyPlot
     public int Width { get; set; } = 1;
     public LineStyle Style { get; set; }
 
-    /// <summary>Puntos en orden de tiempo; un valor null corta la línea.</summary>
+    /// <summary>Points in time order; a null value breaks the line.</summary>
     public List<(DateTime Time, decimal? Value)> Points { get; } = new();
 }
 
 /// <summary>
-/// Lo que la estrategia dibuja: un dibujo por id (repetir el id lo reemplaza, sirve para estirar el rango de hoy vela a
-/// vela) y líneas continuas por nombre. Tiene un tope para no trabar el gráfico: al pasarlo se van los más viejos.
+/// What the strategy draws: one drawing per id (repeating the id replaces it, which is useful for stretching today's range candle
+/// by candle) and continuous lines by name. It has a cap so the chart does not seize up: past it, the oldest ones are dropped.
 /// </summary>
 public sealed class StrategyCanvas
 {
@@ -82,7 +82,7 @@ public sealed class StrategyCanvas
     private readonly Dictionary<string, StrategyPlot> _plots = new();
     private readonly object _lock = new();
 
-    /// <summary>Sube con cada cambio (para redibujar solo cuando hace falta).</summary>
+    /// <summary>Goes up with every change (to redraw only when needed).</summary>
     public int Version { get; private set; }
 
     public void Set(StrategyDrawing d)
@@ -138,7 +138,7 @@ public sealed class StrategyCanvas
             p.Color = color ?? p.Color;
             p.Width = width;
             p.Style = style;
-            // la misma vela otra vez (por ejemplo, al recalcular): se reemplaza el valor
+            // the same candle again (for example, when recalculating): the value is replaced
             if (p.Points.Count > 0 && p.Points[^1].Time >= time)
             {
                 if (p.Points[^1].Time == time) p.Points[^1] = (time, value);
@@ -149,13 +149,13 @@ public sealed class StrategyCanvas
         }
     }
 
-    /// <summary>Copia de los dibujos (para pintarlos desde otro hilo).</summary>
+    /// <summary>Copy of the drawings (to paint them from another thread).</summary>
     public List<StrategyDrawing> Drawings()
     {
         lock (_lock) return _order.Select(id => _drawings[id]).ToList();
     }
 
-    /// <summary>Copia de las líneas continuas.</summary>
+    /// <summary>Copy of the continuous lines.</summary>
     public List<(string Name, string? Color, int Width, LineStyle Style, List<(DateTime Time, decimal? Value)> Points)> Plots()
     {
         lock (_lock) return _plots.Values.Select(p => (p.Name, p.Color, p.Width, p.Style, p.Points.ToList())).ToList();

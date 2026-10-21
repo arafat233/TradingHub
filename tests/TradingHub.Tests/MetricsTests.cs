@@ -2,12 +2,12 @@ using TradingHub.Strategies;
 
 namespace TradingHub.Tests;
 
-/// <summary>Las métricas de un resultado cuando la cuenta pasa por cero o queda en negativo.</summary>
+/// <summary>The metrics of a result when the account passes through zero or ends up negative.</summary>
 public class MetricsTests
 {
     private static readonly DateTime T0 = new(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>Una curva de capital con un punto por día a partir del saldo inicial.</summary>
+    /// <summary>An equity curve with one point per day starting from the initial balance.</summary>
     private static List<EquityPoint> Curve(decimal capital, params decimal[] dailyPnl)
     {
         var list = new List<EquityPoint> { new(T0, capital, 0) };
@@ -24,32 +24,32 @@ public class MetricsTests
     private static PerformanceMetrics Metrics(List<EquityPoint> curve) => PerformanceMetrics.Compute(new List<ClosedTrade>(), curve, 10_000, true, 0, 0);
 
     [Fact]
-    public void Perdiendo_hasta_quedar_en_negativo_el_Sharpe_es_negativo()
+    public void Losing_until_it_goes_negative_the_Sharpe_is_negative()
     {
-        // pierde todos los días (−500 y −1.500 alternados): la cuenta queda en −20.000
+        // it loses every day (-500 and -1,500 alternating): the account ends up at -20,000
         var m = Metrics(Curve(10_000, Enumerable.Range(0, 30).Select(i => i % 2 == 0 ? -500m : -1_500m).ToArray()));
         Assert.True(m.SharpeRatio < 0, $"Sharpe {m.SharpeRatio}");
         Assert.True(m.SortinoRatio < 0, $"Sortino {m.SortinoRatio}");
     }
 
     [Fact]
-    public void Recuperandose_desde_negativo_el_Sharpe_es_positivo()
+    public void Recovering_from_negative_the_Sharpe_is_positive()
     {
-        // un día pierde 15.000 (queda en −5.000) y después gana 600 o 1.400 por día hasta terminar en +25.000
+        // one day it loses 15,000 (ending at -5,000) and then gains 600 or 1,400 per day until finishing at +25,000
         var pnl = new[] { -15_000m }.Concat(Enumerable.Range(0, 30).Select(i => i % 2 == 0 ? 600m : 1_400m)).ToArray();
         var m = Metrics(Curve(10_000, pnl));
         Assert.True(m.SharpeRatio > 0, $"Sharpe {m.SharpeRatio}");
     }
 
     [Fact]
-    public void Por_encima_del_capital_el_retorno_sigue_siendo_sobre_el_saldo()
+    public void Above_the_capital_the_return_is_still_measured_on_the_balance()
     {
-        // siempre arriba del capital: igual que antes, cada día sobre el saldo del día anterior
+        // always above the capital: same as before, each day on the previous day's balance
         var pnl = Enumerable.Range(0, 20).Select(i => i % 3 == 2 ? -200m : 500m).ToArray();
         var m = Metrics(Curve(10_000, pnl));
         var equity = new List<double> { 10_000 };
         foreach (var p in pnl) equity.Add(equity[^1] + (double)p);
-        // el primer día (el del saldo inicial) no tiene resultado
+        // the first day (the one of the initial balance) has no result
         var r = new List<double> { 0 };
         r.AddRange(equity.Skip(1).Select((e, i) => (e - equity[i]) / equity[i]));
         double mean = r.Average(), sd = Math.Sqrt(r.Sum(x => (x - mean) * (x - mean)) / (r.Count - 1));

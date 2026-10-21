@@ -11,16 +11,16 @@ public enum AccountKind
     Tradovate,
 }
 
-/// <summary>Una cuenta para la sección Cuenta.</summary>
+/// <summary>An account for the Account section.</summary>
 public sealed record AccountEntry(string Id, string Name, AccountKind Kind, bool IsReal, bool CanTrade, ConnectionProfile? Profile = null, string RithmicAccount = "");
 
-/// <summary>Posición de un contrato (las que quedaron planas hoy también figuran).</summary>
+/// <summary>Position of a contract (the ones left flat today show up too).</summary>
 public sealed record PositionLine(string Key, string Symbol, decimal Net, decimal AvgPrice, decimal OpenPnl, decimal ClosedPnl, object? Ref = null);
 
-/// <summary>Una orden de hoy, activa o terminada.</summary>
+/// <summary>An order from today, active or finished.</summary>
 public sealed record OrderLine(string Key, DateTime Time, string Symbol, bool Buy, string Type, decimal Quantity, decimal Price, decimal Filled, decimal AvgFill, string Status, bool Active, object? Ref = null);
 
-/// <summary>Foto de una cuenta: saldo, resultado, posiciones, órdenes, ejecuciones y operaciones cerradas.</summary>
+/// <summary>Snapshot of an account: balance, result, positions, orders, fills and closed trades.</summary>
 public sealed class AccountSnapshot
 {
     public required AccountEntry Account { get; init; }
@@ -41,8 +41,8 @@ public sealed class AccountSnapshot
 }
 
 /// <summary>
-/// Junta lo de cada cuenta para la sección Cuenta y la barra de arriba. La simulada se arma con lo que guarda
-/// Trading Hub (ejecuciones en disco) y las de Rithmic con lo que manda Rithmic (saldo, posiciones, órdenes).
+/// Gathers each account's data for the Account section and the top bar. The simulated one is built from what
+/// Trading Hub stores (fills on disk) and the Rithmic ones from what Rithmic sends (balance, positions, orders).
 /// </summary>
 public sealed class AccountCenter
 {
@@ -56,7 +56,7 @@ public sealed class AccountCenter
 
     public const string SimId = "sim";
 
-    /// <summary>Zona horaria para mostrar horas y decidir qué es "hoy".</summary>
+    /// <summary>Time zone for showing times and deciding what counts as "today".</summary>
     public TimeZoneInfo TimeZone
     {
         get
@@ -78,14 +78,14 @@ public sealed class AccountCenter
 
     public IReadOnlyList<AccountEntry> Accounts()
     {
-        var list = new List<AccountEntry> { new(SimId, "Cuenta simulada", AccountKind.Sim, false, true) };
+        var list = new List<AccountEntry> { new(SimId, "Simulated account", AccountKind.Sim, false, true) };
         foreach (var p in _svc.Connections.Enabled.Where(p => p.IsRithmic && !string.IsNullOrWhiteSpace(p.RithmicUser)))
         {
             var session = _svc.RithmicSessionFor(p);
             foreach (var a in session.Accounts)
             {
                 bool real = !session.IsPractice;
-                list.Add(new AccountEntry(AppServices.RithmicAccountId(p, a.AccountId), $"{a.AccountId} · {p.Name}{(real ? " — REAL" : " (práctica)")}",
+                list.Add(new AccountEntry(AppServices.RithmicAccountId(p, a.AccountId), $"{a.AccountId} · {p.Name}{(real ? " — REAL" : " (practice)")}",
                     AccountKind.Rithmic, real, !real || p.AllowRealOrders, p, a.AccountId));
             }
         }
@@ -104,7 +104,7 @@ public sealed class AccountCenter
         return list;
     }
 
-    /// <summary>Operaciones y resultados de la cuenta (se recalcula solo cuando hay ejecuciones nuevas).</summary>
+    /// <summary>Trades and results of the account (recomputed only when there are new fills).</summary>
     public RoundTripResult Analysis(string accountId, IReadOnlyList<AccountFill> fills)
     {
         lock (_cache)
@@ -116,7 +116,7 @@ public sealed class AccountCenter
         }
     }
 
-    /// <summary>Resultado del día y saldo de la cuenta simulada (para la barra de arriba).</summary>
+    /// <summary>Day result and balance of the simulated account (for the top bar).</summary>
     public (decimal DayPnl, decimal Balance) SimSummary()
     {
         var fills = _svc.Journal.FillsOf(SimId);
@@ -141,9 +141,9 @@ public sealed class AccountCenter
 
     private static string TypeName(OrderTypes t) => t switch
     {
-        OrderTypes.Market => "Mercado",
+        OrderTypes.Market => "Market",
         OrderTypes.Stop => "Stop",
-        _ => "Límite",
+        _ => "Limit",
     };
 
     private void FillSim(AccountSnapshot s, decimal realizedToday)
@@ -161,13 +161,13 @@ public sealed class AccountCenter
                 decimal avg = qty > 0 ? fills.Sum(t => t.Price * t.Volume) / qty : 0;
                 bool active = o.State == OrderStates.Active;
                 string status = active
-                    ? o.Filled > 0 ? "Parcial" : "Activa"
+                    ? o.Filled > 0 ? "Partial" : "Active"
                     : o.Status switch
                     {
-                        OrderStatus.Filled => "Ejecutada",
-                        OrderStatus.Canceled => o.Filled > 0 ? "Cancelada (parcial)" : "Cancelada",
-                        OrderStatus.Rejected => "Rechazada",
-                        _ => o.State == OrderStates.Failed ? "Rechazada" : o.Filled > 0 ? "Ejecutada" : "Terminada",
+                        OrderStatus.Filled => "Filled",
+                        OrderStatus.Canceled => o.Filled > 0 ? "Cancelled (partial)" : "Cancelled",
+                        OrderStatus.Rejected => "Rejected",
+                        _ => o.State == OrderStates.Failed ? "Rejected" : o.Filled > 0 ? "Filled" : "Finished",
                     };
                 s.Orders.Add(new OrderLine("sim|" + o.Id, o.Time, b.Instrument.Symbol, o.Direction == OrderDirections.Buy, TypeName(o.Type),
                     o.QuantityToFill, o.Type == OrderTypes.Stop ? o.TriggerPrice : o.Price, o.Filled, avg, status, active, (b, o)));
@@ -180,7 +180,7 @@ public sealed class AccountCenter
         s.Balance = s.StartBalance + s.Analysis.RealizedNet + s.OpenPnl;
         s.RealizedToday = realizedToday;
         s.DayPnl = realizedToday + s.OpenPnl;
-        s.Status = "Trading Hub simula las ejecuciones con el mercado real";
+        s.Status = "Trading Hub simulates the fills against the real market";
     }
 
     private void FillRithmic(AccountSnapshot s, decimal realizedToday)
@@ -188,18 +188,18 @@ public sealed class AccountCenter
         var session = _svc.RithmicSessionFor(s.Account.Profile!);
         string acc = s.Account.RithmicAccount;
         s.Connected = session.IsConnected;
-        s.Status = session.IsConnected ? $"Conectada a Rithmic ({session.System})" : session.StatusText;
+        s.Status = session.IsConnected ? $"Connected to Rithmic ({session.System})" : session.StatusText;
         foreach (var (sym, ex, p) in session.PositionsOf(acc))
             s.Positions.Add(new PositionLine(sym + "|" + ex, sym, p.Net, p.AvgPrice, p.OpenPnl, p.ClosedPnl, (sym, ex)));
 
         foreach (var o in session.OrdersOf(acc))
         {
-            string type = o.PriceType switch { 2 => "Mercado", 3 => "Stop límite", 4 => "Stop", _ => "Límite" };
+            string type = o.PriceType switch { 2 => "Market", 3 => "Stop limit", 4 => "Stop", _ => "Limit" };
             string status = !o.Done
-                ? o.Filled > 0 ? "Parcial" : "Activa"
-                : o.Rejected ? "Rechazada" + (o.Reason.Length > 0 ? ": " + o.Reason : "")
-                : o.Cancelled ? o.Filled > 0 ? "Cancelada (parcial)" : "Cancelada"
-                : "Ejecutada";
+                ? o.Filled > 0 ? "Partial" : "Active"
+                : o.Rejected ? "Rejected" + (o.Reason.Length > 0 ? ": " + o.Reason : "")
+                : o.Cancelled ? o.Filled > 0 ? "Cancelled (partial)" : "Cancelled"
+                : "Filled";
             s.Orders.Add(new OrderLine(o.BasketId, o.Time, o.Symbol, o.IsBuy, type, o.Quantity, o.PriceType is 3 or 4 ? o.Trigger : o.Price,
                 o.Filled, o.AvgFillPrice, status, !o.Done, o));
         }
@@ -220,7 +220,7 @@ public sealed class AccountCenter
         var session = _svc.TradovateSessionFor(s.Account.Profile!);
         long acc = TradovateIdOf(s.Account);
         s.Connected = session.IsConnected;
-        s.Status = session.IsConnected ? $"Conectada a Tradovate ({(session.IsDemo ? "demo" : "real")})" : session.StatusText;
+        s.Status = session.IsConnected ? $"Connected to Tradovate ({(session.IsDemo ? "demo" : "real")})" : session.StatusText;
         foreach (var p in session.PositionsOf(acc))
         {
             decimal pv = PointValueOf(p.Symbol);
@@ -230,12 +230,12 @@ public sealed class AccountCenter
 
         foreach (var o in session.OrdersOf(acc))
         {
-            string type = o.Type switch { "Market" => "Mercado", "Stop" => "Stop", "StopLimit" => "Stop límite", "TrailingStop" => "Stop móvil", _ => "Límite" };
+            string type = o.Type switch { "Market" => "Market", "Stop" => "Stop", "StopLimit" => "Stop limit", "TrailingStop" => "Trailing stop", _ => "Limit" };
             string status = !o.Done
-                ? o.Filled > 0 ? "Parcial" : "Activa"
-                : o.Rejected ? "Rechazada" + (o.Text.Length > 0 ? ": " + o.Text : "")
-                : o.Cancelled ? o.Filled > 0 ? "Cancelada (parcial)" : "Cancelada"
-                : "Ejecutada";
+                ? o.Filled > 0 ? "Partial" : "Active"
+                : o.Rejected ? "Rejected" + (o.Text.Length > 0 ? ": " + o.Text : "")
+                : o.Cancelled ? o.Filled > 0 ? "Cancelled (partial)" : "Cancelled"
+                : "Filled";
             s.Orders.Add(new OrderLine("tv|" + o.Id, o.Time, o.Symbol, o.IsBuy, type, o.Quantity, o.Type is "Stop" or "StopLimit" ? o.StopPrice : o.Price,
                 o.Filled, o.AvgFill, status, !o.Done, o));
         }
@@ -248,12 +248,12 @@ public sealed class AccountCenter
         s.MarginBalance = cash?.InitialMargin;
     }
 
-    /// <summary>Valor del punto de un contrato de futuros por su símbolo (ESZ6 → ES → 50).</summary>
+    /// <summary>Point value of a futures contract by its symbol (ESZ6 -> ES -> 50).</summary>
     public static decimal PointValueOf(string contract) => RithmicFeed.PointValueOfContract(contract);
 
-    // ------------------------------------------------------------------ acciones
+    // ------------------------------------------------------------------ actions
 
-    /// <summary>Cancela una orden activa.</summary>
+    /// <summary>Cancels an active order.</summary>
     public async Task CancelAsync(AccountEntry a, OrderLine o)
     {
         if (!o.Active || !a.CanTrade) return;
@@ -269,7 +269,7 @@ public sealed class AccountCenter
             await _svc.TradovateSessionFor(a.Profile!).CancelAsync(tv.Id, CancellationToken.None).ConfigureAwait(false);
     }
 
-    /// <summary>Cierra la posición de un contrato a mercado (antes cancela sus órdenes, como "Cerrar posición" del Chart Trader).</summary>
+    /// <summary>Closes a contract's position at market (it cancels its orders first, like the Chart Trader's "Close position").</summary>
     public async Task CloseAsync(AccountEntry a, PositionLine p)
     {
         if (p.Net == 0 || !a.CanTrade) return;
@@ -281,7 +281,7 @@ public sealed class AccountCenter
 
         if (a.Kind == AccountKind.Tradovate && p.Ref is TradingHub.Feeds.Tradovate.TradovatePositionState tp)
         {
-            // Tradovate cancela las órdenes del contrato y cierra a mercado en un solo pedido
+            // Tradovate cancels the contract's orders and closes at market in a single request
             await _svc.TradovateSessionFor(a.Profile!).LiquidateAsync(tp.AccountId, tp.ContractId, CancellationToken.None).ConfigureAwait(false);
             return;
         }
@@ -292,7 +292,7 @@ public sealed class AccountCenter
             foreach (var o in session.OrdersOf(a.RithmicAccount).Where(o => !o.Done && o.Symbol == sym && o.Exchange == ex))
                 await session.CancelAsync(a.RithmicAccount, o.BasketId, CancellationToken.None).ConfigureAwait(false);
             int qty = (int)Math.Abs(p.Net);
-            await session.PlaceAsync(a.RithmicAccount, sym, ex, p.Net < 0, 2, qty, 0, 0, "th-cerrar-" + DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture), CancellationToken.None).ConfigureAwait(false);
+            await session.PlaceAsync(a.RithmicAccount, sym, ex, p.Net < 0, 2, qty, 0, 0, "th-close-" + DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture), CancellationToken.None).ConfigureAwait(false);
         }
     }
 }

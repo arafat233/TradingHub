@@ -3,7 +3,7 @@ using TradingHub.Market;
 
 namespace TradingHub.Strategies;
 
-/// <summary>Una vela cerrada (o en formación) con su order flow.</summary>
+/// <summary>A closed (or forming) candle with its order flow.</summary>
 public sealed class Bar
 {
     public int Index { get; internal set; }
@@ -15,10 +15,10 @@ public sealed class Bar
     public decimal Close { get; internal set; }
     public decimal Volume { get; internal set; }
 
-    /// <summary>Volumen de compradores agresivos (pegaron al ask).</summary>
+    /// <summary>Volume of aggressive buyers (they hit the ask).</summary>
     public decimal BuyVolume { get; internal set; }
 
-    /// <summary>Volumen de vendedores agresivos (pegaron al bid).</summary>
+    /// <summary>Volume of aggressive sellers (they hit the bid).</summary>
     public decimal SellVolume { get; internal set; }
 
     public decimal Delta => BuyVolume - SellVolume;
@@ -26,10 +26,10 @@ public sealed class Bar
     public decimal MinDelta { get; internal set; }
     public int Trades { get; internal set; }
 
-    /// <summary>Precio con más volumen de la vela (POC).</summary>
+    /// <summary>Price with the most volume in the candle (POC).</summary>
     public decimal PocPrice { get; internal set; }
 
-    /// <summary>Volumen por precio (solo si la estrategia activa <c>UseFootprint</c>).</summary>
+    /// <summary>Volume by price (only if the strategy enables <c>UseFootprint</c>).</summary>
     public IReadOnlyDictionary<decimal, (decimal Buy, decimal Sell)> Levels => _levels ?? Empty;
 
     public bool IsBullish => Close > Open;
@@ -44,17 +44,17 @@ public sealed class Bar
     public override string ToString() => $"#{Index} {Time:yyyy-MM-dd HH:mm} O {Open} H {High} L {Low} C {Close} V {Volume} Δ {Delta}";
 }
 
-/// <summary>Velas cerradas. El índice cuenta hacia atrás: <c>Bars[0]</c> es la última cerrada.</summary>
+/// <summary>Closed candles. The index counts backwards: <c>Bars[0]</c> is the last closed one.</summary>
 public sealed class BarSeries
 {
     private readonly List<Bar> _bars = new();
 
     public int Count => _bars.Count;
 
-    /// <summary>Vela de hace <paramref name="ago"/> velas (0 = la última cerrada).</summary>
+    /// <summary>Candle from <paramref name="ago"/> candles ago (0 = the last closed one).</summary>
     public Bar this[int ago] => _bars[_bars.Count - 1 - Math.Clamp(ago, 0, _bars.Count - 1)];
 
-    /// <summary>Vela por número absoluto (0 = la primera).</summary>
+    /// <summary>Candle by absolute number (0 = the first one).</summary>
     public Bar At(int index) => _bars[index];
 
     public IReadOnlyList<Bar> All => _bars;
@@ -62,7 +62,7 @@ public sealed class BarSeries
     internal void Add(Bar b) => _bars.Add(b);
 }
 
-/// <summary>Arma velas a partir de operaciones (tiempo, ticks, volumen, rango o delta).</summary>
+/// <summary>Builds candles from trades (time, ticks, volume, range or delta).</summary>
 internal sealed class BarBuilder
 {
     private readonly Instrument _instrument;
@@ -83,14 +83,14 @@ internal sealed class BarBuilder
         if (period.Type is PeriodType.Seconds or PeriodType.Minutes or PeriodType.Hours or PeriodType.Days or PeriodType.Weeks or PeriodType.Months)
             _timeHelper = new CandleSeries(instrument, period, 1, session);
         else if (period.Type is not (PeriodType.Tick or PeriodType.Volume or PeriodType.Range or PeriodType.Delta))
-            throw new NotSupportedException($"El período {period.DisplayName} no está disponible en backtests (usá tiempo, ticks, volumen, rango o delta).");
+            throw new NotSupportedException($"The {period.DisplayName} period is not available in backtests (use time, ticks, volume, range or delta).");
     }
 
     public Bar? Current => _current;
 
     /// <summary>
-    /// Si esta operación abre una vela nueva, cierra la actual y la devuelve (todavía sin agregar la
-    /// operación). Después hay que llamar a <see cref="Append"/>.
+    /// If this trade opens a new candle, it closes the current one and returns it (without adding the
+    /// trade yet). Afterwards <see cref="Append"/> has to be called.
     /// </summary>
     public Bar? Roll(long timeTicks, long priceTicks)
     {
@@ -101,7 +101,7 @@ internal sealed class BarBuilder
         return closed;
     }
 
-    /// <summary>Agrega la operación a la vela en formación (la crea si hace falta).</summary>
+    /// <summary>Adds the trade to the candle being formed (creating it if needed).</summary>
     public void Append(long timeTicks, long priceTicks, decimal volume, TradeSide side)
     {
         if (_current == null) Start(timeTicks, priceTicks);
@@ -142,7 +142,7 @@ internal sealed class BarBuilder
         }
     }
 
-    /// <summary>Cierra la vela en formación (fin de datos).</summary>
+    /// <summary>Closes the candle being formed (end of data).</summary>
     public Bar? Flush()
     {
         var b = _current;

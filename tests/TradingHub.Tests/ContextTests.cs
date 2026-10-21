@@ -4,13 +4,13 @@ using TradingHub.Strategies;
 
 namespace TradingHub.Tests;
 
-/// <summary>Contexto del mercado, filtro de contexto de las estrategias y sus dibujos en el gráfico.</summary>
+/// <summary>Market context, the strategies' context filter and their chart drawings.</summary>
 public class ContextTests
 {
     private static readonly Instrument Inst = new() { Symbol = "TEST", FeedId = "test", TickSize = 1m, VolumeStep = 1m, PointValue = 1m };
     private static readonly DateTime T0 = new(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>Una operación por minuto: un día y medio subiendo derecho y después un día y medio de vaivén.</summary>
+    /// <summary>One trade per minute: a day and a half rising straight up and then a day and a half of back-and-forth.</summary>
     private static TickData TrendThenRange()
     {
         var list = new List<Trade>();
@@ -30,7 +30,7 @@ public class ContextTests
         FeedId = "test", Symbol = "TEST", FromUtc = T0, ToUtc = T0.AddDays(days), Period = "H1", CommissionPercent = 0, SlippageTicks = 0, InitialCapital = 100_000,
     };
 
-    /// <summary>Entra largo cada vez que está plana y sale a las dos velas.</summary>
+    /// <summary>Enters long every time it is flat and exits two candles later.</summary>
     private sealed class AlwaysIn : Strategy
     {
         private int _entry = -10;
@@ -47,7 +47,7 @@ public class ContextTests
     }
 
     [Fact]
-    public void El_filtro_de_contexto_solo_deja_entrar_en_ese_regimen()
+    public void The_context_filter_only_allows_entering_in_that_regime()
     {
         var free = new BacktestEngine(new AlwaysIn(), TrendThenRange(), Settings()).Run();
         Assert.Contains(free.Trades, t => t.EntryTrend >= Robustness.TrendingTrend);
@@ -56,14 +56,14 @@ public class ContextTests
         var r = new BacktestEngine(onlyRange, TrendThenRange(), Settings()).Run();
         var judged = r.Trades.Where(t => t.EntryTrend != null).ToList();
         Assert.NotEmpty(judged);
-        Assert.All(judged, t => Assert.True(t.EntryTrend <= Robustness.RangeTrend, $"entró con tendencia {t.EntryTrend}"));
+        Assert.All(judged, t => Assert.True(t.EntryTrend <= Robustness.RangeTrend, $"entered with trend {t.EntryTrend}"));
         Assert.True(r.Trades.Count < free.Trades.Count);
-        // las salidas siempre pasan: nada queda abierto de más
+        // exits always go through: nothing is left open that should not be
         Assert.True(r.OpenPosition == null || r.OpenPosition.Quantity == 1);
     }
 
     [Fact]
-    public void Cada_operacion_guarda_el_contexto_y_el_percentil_de_volatilidad()
+    public void Each_trade_stores_the_context_and_the_volatility_percentile()
     {
         var r = new BacktestEngine(new AlwaysIn(), TrendThenRange(), Settings()).Run();
         var late = r.Trades.Where(t => t.EntryTime > T0.AddDays(2)).ToList();
@@ -77,35 +77,35 @@ public class ContextTests
         });
     }
 
-    /// <summary>Dibuja el rango de cada día, una línea vela a vela y una flecha en cada entrada.</summary>
+    /// <summary>Draws each day's range, a line candle by candle and an arrow on each entry.</summary>
     private sealed class Drawer : Strategy
     {
         protected override void OnBar(Bar bar)
         {
             var day = bar.Time.Date;
-            DrawBox($"rango-{day:yyyyMMdd}", day, bar.High + 5, bar.Time, bar.Low - 5, "verde", 20, "rango");
-            Plot("Cierre", bar.Close, "#FF8800");
-            if (CurrentBar % 10 == 0) DrawArrowUp($"flecha-{CurrentBar}", bar.Time, bar.Low, "azul", "entrada");
+            DrawBox($"range-{day:yyyyMMdd}", day, bar.High + 5, bar.Time, bar.Low - 5, "green", 20, "range");
+            Plot("Close", bar.Close, "#FF8800");
+            if (CurrentBar % 10 == 0) DrawArrowUp($"arrow-{CurrentBar}", bar.Time, bar.Low, "blue", "entry");
         }
     }
 
     [Fact]
-    public void Las_estrategias_dibujan_rangos_lineas_y_flechas()
+    public void The_strategies_draw_ranges_lines_and_arrows()
     {
         var s = new Drawer();
         var r = new BacktestEngine(s, TrendThenRange(), Settings()).Run();
         var drawings = s.Canvas.Drawings();
         var boxes = drawings.Where(d => d.Kind == DrawingKind.Box).ToList();
-        Assert.Equal(r.Bars > 0 ? drawings.Count(d => d.Id.StartsWith("rango-", StringComparison.Ordinal)) : 0, boxes.Count);
-        Assert.InRange(boxes.Count, 3, 4); // un rango por día: el mismo id se estira, no se repite
-        Assert.Contains(drawings, d => d.Kind == DrawingKind.Marker && d.Shape == MarkerShape.ArrowUp && d.Text == "entrada");
+        Assert.Equal(r.Bars > 0 ? drawings.Count(d => d.Id.StartsWith("range-", StringComparison.Ordinal)) : 0, boxes.Count);
+        Assert.InRange(boxes.Count, 3, 4); // one range per day: the same id is stretched, not repeated
+        Assert.Contains(drawings, d => d.Kind == DrawingKind.Marker && d.Shape == MarkerShape.ArrowUp && d.Text == "entry");
         var plot = Assert.Single(s.Canvas.Plots());
-        Assert.Equal("Cierre", plot.Name);
+        Assert.Equal("Close", plot.Name);
         Assert.Equal(r.Bars, plot.Points.Count);
     }
 
     [Fact]
-    public void El_lienzo_tiene_un_tope_y_se_van_los_mas_viejos()
+    public void The_canvas_has_a_cap_and_the_oldest_ones_are_dropped()
     {
         var c = new StrategyCanvas();
         for (int i = 0; i < StrategyCanvas.MaxDrawings + 50; i++) c.Set(new StrategyDrawing { Id = $"d{i}", Kind = DrawingKind.Text, Text = "x" });
@@ -115,7 +115,7 @@ public class ContextTests
     }
 
     [Fact]
-    public void Si_gana_solo_en_rango_con_volatilidad_baja_sugiere_ese_filtro()
+    public void If_it_only_wins_in_a_range_with_low_volatility_it_suggests_that_filter()
     {
         var trades = Enumerable.Range(0, 90).Select(i =>
         {
@@ -130,16 +130,16 @@ public class ContextTests
         }).ToList();
         var f = Robustness.SuggestContextFilter(trades);
         Assert.NotNull(f);
-        Assert.True(f!.Regime is RegimeFilter.RangeOnly or RegimeFilter.NoTrend, $"régimen {f.Regime}");
-        Assert.True(f.MaxVolatilityRank <= 66, $"volatilidad hasta {f.MaxVolatilityRank}");
+        Assert.True(f!.Regime is RegimeFilter.RangeOnly or RegimeFilter.NoTrend, $"regime {f.Regime}");
+        Assert.True(f.MaxVolatilityRank <= 66, $"volatility up to {f.MaxVolatilityRank}");
         Assert.True(f.ProfitFactor >= 1.5m && f.DroppedNet < 0 && f.Trades >= 20);
-        Assert.Contains("rango", f.Description);
+        Assert.Contains("range", f.Description);
 
-        // si gana parejo en todos los contextos, no hay nada que filtrar
+        // if it wins evenly in every context, there is nothing to filter
         var even = trades.Select((t, i) => t with { Pnl = i % 3 == 0 ? -50 : 100 }).ToList();
         Assert.Null(Robustness.SuggestContextFilter(even));
     }
-    /// <summary>Cierres por hora: un día y medio subiendo, uno y medio bajando y uno y medio de vaivén.</summary>
+    /// <summary>Hourly closes: a day and a half rising, one and a half falling and one and a half of back-and-forth.</summary>
     private static TickData UpDownRange()
     {
         var list = new List<Trade>();
@@ -156,7 +156,7 @@ public class ContextTests
     }
 
     [Fact]
-    public void El_contexto_dice_si_la_tendencia_es_alcista_o_bajista()
+    public void The_context_says_whether_the_trend_is_up_or_down()
     {
         var up = new MarketContextTracker();
         var down = new MarketContextTracker();
@@ -169,19 +169,19 @@ public class ContextTests
         Assert.Equal(MarketRegime.Trend, up.Regime);
         Assert.Equal(1, up.Direction);
         Assert.True(up.Change > 0);
-        Assert.Equal("Tendencia alcista", up.RegimeLabel);
+        Assert.Equal("Up trend", up.RegimeLabel);
         Assert.Equal(-1, down.Direction);
-        Assert.Equal("Tendencia bajista", down.RegimeLabel);
-        Assert.StartsWith("tendencia bajista", down.Describe());
+        Assert.Equal("Down trend", down.RegimeLabel);
+        Assert.StartsWith("down trend", down.Describe());
         Assert.True(up.Allows(RegimeFilter.UpTrendOnly, 0, 100) && !up.Allows(RegimeFilter.DownTrendOnly, 0, 100));
         Assert.True(down.Allows(RegimeFilter.DownTrendOnly, 0, 100) && !down.Allows(RegimeFilter.UpTrendOnly, 0, 100));
         Assert.False(down.Allows(RegimeFilter.RangeOnly, 0, 100));
-        Assert.Equal("baja", MarketContextTracker.VolatilityLabel(20));
-        Assert.Equal("alta", MarketContextTracker.VolatilityLabel(80));
+        Assert.Equal("low", MarketContextTracker.VolatilityLabel(20));
+        Assert.Equal("high", MarketContextTracker.VolatilityLabel(80));
     }
 
     [Fact]
-    public void Solo_en_tendencia_alcista_entra_solo_cuando_venia_subiendo()
+    public void Up_trend_only_enters_only_when_it_had_been_rising()
     {
         var free = new BacktestEngine(new AlwaysIn(), UpDownRange(), Settings(5)).Run();
         Assert.Contains(free.Trades, t => t.EntryMarketDirection < 0 && t.EntryTrend >= Robustness.TrendingTrend);
@@ -191,7 +191,7 @@ public class ContextTests
         Assert.NotEmpty(judged);
         Assert.All(judged, t =>
         {
-            Assert.True(t.EntryTrend >= Robustness.TrendingTrend, $"entró con tendencia {t.EntryTrend}");
+            Assert.True(t.EntryTrend >= Robustness.TrendingTrend, $"entered with trend {t.EntryTrend}");
             Assert.Equal(1, t.EntryMarketDirection);
         });
 
@@ -200,9 +200,9 @@ public class ContextTests
     }
 
     [Fact]
-    public void La_historia_por_hora_arma_el_mismo_contexto_que_las_velas()
+    public void The_hourly_history_builds_the_same_context_as_the_candles()
     {
-        // con velas de menos de una hora: sumar la historia es lo mismo que haberla visto hora a hora
+        // with candles shorter than an hour: adding the history is the same as having seen it hour by hour
         var hourly = Enumerable.Range(0, 40 * 24).Select(i => (T0.AddHours(i), 1000m + (decimal)Math.Sin(i / 5.0) * 30 + i * 0.2m)).ToList();
         var seeded = new MarketContextTracker();
         seeded.AddHistory(hourly, TimeSpan.FromMinutes(15));
@@ -211,7 +211,7 @@ public class ContextTests
         Assert.Equal(direct.Trend, seeded.Trend);
         Assert.Equal(direct.VolatilityRank, seeded.VolatilityRank);
 
-        // con velas de 4 horas se agrupa: el último cierre de cada tramo de 4 horas
+        // with 4-hour candles it is grouped: the last close of each 4-hour stretch
         var coarse = new MarketContextTracker(coarse: true);
         coarse.AddHistory(hourly, TimeSpan.FromHours(4));
         var fours = new MarketContextTracker(coarse: true);
@@ -221,11 +221,11 @@ public class ContextTests
     }
 
     [Fact]
-    public void Si_gana_solo_en_tendencia_alcista_sugiere_ese_filtro_y_la_tabla_la_separa()
+    public void If_it_only_wins_in_an_up_trend_it_suggests_that_filter_and_the_table_separates_it()
     {
         var trades = Enumerable.Range(0, 90).Select(i =>
         {
-            int kind = i % 3; // 0 = tendencia alcista, 1 = tendencia bajista, 2 = rango
+            int kind = i % 3; // 0 = up trend, 1 = down trend, 2 = range
             decimal pnl = kind == 0 ? (i % 5 == 0 ? -60 : 160) : kind == 1 ? (i % 4 == 0 ? 50 : -110) : (i % 4 == 0 ? 60 : -90);
             return new ClosedTrade(i + 1, true, T0.AddHours(i), 100, T0.AddHours(i + 0.5), 100 + pnl, 1, pnl, 0, 0, 0, "", "", 1)
             {
@@ -237,23 +237,23 @@ public class ContextTests
         var f = Robustness.SuggestContextFilter(trades);
         Assert.NotNull(f);
         Assert.Equal(RegimeFilter.UpTrendOnly, f!.Regime);
-        Assert.Contains("tendencia alcista", f.Description);
+        Assert.Contains("up trend", f.Description);
 
         var regimes = Robustness.Regimes(trades);
-        var up = regimes.Single(r => r.Name == "tendencia alcista");
+        var up = regimes.Single(r => r.Name == "up trend");
         Assert.True(up.Detail && up.Trades == 30 && up.Net > 0);
-        Assert.True(regimes.Single(r => r.Name == "tendencia bajista").Net < 0);
+        Assert.True(regimes.Single(r => r.Name == "down trend").Net < 0);
 
-        // lo que deja y lo que saca el filtro en otro mercado
+        // what the filter keeps and what it drops on another market
         var (kept, keptNet, dropped, droppedNet) = Robustness.ApplyFilter(trades, RegimeFilter.UpTrendOnly, 0, 100);
         Assert.Equal(30, kept);
         Assert.Equal(60, dropped);
         Assert.True(keptNet > 0 && droppedNet < 0);
     }
     [Fact]
-    public void Se_puede_elegir_cualquier_combinacion_de_condiciones()
+    public void Any_combination_of_conditions_can_be_chosen()
     {
-        // las 15 combinaciones de rango, mixto, tendencia alcista y bajista tienen su filtro, y vuelven a la misma
+        // the 15 combinations of range, mixed, up trend and down trend each have their filter, and they map back to the same
         for (int bits = 1; bits <= 15; bits++)
         {
             var set = (RegimeSet)bits;
@@ -266,18 +266,18 @@ public class ContextTests
         Assert.True(MarketContextTracker.RegimeAllows(RegimeFilter.RangeOrUpTrend, MarketRegime.Trend, 1));
         Assert.False(MarketContextTracker.RegimeAllows(RegimeFilter.RangeOrUpTrend, MarketRegime.Trend, -1));
         Assert.False(MarketContextTracker.RegimeAllows(RegimeFilter.RangeOrUpTrend, MarketRegime.Mixed, 1));
-        Assert.True(MarketContextTracker.RegimeAllows(RegimeFilter.MixedOnly, MarketRegime.Unknown, null)); // sin datos no bloquea
-        Assert.Equal("rango o tendencia alcista", Robustness.DescribeRegimes(RegimeSet.Range | RegimeSet.UpTrend));
-        Assert.Equal("todo menos tendencia bajista", Robustness.DescribeRegimes(RegimeSet.Range | RegimeSet.Mixed | RegimeSet.UpTrend));
-        Assert.Equal("solo en mixto", Robustness.DescribeRegimes(RegimeSet.Mixed));
-        Assert.Equal("solo en rango, volatilidad baja", Robustness.DescribeFilter(RegimeFilter.RangeOnly, 0, 33));
+        Assert.True(MarketContextTracker.RegimeAllows(RegimeFilter.MixedOnly, MarketRegime.Unknown, null)); // with no data it does not block
+        Assert.Equal("range or up trend", Robustness.DescribeRegimes(RegimeSet.Range | RegimeSet.UpTrend));
+        Assert.Equal("everything but down trend", Robustness.DescribeRegimes(RegimeSet.Range | RegimeSet.Mixed | RegimeSet.UpTrend));
+        Assert.Equal("mixed only", Robustness.DescribeRegimes(RegimeSet.Mixed));
+        Assert.Equal("range only, low volatility", Robustness.DescribeFilter(RegimeFilter.RangeOnly, 0, 33));
     }
 
     [Fact]
-    public void Con_la_historia_previa_el_filtro_vale_desde_la_primera_vela()
+    public void With_the_earlier_history_the_filter_applies_from_the_first_candle()
     {
-        // arranca en plena tendencia (un día y medio subiendo): sin historia, las primeras horas no sabe que es tendencia y
-        // «solo en rango» la deja entrar; con el mes anterior (también subiendo), ya lo sabe desde la primera vela
+        // it starts in the middle of a trend (a day and a half rising): with no history, in the first hours it does not know it is a trend and
+        // "range only" lets it enter; with the previous month (also rising), it knows from the first candle
         var data = TrendThenRange();
         var free = new BacktestEngine(new AlwaysIn { RegimeFilter = RegimeFilter.RangeOnly }, data, Settings()).Run();
         Assert.Contains(free.Trades, t => t.EntryTime < T0.AddHours(8));
@@ -285,23 +285,23 @@ public class ContextTests
         var before = Enumerable.Range(1, 30 * 24).Select(h => (T0.AddHours(-h), 1000m - h * 0.5m)).Reverse().ToList();
         var seeded = new BacktestEngine(new AlwaysIn { RegimeFilter = RegimeFilter.RangeOnly }, data, Settings()) { ContextHistory = before }.Run();
         Assert.DoesNotContain(seeded.Trades, t => t.EntryTime < T0.AddHours(30));
-        Assert.All(seeded.Trades, t => Assert.True(t.EntryTrend <= Robustness.RangeTrend, $"entró con tendencia {t.EntryTrend}"));
-        // y cada operación ya trae su contexto (no hay «sin datos» al principio)
+        Assert.All(seeded.Trades, t => Assert.True(t.EntryTrend <= Robustness.RangeTrend, $"entered with trend {t.EntryTrend}"));
+        // and each trade already carries its context (there is no "no data" at the start)
         var all = new BacktestEngine(new AlwaysIn(), data, Settings()) { ContextHistory = before }.Run();
         Assert.All(all.Trades, t => Assert.NotNull(t.EntryTrend));
     }
 
     [Fact]
-    public void Cada_ventana_del_walk_forward_arranca_sabiendo_como_venia_el_mercado()
+    public void Each_walk_forward_window_starts_knowing_how_the_market_had_been()
     {
         var data = UpDownRange();
         var settings = Settings(5);
         var wf = Optimizer.WalkForward(() => new AlwaysIn(), new Dictionary<string, object?>(), new List<ParameterRange>(), data, settings,
             FitnessMetric.NetProfit, 1, 1, false, 0, null, CancellationToken.None);
-        // las ventanas fuera de muestra empiezan en el día 1, 2 y 3: con lo anterior, su primera operación ya sabe si hay
-        // rango o tendencia (antes, cada ventana arrancaba sin contexto)
+        // the out-of-sample windows start on day 1, 2 and 3: with what came before, their first trade already knows whether there is
+        // a range or a trend (before, each window started with no context)
         var firstOfDay = wf.OutSampleTrades.GroupBy(t => t.EntryTime.Date).Select(g => g.OrderBy(t => t.EntryTime).First()).ToList();
-        Assert.True(firstOfDay.Count >= 2, $"ventanas con operaciones: {firstOfDay.Count}");
+        Assert.True(firstOfDay.Count >= 2, $"windows with trades: {firstOfDay.Count}");
         Assert.All(firstOfDay, t => Assert.NotNull(t.EntryTrend));
     }
 }

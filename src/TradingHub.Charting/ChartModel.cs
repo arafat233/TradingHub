@@ -11,7 +11,7 @@ using IndicatorCandle = TradingHub.Indicators.IndicatorCandle;
 
 namespace TradingHub.Charting;
 
-/// <summary>Un indicador agregado al gráfico.</summary>
+/// <summary>An indicator added to the chart.</summary>
 public sealed class IndicatorSlot
 {
     internal IndicatorSlot(Indicator indicator)
@@ -48,7 +48,7 @@ public sealed class IndicatorSlot
     public override string ToString() => Indicator.Name;
 }
 
-/// <summary>Panel de indicadores debajo del gráfico de precio.</summary>
+/// <summary>Indicator panel below the price chart.</summary>
 public sealed class SubPanel
 {
     public List<IndicatorSlot> Slots { get; } = new();
@@ -57,18 +57,18 @@ public sealed class SubPanel
 
 public sealed record AlertInfo(DateTime Time, string Instrument, string Message, string SoundFile, Color Background, Color Foreground, string Source);
 
-/// <summary>Una entrada o salida de una estrategia puesta en el gráfico.</summary>
+/// <summary>An entry or exit of a strategy placed on the chart.</summary>
 public readonly record struct StrategySignal(DateTime Time, decimal Price, bool Buy, bool Entry, string Label);
 
 /// <summary>
-/// Una estrategia puesta en el gráfico como un indicador: marca dónde entra y dónde sale (lo histórico y lo nuevo).
-/// La app la corre (solo visual o ejecutando en una cuenta) y deja acá lo que hay que dibujar.
+/// A strategy placed on the chart like an indicator: it marks where it enters and where it exits (the historical and the new part).
+/// The app runs it (visual only or executing on an account) and leaves here whatever has to be drawn.
 /// </summary>
 public sealed class StrategyOverlay
 {
     public string Name { get; set; } = "";
 
-    /// <summary>"visual", "en vivo · cuenta", "calculando…"</summary>
+    /// <summary>"visual", "live · account", "calculating…"</summary>
     public string Status { get; set; } = "";
 
     public bool Visible { get; set; } = true;
@@ -78,13 +78,13 @@ public sealed class StrategyOverlay
     public IReadOnlyList<StrategySignal> Signals { get; set; } = Array.Empty<StrategySignal>();
     public IReadOnlyList<TradeLink> Links { get; set; } = Array.Empty<TradeLink>();
 
-    /// <summary>Lo que dibuja la estrategia: rangos, líneas, niveles, marcas y textos.</summary>
+    /// <summary>What the strategy draws: ranges, lines, levels, markers and texts.</summary>
     public IReadOnlyList<StrategyShape> Shapes { get; set; } = Array.Empty<StrategyShape>();
 
-    /// <summary>Líneas continuas de la estrategia (un valor por vela).</summary>
+    /// <summary>Continuous lines of the strategy (one value per candle).</summary>
     public IReadOnlyList<StrategyLine> Lines { get; set; } = Array.Empty<StrategyLine>();
 
-    /// <summary>Objeto de la app que la maneja.</summary>
+    /// <summary>App object that manages it.</summary>
     public object? Tag { get; set; }
 }
 
@@ -107,29 +107,29 @@ public enum StrategyMarker
     Cross,
 }
 
-/// <summary>Un dibujo de una estrategia listo para pintar. Dash: 0 continua, 1 rayada, 2 punteada.</summary>
+/// <summary>A strategy drawing ready to paint. Dash: 0 solid, 1 dashed, 2 dotted.</summary>
 public sealed record StrategyShape(StrategyShapeKind Kind, DateTime Time1, decimal Price1, DateTime Time2, decimal Price2, SkiaSharp.SKColor Color,
     byte FillAlpha, float Width, int Dash, StrategyMarker Marker, string Text, bool ExtendRight);
 
-/// <summary>Una línea continua de una estrategia (null corta la línea).</summary>
+/// <summary>A continuous line of a strategy (null breaks the line).</summary>
 public sealed record StrategyLine(string Name, SkiaSharp.SKColor Color, float Width, int Dash, IReadOnlyList<(DateTime Time, decimal? Value)> Points);
 
-/// <summary>Una ejecución propia para marcar en el gráfico.</summary>
+/// <summary>One of your own fills to mark on the chart.</summary>
 public readonly record struct TradeMark(DateTime Time, decimal Price, bool Buy, decimal Quantity);
 
-/// <summary>Una operación cerrada (entrada → salida) para unirla con una línea en el gráfico.</summary>
+/// <summary>A closed trade (entry -> exit) to join with a line on the chart.</summary>
 public readonly record struct TradeLink(DateTime OpenTime, decimal OpenPrice, DateTime CloseTime, decimal ClosePrice, bool IsLong, decimal Pnl);
 
 /// <summary>
-/// Operación resaltada (al elegirla en una lista de operaciones): recuadro de la entrada a la salida, marcas, el peor y
-/// el mejor precio por el que pasó (MAE y MFE) y una etiqueta con el detalle.
+/// Highlighted trade (when picked from a trade list): a box from entry to exit, markers, the worst and
+/// the best price it went through (MAE and MFE) and a label with the detail.
 /// </summary>
 public sealed record TradeFocus(DateTime EntryTime, decimal EntryPrice, DateTime ExitTime, decimal ExitPrice, bool IsLong, decimal Quantity, decimal Pnl, string Label);
 
 /// <summary>
-/// Estado completo de un gráfico: datos, velas, indicadores, configuración y navegación.
-/// Implementa <see cref="IIndicatorHost"/> para que los indicadores accedan a las velas y al gráfico.
-/// Todo se usa desde el hilo de UI.
+/// Complete state of a chart: data, candles, indicators, settings and navigation.
+/// It implements <see cref="IIndicatorHost"/> so the indicators can reach the candles and the chart.
+/// Everything is used from the UI thread.
 /// </summary>
 public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDisposable
 {
@@ -169,30 +169,30 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
     public CandleSeries Series { get; private set; }
     public List<IndicatorSlot> Indicators { get; } = new();
     public List<SubPanel> SubPanels { get; } = new();
-    /// <summary>Dibujos del gráfico. Los gráficos del mismo instrumento comparten la misma lista (se sincronizan).</summary>
+    /// <summary>Chart drawings. Charts of the same instrument share the same list (they stay in sync).</summary>
     public List<Drawings.ChartDrawing> Drawings { get; set; } = new();
 
-    /// <summary>Gestor de trading (broker simulado) — opcional.</summary>
+    /// <summary>Trading manager (simulated broker) — optional.</summary>
     public TradingManager? Trading { get; set; }
 
-    /// <summary>Cuenta con la que se opera desde el gráfico (órdenes y posición dibujadas).</summary>
+    /// <summary>Account traded from the chart (orders and position drawn).</summary>
     public ITradingAccount? Account { get; set; }
 
-    /// <summary>Estrategias puestas en el gráfico (aparecen en la leyenda y marcan sus operaciones).</summary>
+    /// <summary>Strategies placed on the chart (they show up in the legend and mark their trades).</summary>
     public List<StrategyOverlay> Strategies { get; } = new();
 
-    /// <summary>Ejecuciones propias en este instrumento (se marcan en el gráfico).</summary>
+    /// <summary>Your own fills on this instrument (they are marked on the chart).</summary>
     public IReadOnlyList<TradeMark> TradeMarks { get; set; } = Array.Empty<TradeMark>();
 
-    /// <summary>Operaciones cerradas: línea de la entrada a la salida.</summary>
+    /// <summary>Closed trades: a line from entry to exit.</summary>
     public IReadOnlyList<TradeLink> TradeLinks { get; set; } = Array.Empty<TradeLink>();
 
-    /// <summary>Operación resaltada (null = ninguna).</summary>
+    /// <summary>Highlighted trade (null = none).</summary>
     public TradeFocus? FocusTrade { get; set; }
 
     /// <summary>
-    /// Centra la vista en un intervalo de tiempo (con aire a los costados) y, si no entra, achica las velas. Usa el
-    /// ancho del último cuadro dibujado (o uno típico si todavía no se dibujó).
+    /// Centers the view on a time interval (with room on the sides) and, if it does not fit, shrinks the candles. It uses the
+    /// width of the last drawn frame (or a typical one if nothing has been drawn yet).
     /// </summary>
     public void CenterOn(DateTime fromUtc, DateTime toUtc)
     {
@@ -211,12 +211,12 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         Invalidate();
     }
 
-    /// <summary>Stop loss / objetivos de la cuenta (para dibujarlos y arrastrarlos desde la posición).</summary>
+    /// <summary>Stop loss / targets of the account (to draw them and drag them from the position).</summary>
     public BracketManager? Brackets { get; set; }
 
     public TradingStatisticsProvider Statistics { get; set; } = new();
 
-    /// <summary>Distribución del último cuadro dibujado.</summary>
+    /// <summary>Layout of the last drawn frame.</summary>
     public ChartLayout? LastLayout { get; internal set; }
 
     public bool IsDirty { get; private set; } = true;
@@ -224,7 +224,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
     public event Action? Invalidated;
     public event Action<AlertInfo>? AlertRaised;
 
-    /// <summary>Vuelve a armar los colores con los de este gráfico (después de cambiarlos en su configuración).</summary>
+    /// <summary>Rebuilds the colors with this chart's own (after changing them in its settings).</summary>
     public void ApplyColors()
     {
         Theme = ChartTheme.With(Settings.Colors);
@@ -241,7 +241,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
 
     public string Title => $"{Instrument.Symbol} · {Period.DisplayName}";
 
-    // =================================================================== construcción
+    // =================================================================== construction
 
     public void SetPeriod(ChartPeriod period)
     {
@@ -251,7 +251,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         Rebuild();
     }
 
-    /// <summary>Ticks por fila que se muestran en el footprint (0 = automático según el zoom).</summary>
+    /// <summary>Ticks per row shown in the footprint (0 = automatic, based on the zoom).</summary>
     public void SetPriceStep(int step)
     {
         Settings.PriceStep = Math.Max(0, step);
@@ -260,12 +260,12 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         else Invalidate();
     }
 
-    /// <summary>Ticks por fila con que se construyen las velas (resolución base del footprint).</summary>
+    /// <summary>Ticks per row the candles are built with (base resolution of the footprint).</summary>
     public int EffectivePriceStep => Series.PriceStep;
 
     /// <summary>
-    /// Paso base: fino (≈150 filas por vela típica) para poder acercar el zoom sin reconstruir.
-    /// Si el usuario fija un paso, el base es el mayor divisor de ese paso que no supere al automático.
+    /// Base step: fine (~150 rows per typical candle) so you can zoom in without rebuilding.
+    /// If the user fixes a step, the base one is the largest divisor of that step not exceeding the automatic one.
     /// </summary>
     private int BaseStepFor(int userStep)
     {
@@ -278,7 +278,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         return 1;
     }
 
-    /// <summary>Reconstruye las velas desde las operaciones y recalcula los indicadores.</summary>
+    /// <summary>Rebuilds the candles from the trades and recalculates the indicators.</summary>
     public void Rebuild()
     {
         int step = BaseStepFor(Settings.PriceStep);
@@ -335,7 +335,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
 
     private static Color ToColor(SkiaSharp.SKColor c) => Color.FromArgb(c.Alpha, c.Red, c.Green, c.Blue);
 
-    // =================================================================== indicadores
+    // =================================================================== indicators
 
     public IndicatorSlot AddIndicator(Indicator indicator, bool applyDefaultColors = true)
     {
@@ -358,7 +358,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         catch (Exception ex)
         {
             slot.Error = ex.Message;
-            this.LogError($"Error al inicializar {indicator.Name}", ex);
+            this.LogError($"Error while initializing {indicator.Name}", ex);
         }
 
         indicator.PropertyChanged += (_, e) =>
@@ -371,7 +371,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         return slot;
     }
 
-    /// <summary>Agrega el indicador a un panel existente (para superponer indicadores).</summary>
+    /// <summary>Adds the indicator to an existing panel (to overlay indicators).</summary>
     public void MoveToPanel(IndicatorSlot slot, SubPanel? target)
     {
         if (slot.Panel == target) return;
@@ -408,11 +408,11 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
 
         _timers.RemoveAll(t => t.Ind == slot.Indicator);
         try { slot.Indicator.HostDetach(); }
-        catch (Exception ex) { this.LogError("Error al quitar el indicador", ex); }
+        catch (Exception ex) { this.LogError("Error while removing the indicator", ex); }
         Invalidate();
     }
 
-    /// <summary>Procesa recálculos, timers y pedidos pendientes. Llamar en cada tick de UI.</summary>
+    /// <summary>Processes recalculations, timers and pending requests. Call it on every UI tick.</summary>
     public void Update()
     {
         RefreshFixedProfiles();
@@ -420,7 +420,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         {
             var a = _invokes.Dequeue();
             try { a(); }
-            catch (Exception ex) { this.LogError("Error en acción diferida", ex); }
+            catch (Exception ex) { this.LogError("Error in a deferred action", ex); }
         }
 
         ProcessPending();
@@ -434,7 +434,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
                 if (now < t.Next) continue;
                 _timers[i] = (t.Ind, t.Interval, t.Action, now + t.Interval);
                 try { t.Action(); }
-                catch (Exception ex) { this.LogError("Error en timer de indicador", ex); }
+                catch (Exception ex) { this.LogError("Error in an indicator timer", ex); }
             }
         }
     }
@@ -476,12 +476,12 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         }
         catch (Exception ex)
         {
-            if (slot.Error == null) this.LogError($"Error en el indicador {slot.Indicator.Name}: {ex.Message}", ex);
+            if (slot.Error == null) this.LogError($"Error in the indicator {slot.Indicator.Name}: {ex.Message}", ex);
             slot.Error = ex.Message;
         }
     }
 
-    // =================================================================== datos en vivo
+    // =================================================================== live data
 
     private void OnHistoryLoaded()
     {
@@ -495,7 +495,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         for (int i = _wrappers.Count; i < Series.Count; i++) _wrappers.Add(new IndicatorCandle(Series[i], Series));
         if (!res.Changed) return;
 
-        // ticks para los indicadores que los piden
+        // ticks for the indicators that ask for them
         List<MarketDataArg>? args = null;
         bool anyCum = Indicators.Any(s => s.WantsCumulative);
         if (Indicators.Any(s => s.WantsTrades) || anyCum)
@@ -580,7 +580,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         return s;
     }
 
-    // =================================================================== operaciones acumuladas
+    // =================================================================== accumulated trades
 
     private List<CumulativeTrade> BuildCumulativeTrades(DateTime from, DateTime to)
     {
@@ -593,7 +593,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         {
             long t = store.GetTimeTicks(i);
             if (to != DateTime.MaxValue && t > to.Ticks) break;
-            if (store.GetId(i) < 0) continue; // historia armada con velas: no son operaciones reales
+            if (store.GetId(i) < 0) continue; // history built from candles: these are not real trades
             var side = store.GetSide(i);
             var dir = side == TradeSide.Buy ? TradeDirection.Buy : side == TradeSide.Sell ? TradeDirection.Sell : TradeDirection.Between;
             var price = store.GetPrice(i);
@@ -641,7 +641,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         }
     }
 
-    // =================================================================== líneas hasta toque
+    // =================================================================== lines until touched
 
     private void UpdateLinesTillTouch(Indicator ind, int fromBar)
     {
@@ -733,7 +733,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         slot?.PendingCumulative.Add(request);
     }
 
-    // ----------------------------------------------------------------- perfiles fijos (día, semana, mes…)
+    // ----------------------------------------------------------------- fixed profiles (day, week, month…)
 
     private readonly List<(Indicator Indicator, FixedProfilePeriods Period)> _fixedProfileSubs = new();
     private int _fixedProfileBars = -1;
@@ -745,7 +745,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         BeginInvoke(() => RespondFixedProfile(indicator, p));
     }
 
-    /// <summary>Vuelve a mandar los perfiles de los períodos en curso cuando aparece una vela nueva.</summary>
+    /// <summary>Resends the profiles of the periods in progress when a new candle shows up.</summary>
     private void RefreshFixedProfiles()
     {
         if (_fixedProfileSubs.Count == 0 || Series.Count == _fixedProfileBars) return;
@@ -788,11 +788,11 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         }
         catch (Exception ex)
         {
-            indicator.LogWarn($"Error en el perfil fijo de {indicator.Name}: {ex.Message}");
+            indicator.LogWarn($"Error in the fixed profile of {indicator.Name}: {ex.Message}");
         }
     }
 
-    /// <summary>Velas (primera y última) que forman el período pedido.</summary>
+    /// <summary>Candles (first and last) that make up the requested period.</summary>
     private (int First, int Last)? FixedProfileRange(FixedProfilePeriods period)
     {
         int n = Series.Count;
@@ -806,7 +806,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
             _ => session.IsNewSession,
         };
 
-        // inicio del período en curso
+        // start of the period in progress
         int start = n - 1;
         while (start > 0 && !isNew(Series[start - 1].Time, Series[start].Time)) start--;
         bool previous = period is FixedProfilePeriods.LastDay or FixedProfilePeriods.LastWeek or FixedProfilePeriods.LastMonth;
@@ -831,7 +831,7 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
         Indicators.Clear();
     }
 
-    /// <summary>Contenedor vacío hasta el primer dibujado.</summary>
+    /// <summary>Empty container until the first draw.</summary>
     private sealed class EmptyContainer : IChartContainer
     {
         public static readonly EmptyContainer Instance = new();

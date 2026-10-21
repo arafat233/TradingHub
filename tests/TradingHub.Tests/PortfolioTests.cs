@@ -2,7 +2,7 @@ using TradingHub.Strategies;
 
 namespace TradingHub.Tests;
 
-/// <summary>Estadísticas del informe y portafolios de estrategias.</summary>
+/// <summary>Report statistics and strategy portfolios.</summary>
 public class PortfolioTests
 {
     private static readonly DateTime D0 = new(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
@@ -24,7 +24,7 @@ public class PortfolioTests
     }
 
     [Fact]
-    public void Analitica_de_operaciones_mensual_lados_y_drawdowns()
+    public void Trade_analytics_monthly_sides_and_drawdowns()
     {
         var trades = new List<ClosedTrade>
         {
@@ -36,12 +36,12 @@ public class PortfolioTests
         Assert.Equal(2, a.Short.Trades);
         Assert.Equal(350m, a.Long.Net + a.Short.Net);
         var y = Assert.Single(a.Monthly);
-        Assert.Equal(50m, y.MonthNet[0]);     // enero: +100 −50
-        Assert.Equal(-200m, y.MonthNet[1]);   // febrero: +200 −300 −100
-        Assert.Equal(500m, y.MonthNet[2]);    // marzo
+        Assert.Equal(50m, y.MonthNet[0]);     // January: +100 −50
+        Assert.Equal(-200m, y.MonthNet[1]);   // February: +200 −300 −100
+        Assert.Equal(500m, y.MonthNet[2]);    // March
         Assert.Equal(350m, y.YearNet);
         Assert.Equal(6, a.Histogram.Sum(h => h.Count));
-        // peor caída al cierre: de 10.250 a 9.850 (−400), recuperada con la de marzo
+        // worst closing drawdown: from 10,250 to 9,850 (-400), recovered by March's
         var dd = a.Drawdowns[0];
         Assert.Equal(400m, dd.Depth);
         Assert.NotNull(dd.Recovery);
@@ -50,12 +50,12 @@ public class PortfolioTests
     }
 
     [Fact]
-    public void Portafolio_suma_resultados_y_mide_correlacion()
+    public void A_portfolio_adds_up_results_and_measures_correlation()
     {
         var a = C("A", 100, -50, 80, -20, 60, -10, 40);
         var copy = C("B", 100, -50, 80, -20, 60, -10, 40);
         var opposite = C("C", -100, 50, -80, 20, -60, 10, -40);
-        // con una sola estrategia, el portafolio y la estrategia tienen las mismas métricas
+        // with a single strategy, the portfolio and the strategy have the same metrics
         var single = PortfolioAnalyzer.Analyze(new[] { a }, 10_000);
         Assert.Equal(single.Metrics.SharpeRatio, single.ComponentMetrics[0].SharpeRatio, 6);
         Assert.Equal(single.Metrics.MaxDrawdown, single.ComponentMetrics[0].MaxDrawdown);
@@ -70,14 +70,14 @@ public class PortfolioTests
         Assert.Equal(0m, hedged.Metrics.MaxDrawdown);
         Assert.True(hedged.DrawdownReductionPercent > 99);
 
-        // con pesos: la mitad de B
+        // with weights: half of B
         copy.Weight = 0.5m;
         var weighted = PortfolioAnalyzer.Analyze(new[] { a, copy }, 10_000);
         Assert.Equal(300m, weighted.Metrics.NetProfit);
     }
 
     [Fact]
-    public void La_sugerencia_descarta_las_estrategias_correlacionadas()
+    public void The_suggestion_discards_the_correlated_strategies()
     {
         var rnd = new Random(3);
         decimal[] Series(int seed)
@@ -92,7 +92,7 @@ public class PortfolioTests
         var candidates = new[] { a, clone, independent };
         var chosen = PortfolioAnalyzer.SuggestUncorrelated(candidates, 10_000, maxComponents: 3, maxCorrelation: 0.5);
         Assert.Contains(2, chosen);
-        Assert.False(chosen.Contains(0) && chosen.Contains(1), "eligió dos estrategias casi idénticas");
+        Assert.False(chosen.Contains(0) && chosen.Contains(1), "it picked two almost identical strategies");
         _ = rnd;
     }
 }
