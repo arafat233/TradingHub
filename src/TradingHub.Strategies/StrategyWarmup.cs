@@ -55,6 +55,8 @@ public sealed record StrategyWarmup(int Bars, IReadOnlyList<string> Indicators, 
         public BarSeries Bars => _bars;
         public Bar? FormingBar => null;
         public DateTime Time => _time;
+        public DepthSnapshot? Book => null;
+        public IReadOnlyList<IcebergEvent> Icebergs => Array.Empty<IcebergEvent>();
         public decimal LastPrice => _bars.Count > 0 ? _bars[0].Close : 100;
         public TimeZoneInfo TimeZone => TimeZoneInfo.Utc;
         public SessionSettings Session { get; } = new();

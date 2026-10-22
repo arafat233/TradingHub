@@ -574,6 +574,14 @@ public sealed class ClaudeCodeBridge
           does not open or add to positions (exits always go through). They can be set as parameters in the backtest, the
           optimization, the walk-forward and live. ContextAllowsEntries tells you whether entries are allowed right now.
 
+        - Order book (depth): Book (DepthSnapshot? with Bids and Asks, each a BookLevel[] of PriceTicks and Size, best first;
+          price = Instrument.FromTicks is not available to strategies, use PriceTicks * TickSize) is the live book, or in a
+          backtest the recorded one (4 snapshots a second, 20 levels per side; only for days the app recorded with "Record the
+          order book" on). It is null when there is none: ALWAYS check for null and do nothing (or fall back) without it.
+          BookImbalance(levels = 5) is (bid - ask) / (bid + ask) in -1..+1 (0 with no book). Set TrackIcebergs = true in OnInit
+          to fill Icebergs (IcebergEvent: Ticks, Ask = resting sell, Volume, Start, Last), levels that absorbed much more than
+          they showed. Check the result log for "Using the recorded order book" to know the backtest had a book.
+
         Rules:
         - Write code that compiles in C# 13 with no external packages. No files, network, threads or unseeded Random.
         - Short comments in English explaining the logic.

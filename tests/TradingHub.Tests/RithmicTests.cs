@@ -131,15 +131,69 @@ public class RithmicTests
             lock (Trades) Trades.AddRange(trades);
         }
 
-        public void OnDepth(Instrument instrument, DepthUpdate update)
-        {
-        }
+        public volatile DepthUpdate? Depth;
+
+        public void OnDepth(Instrument instrument, DepthUpdate update) => Depth = update;
 
         public void OnStatus(Instrument instrument, FeedStatus status, string? message)
         {
             Status = status;
             Message = message;
         }
+    }
+
+    [Fact]
+    public async Task Level2_order_book_fills_the_dom_and_the_best_bid_offer_no_longer_touches_it()
+    {
+        using var server = new FakeRithmicServer { LastTradeSsboe = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 2 };
+        using var feed = new RithmicFeed(Settings(server));
+        var sink = new Sink();
+        using var sub = feed.Subscribe(Es, sink);
+        await Until(() => sink.Message?.Contains("ESZ6") == true);
+        Assert.Contains(7L, server.SubscribeBits); // last trade + BBO + order book
+
+        // full book: levels with their absolute size
+        await server.PushBook("ESZ6", 7, new[] { (5000.0, 10), (4999.75, 20), (4999.5, 30) }, new[] { (5000.25, 12), (5000.5, 22) });
+        await Until(() => sink.Depth?.Snapshot.Bids.Length == 3);
+        var d = sink.Depth!;
+        Assert.True(d.IsFullRefresh);
+        Assert.Equal(Es.ToTicks(5000m), d.Snapshot.BestBidTicks);
+        Assert.Equal(12m, d.Snapshot.BestAskSize);
+        Assert.Equal(2, d.Snapshot.Asks.Length);
+
+        // a BEGIN/END set: 4999.5 goes away (size 0), a new ask level appears, the best bid changes size
+        await server.PushBook("ESZ6", 4, new[] { (4999.5, 0) }, Array.Empty<(double, int)>());
+        await server.PushBook("ESZ6", 6, new[] { (5000.0, 15) }, new[] { (5000.75, 5) });
+        await Until(() => sink.Depth?.Snapshot.Asks.Length == 3);
+        d = sink.Depth!;
+        Assert.Equal(2, d.Snapshot.Bids.Length);
+        Assert.Equal(15m, d.Snapshot.BestBidSize);
+        Assert.False(d.IsFullRefresh);
+
+        // with depth arriving, a BBO at another price must not wipe levels from the book
+        await server.PushBbo("ESZ6", 5001.0, 1, 5001.25, 1);
+        await server.PushBook("ESZ6", 7, Array.Empty<(double, int)>(), new[] { (5000.25, 13) });
+        await Until(() => sink.Depth?.Snapshot.BestAskSize == 13m);
+        Assert.Equal(Es.ToTicks(5000m), sink.Depth!.Snapshot.BestBidTicks);
+        Assert.Equal(2, sink.Depth.Snapshot.Bids.Length);
+    }
+
+    [Fact]
+    public async Task Without_level2_permission_it_keeps_trades_and_best_bid_offer()
+    {
+        using var server = new FakeRithmicServer { LastTradeSsboe = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 2, NoLevel2 = true };
+        using var feed = new RithmicFeed(Settings(server));
+        var sink = new Sink();
+        using var sub = feed.Subscribe(Es, sink);
+        await Until(() => server.SubscribeBits.Contains(3L));
+        Assert.Equal(new[] { 7L, 3L }, server.SubscribeBits.ToArray()); // asked with depth, refused, asked again without it
+
+        await server.PushBbo("ESZ6", 5000.0, 4, 5000.25, 6);
+        await Until(() => sink.Depth != null);
+        Assert.Equal(Es.ToTicks(5000m), sink.Depth!.Snapshot.BestBidTicks);
+        await server.PushTrade("ESZ6", 5000.25, 2, true);
+        await Until(() => sink.Trades.Count > 0);
+        Assert.NotEqual(FeedStatus.Error, sink.Status);
     }
 
     private static readonly Instrument Mes = new() { Symbol = "MES", FeedId = RithmicFeed.FeedId, Exchange = "CME", TickSize = 0.25m, VolumeStep = 1, PointValue = 5 };

@@ -240,6 +240,15 @@ public sealed class ChartRenderer
 
         double rangeV = Math.Max(max - min, row * 6);
         double mid = (max + min) / 2;
+        if (model.Settings.CenterOnPrice && series.Count > 0 && layout.LastVisible >= series.Count - 1)
+        {
+            // the last price goes to the middle: the range is made symmetrical around it, wide enough for every visible candle
+            double lastPrice = (double)series.TicksToPrice(series[^1].CloseTicks);
+            double half = Math.Max(Math.Max(max - lastPrice, lastPrice - min), row * 3);
+            rangeV = Math.Max(rangeV, half * 2);
+            mid = lastPrice;
+        }
+
         double margin = rangeV * 0.08;
         // combined mode writes the delta above and the volume below each candle: leave room
         if (footprint && model.Settings.Layout.ShowTotals && main.Rect.Height > 100)
@@ -310,6 +319,23 @@ public sealed class ChartRenderer
             canvas.DrawLine(main.Rect.Left, y, main.Rect.Right, y, _stroke);
             _stroke.PathEffect = null;
         }
+    }
+
+    /// <summary>
+    /// Time left in the current candle ("04:12", "1:02:30", "2d 05h"), or null if the candles are not time based (ticks, range, volume…).
+    /// It counts with the feed's clock, so a replay counts its own time.
+    /// </summary>
+    public static string? Countdown(ChartModel model)
+    {
+        var series = model.Series;
+        if (series.Count == 0 || !series.Period.IsTimeBased) return null;
+        long end = series.TimeBucket(series[^1].Time.Ticks).End;
+        if (end == long.MaxValue) return null;
+        var left = new DateTime(end, DateTimeKind.Utc) - model.Data.Feed.Now;
+        if (left < TimeSpan.Zero) left = TimeSpan.Zero;
+        return left.TotalDays >= 1 ? $"{(int)left.TotalDays}d {left.Hours:00}h"
+            : left.TotalHours >= 1 ? $"{(int)left.TotalHours}:{left.Minutes:00}:{left.Seconds:00}"
+            : $"{left.Minutes:00}:{left.Seconds:00}";
     }
 
     private static int Instrument_Decimals(ChartModel model) => Market.Instrument.DecimalPlaces(model.Series.RowSize);
@@ -460,7 +486,14 @@ public sealed class ChartRenderer
             {
                 bool up = last.CloseTicks >= last.OpenTicks;
                 var bg = up ? t.LastPriceUp : t.LastPriceDown;
-                DrawAxisTag(canvas, layout, y, model.Instrument.FormatPrice(price), bg, SKColors.Black, RenderContext.GetFont(t.FontFamily, 11, true, false));
+                var tagFont = RenderContext.GetFont(t.FontFamily, 11, true, false);
+                DrawAxisTag(canvas, layout, y, model.Instrument.FormatPrice(price), bg, SKColors.Black, tagFont);
+                // time left in the candle, in a tag just under the price
+                if (model.Settings.ShowCountdown && Countdown(model) is { } left)
+                {
+                    float h = tagFont.Spacing + 4;
+                    if (y + h * 1.5f <= main.Rect.Bottom) DrawAxisTag(canvas, layout, y + h, left, new SKColor(38, 44, 56), new SKColor(235, 238, 245), tagFont);
+                }
             }
         }
     }

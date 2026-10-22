@@ -25,6 +25,11 @@ internal sealed class RithmicTickerPlant : IDisposable
         public long LastId;
         public OrderBookBuilder Book = new();
         public long LastBid = long.MinValue, LastAsk = long.MaxValue;
+
+        /// <summary>Full depth is arriving (the best bid/ask no longer touch the book) / Rithmic refused the depth (it asks without it).</summary>
+        public bool HasBook, NoBook, BookFull;
+
+        public int Bits => NoBook ? Rp.TradesQuotes : Rp.TradesQuotesBook;
         public string Key => Symbol + "|" + Exchange;
     }
 
@@ -134,7 +139,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         if (sub.Sinks.Count > 0 || sub.Probes > 0) return;
         _subs.Remove(sub.Instrument.Key);
         if (sub.Subscribed && _client is { } c && !_subs.Values.Any(s => s.Subscribed && s.Key == sub.Key))
-            _ = SafeSend(c, MarketData(sub.Symbol, sub.Exchange, 2), CancellationToken.None);
+            _ = SafeSend(c, MarketData(sub.Symbol, sub.Exchange, 2, sub.Bits), CancellationToken.None);
     }
 
     /// <summary>Front-month contract and last trade: from the live subscription if there is one, otherwise a short query.</summary>
@@ -194,9 +199,9 @@ internal sealed class RithmicTickerPlant : IDisposable
         }
     }
 
-    private static ProtoWriter MarketData(string symbol, string exchange, int request) =>
+    private static ProtoWriter MarketData(string symbol, string exchange, int request, int bits) =>
         new ProtoWriter().Int(Rp.TemplateId, Rp.RequestMarketDataUpdate).String(Rp.UserMsg, "md|" + symbol + "|" + exchange)
-            .String(Rp.Symbol, symbol).String(Rp.Exchange, exchange).Int(Rp.Request, request).Int(Rp.UpdateBits, 1 | 2);
+            .String(Rp.Symbol, symbol).String(Rp.Exchange, exchange).Int(Rp.Request, request).Int(Rp.UpdateBits, bits);
 
     private Task AskFrontMonth(RithmicClient c, Sub sub, CancellationToken ct) =>
         SafeSend(c, new ProtoWriter().Int(Rp.TemplateId, Rp.RequestFrontMonth).String(Rp.UserMsg, "fm|" + sub.Instrument.Key)
@@ -214,7 +219,7 @@ internal sealed class RithmicTickerPlant : IDisposable
         }
 
         foreach (var sink in Sinks(sub)) sink.OnStatus(sub.Instrument, FeedStatus.Connected, $"Rithmic: {symbol} ({_settings().System})");
-        await SafeSend(c, MarketData(symbol, exchange, 1), ct).ConfigureAwait(false);
+        await SafeSend(c, MarketData(symbol, exchange, 1, sub.Bits), ct).ConfigureAwait(false);
     }
 
     private IMarketDataSink[] Sinks(Sub sub)
@@ -324,6 +329,7 @@ internal sealed class RithmicTickerPlant : IDisposable
                         sub.Book = new OrderBookBuilder();
                         sub.LastBid = long.MinValue;
                         sub.LastAsk = long.MaxValue;
+                        sub.HasBook = sub.NoBook = false;
                     }
                 }
 
@@ -429,6 +435,19 @@ internal sealed class RithmicTickerPlant : IDisposable
                 var parts = tag.Split('|');
                 foreach (var sub in ByContract(parts.ElementAtOrDefault(1), parts.ElementAtOrDefault(2)))
                 {
+                    if (!sub.NoBook)
+                    {
+                        // maybe the account has no Level 2 permission: asks again without the depth (trades and best bid/ask)
+                        lock (_gate)
+                        {
+                            sub.NoBook = true;
+                            sub.Subscribed = false;
+                        }
+
+                        await SubscribeData(c, sub, sub.Symbol, sub.Exchange, ct).ConfigureAwait(false);
+                        continue;
+                    }
+
                     foreach (var sink in Sinks(sub)) sink.OnStatus(sub.Instrument, FeedStatus.Error, $"Rithmic rejected the subscription to {sub.Symbol}: {string.Join(" ", codes)}");
                     MarkReady(sub);
                 }
@@ -460,6 +479,7 @@ internal sealed class RithmicTickerPlant : IDisposable
             {
                 foreach (var sub in ByContract(m.String(Rp.Symbol), m.String(Rp.Exchange)))
                 {
+                    if (sub.HasBook) continue; // the full book already carries the best levels
                     var inst = sub.Instrument;
                     DepthUpdate update;
                     lock (sub.Book)
@@ -486,6 +506,44 @@ internal sealed class RithmicTickerPlant : IDisposable
                     }
 
                     foreach (var sink in Sinks(sub)) sink.OnDepth(inst, update);
+                }
+
+                break;
+            }
+            case Rp.OrderBook:
+            {
+                int type = (int)m.Int(Rp.BookUpdateType);
+                if (type == Rp.BookNone) break; // no Level 2 for this contract: the best bid/ask keep filling the DOM
+                var bidPrices = m.Doubles(Rp.BookBidPrice).ToArray();
+                var bidSizes = m.Ints(Rp.BookBidSize).ToArray();
+                var askPrices = m.Doubles(Rp.BookAskPrice).ToArray();
+                var askSizes = m.Ints(Rp.BookAskSize).ToArray();
+                foreach (var sub in ByContract(m.String(Rp.Symbol), m.String(Rp.Exchange)))
+                {
+                    var inst = sub.Instrument;
+                    DepthUpdate? update = null;
+                    lock (sub.Book)
+                    {
+                        // the first depth replaces what the best bid/ask had built
+                        if (!sub.HasBook || type == Rp.BookClear)
+                        {
+                            sub.Book.Clear();
+                            sub.HasBook = sub.BookFull = true;
+                        }
+
+                        for (int i = 0; i < Math.Min(bidPrices.Length, bidSizes.Length); i++) sub.Book.Set(BookSide.Bid, inst.ToTicks((decimal)bidPrices[i]), bidSizes[i]);
+                        for (int i = 0; i < Math.Min(askPrices.Length, askSizes.Length); i++) sub.Book.Set(BookSide.Ask, inst.ToTicks((decimal)askPrices[i]), askSizes[i]);
+
+                        // a BEGIN… MIDDLE… END set is shown once it is complete (half-applied it can look crossed)
+                        if (type is not (Rp.BookBegin or Rp.BookMiddle))
+                        {
+                            update = sub.Book.BuildUpdate(DateTime.UtcNow, 50, sub.BookFull);
+                            sub.BookFull = false;
+                        }
+                    }
+
+                    if (update != null)
+                        foreach (var sink in Sinks(sub)) sink.OnDepth(inst, update);
                 }
 
                 break;

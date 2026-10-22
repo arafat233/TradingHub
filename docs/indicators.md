@@ -22,6 +22,8 @@ The strategy indicators (`Sma`, `Ema`, `Rsi`…) are a different, simpler API: s
 | Cumulative delta (CVD) | Volume / Order flow | As candles; resets each session or not |
 | Big Trades | Volume / Order flow | Bubbles on large aggressive orders (it adds up the executions of one order even if it sweeps several levels). Fixed or adaptive threshold (a percentile of recent orders), where it sits on the price, colors and sizes |
 | Session volume profile | Volume / Order flow | Per session, week or all the visible history; volume, delta or bid/ask; value area (%), POC, VAH and VAL |
+| TPO profile (market profile) | Volume / Order flow | Per session or week: a letter for every period (30 minutes by default) that traded at each price row, POC, value area and the initial balance. It works from the candles' highs and lows: use candles no longer than the period |
+| Speed of Tape | Volume / Order flow | How fast it is trading per candle (trades or contracts per second), against its recent average; candles well above it are painted with the color of the side that led |
 | RSI | Oscillators | Period |
 | MACD | Oscillators | Fast and slow averages, and signal |
 

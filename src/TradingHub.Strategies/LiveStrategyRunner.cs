@@ -33,6 +33,7 @@ public sealed class LiveStrategyRunner : IStrategyHost, IDisposable
     private static readonly HashSet<long> CanceledOrders = new();
     private readonly Strategy _strategy;
     private readonly InstrumentData _data;
+    private IcebergDetector? _icebergs;
     private readonly ITradingAccount _account;
     private readonly ChartPeriod _period;
     private readonly SessionSettings _session;
@@ -484,6 +485,7 @@ public sealed class LiveStrategyRunner : IStrategyHost, IDisposable
         _builder.Append(t, p, store.GetVolume(i), store.GetSide(i));
         if (_warmup) return;
         Trail(store.GetPrice(i));
+        if (_strategy.WantsIcebergs) (_icebergs ??= new IcebergDetector { Keep = TimeSpan.FromHours(4) }).OnTrade(store.GetTime(i), store.GetPriceTicks(i), store.GetVolume(i), store.GetSide(i) == TradeSide.Buy, BookNow);
         if (_strategy.WantsTicks) _strategy.InternalTick(store.Get(i));
     }
 
@@ -882,6 +884,9 @@ public sealed class LiveStrategyRunner : IStrategyHost, IDisposable
     public BarSeries Bars => _bars;
     public Bar? FormingBar => _builder?.Current;
     public DateTime Time => new(_timeTicks, DateTimeKind.Utc);
+    DepthSnapshot? IStrategyHost.Book => BookNow;
+    private DepthSnapshot? BookNow => _data.Depth is { } d && (d.HasBid || d.HasAsk) ? d : null;
+    public IReadOnlyList<IcebergEvent> Icebergs => _icebergs?.Events ?? (IReadOnlyList<IcebergEvent>)Array.Empty<IcebergEvent>();
     public decimal LastPrice => _data.Instrument.FromTicks(_priceTicks);
     public TimeZoneInfo TimeZone => _tz;
     public SessionSettings Session => _session;

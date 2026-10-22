@@ -39,6 +39,9 @@ public sealed class BacktestSettings
     /// <summary>Session start time in that zone.</summary>
     public TimeSpan SessionStart { get; set; }
 
+    /// <summary>Give the strategy the recorded order book (<see cref="Strategy.Book"/>) when there is one for the range.</summary>
+    public bool UseBook { get; set; } = true;
+
     /// <summary>Close the open position at the end of the backtest.</summary>
     public bool CloseAtEnd { get; set; } = true;
 

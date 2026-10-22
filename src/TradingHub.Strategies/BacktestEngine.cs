@@ -30,6 +30,9 @@ public sealed class BacktestEngine : IStrategyHost
     private int _index;
     private long _submitIndex;
     private long _timeTicks, _priceTicks;
+    private DepthCursor? _depth;
+    private DepthSnapshot? _book;
+    private IcebergDetector? _icebergs;
 
     // position
     private decimal _pos, _avg, _realized, _commissionOpen, _commissionTotal;
@@ -82,6 +85,13 @@ public sealed class BacktestEngine : IStrategyHost
 
             result.Parameters = _strategy.GetParameters();
             _builder = new BarBuilder(_inst, _period, _session, _strategy.UseFootprint);
+            if (_s.UseBook && _data.DepthRoot != null)
+            {
+                _depth = new DepthCursor(_data.DepthRoot, _inst.FeedId, _inst.Symbol);
+                if (_strategy.WantsIcebergs) _icebergs = new IcebergDetector { Keep = TimeSpan.FromHours(4) };
+                Log("Using the recorded order book");
+            }
+
             bool ticks = _strategy.WantsTicks;
             for (int i = _data.Start; i < _data.End; i++)
             {
@@ -89,6 +99,7 @@ public sealed class BacktestEngine : IStrategyHost
                 _index = i;
                 long t = _data.TimeTicks(i), p = _data.PriceTicks(i);
                 _timeTicks = t;
+                if (_depth != null) _book = _depth.At(new DateTime(t, DateTimeKind.Utc));
 
                 // 1) candle close (the strategy decides with whatever there was up to the close)
                 var closed = _builder.Roll(t, p);
@@ -114,6 +125,8 @@ public sealed class BacktestEngine : IStrategyHost
                 // 2) fills with this trade
                 _priceTicks = p;
                 if (_orders.Count > 0) ProcessFills(i, p, t);
+
+                _icebergs?.OnTrade(new DateTime(t, DateTimeKind.Utc), p, _data.Volume(i), _data.Side(i) == TradeSide.Buy, _book);
 
                 // 3) the trade goes into the candle being formed
                 _builder.Append(t, p, _data.Volume(i), _data.Side(i));
@@ -388,6 +401,8 @@ public sealed class BacktestEngine : IStrategyHost
     public BarSeries Bars => _bars;
     public Bar? FormingBar => _builder?.Current;
     public DateTime Time => new(_timeTicks, DateTimeKind.Utc);
+    public DepthSnapshot? Book => _book;
+    public IReadOnlyList<IcebergEvent> Icebergs => _icebergs?.Events ?? (IReadOnlyList<IcebergEvent>)Array.Empty<IcebergEvent>();
     public decimal LastPrice => _inst.FromTicks(_priceTicks);
     public TimeZoneInfo TimeZone => _tz;
     public SessionSettings Session => _session;

@@ -56,7 +56,7 @@ public static class MarketInfo
     /// CME futures (Rithmic or Tradovate: same contracts, same continuous history; also Databento's history and
     /// the one from a single connection, see <see cref="HistorySources"/>).
     /// </summary>
-    public static bool IsFutures(string feed) => HistorySources.Folder(feed) is RithmicFeed.FeedId or TradingHub.Feeds.Tradovate.TradovateFeed.FeedId or HistorySources.Databento;
+    public static bool IsFutures(string feed) => HistorySources.Folder(feed) is RithmicFeed.FeedId or TradingHub.Feeds.Tradovate.TradovateFeed.FeedId or HistorySources.Databento or TradingHub.Feeds.DxFeed.DxFeedFeed.FeedId;
 
     /// <summary>CFDs (imported files, OANDA or a cTrader broker): with no real trades, the spread goes in as slippage.</summary>
     public static bool IsCfd(string feed) => feed == CsvImport.FeedId || feed == TradingHub.Feeds.Oanda.OandaFeed.FeedId || feed.StartsWith(TradingHub.Feeds.CTrader.CTraderFeed.FeedId, StringComparison.Ordinal);

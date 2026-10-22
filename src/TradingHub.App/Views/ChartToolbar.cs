@@ -31,6 +31,7 @@ internal sealed class ChartToolbar : UserControl
     private readonly ChoiceButton<ChartStyle> _styleBox;
     private readonly ComboBox _layoutBox = new() { MinWidth = 190, MaxWidth = 240 };
     private readonly ChoiceButton<int> _stepBox;
+    private readonly ToggleButton _centerBtn = Ui.IconToggle(MaterialIconKind.CrosshairsGps, "Keep the price in the middle of the chart: the price scale follows the price up and down (off: it just fits the visible candles)");
     private readonly ChoiceButton<double> _historyBox;
     private ChartTab? _chart;
     private bool _syncing;
@@ -127,6 +128,15 @@ internal sealed class ChartToolbar : UserControl
         right.Children.Add(_styleBox);
         right.Children.Add(Ui.Button("Indicators", MaterialIconKind.FunctionVariant, () => _host.OpenIndicators(_chart)));
         right.Children.Add(Ui.IconButton(MaterialIconKind.ViewColumnOutline, "Edit footprint (columns)", () => _host.OpenFootprintEditor(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.Fire, "Liquidity heatmap: what rests in the order book at each price over time (needs a connection with depth)", () => _host.OpenHeatmap(_chart)));
+        _centerBtn.IsCheckedChanged += (_, _) =>
+        {
+            if (_syncing || _chart?.Model is not { } cm) return;
+            cm.Settings.CenterOnPrice = _centerBtn.IsChecked == true;
+            if (cm.Settings.CenterOnPrice) cm.Viewport.AutoScale = true; // the automatic scale has to be on for it to follow
+            cm.Invalidate();
+        };
+        right.Children.Add(_centerBtn);
         right.Children.Add(Ui.IconButton(MaterialIconKind.PaletteOutline, "Chart settings: colors for the background, the candles, the axes…", () => _host.OpenChartSettings(_chart)));
         Button? strategies = null;
         strategies = Ui.IconButton(MaterialIconKind.RobotOutline, "Strategies on the chart: they mark where they enter and exit (history and live), visual only or executing on an account", () => _host.ShowStrategyMenu(_chart, strategies!));
@@ -354,6 +364,7 @@ internal sealed class ChartToolbar : UserControl
         _stepBox.IsVisible = m.Settings.Style == ChartStyle.Footprint;
         _layoutBox.SelectedItem = _layoutBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is FootprintLayout l && l.Name == m.Settings.Layout.Name);
         _stepBox.Select(m.Settings.PriceStep);
+        _centerBtn.IsChecked = m.Settings.CenterOnPrice;
         double hours = c.HistoryHours != 0 ? c.HistoryHours : _host.Services.HistoryFor(c.FeedId).TotalHours;
         if (hours == AllHistory) _historyBox.Select(AllHistory);
         else

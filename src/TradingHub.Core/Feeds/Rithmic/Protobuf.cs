@@ -158,6 +158,18 @@ public sealed class ProtoMessage
         }
     }
 
+    /// <summary>Every double value of a repeated field (loose or packed).</summary>
+    public IEnumerable<double> Doubles(int field)
+    {
+        if (!_fields.TryGetValue(field, out var l)) yield break;
+        foreach (var v in l)
+        {
+            if (v is double d) yield return d;
+            else if (v is byte[] packed)
+                for (int pos = 0; pos + 8 <= packed.Length; pos += 8) yield return BitConverter.ToDouble(packed, pos);
+        }
+    }
+
     public IEnumerable<string> Strings(int field) =>
         _fields.TryGetValue(field, out var l) ? l.OfType<byte[]>().Select(b => Encoding.UTF8.GetString(b)) : Array.Empty<string>();
 }

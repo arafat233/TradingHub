@@ -88,6 +88,12 @@ internal interface IStrategyHost
     BarSeries Bars { get; }
     Bar? FormingBar { get; }
     DateTime Time { get; }
+
+    /// <summary>The order book right now (null if there is no depth: a backtest without recorded books, or a feed that sends none).</summary>
+    DepthSnapshot? Book { get; }
+
+    /// <summary>Icebergs found so far (only filled when the strategy asked for them with TrackIcebergs).</summary>
+    IReadOnlyList<IcebergEvent> Icebergs { get; }
     decimal LastPrice { get; }
     TimeZoneInfo TimeZone { get; }
     SessionSettings Session { get; }
@@ -174,6 +180,37 @@ public abstract class Strategy
     public DateTime LocalTime => TimeZoneInfo.ConvertTimeFromUtc(Host.Time, Host.TimeZone);
 
     public decimal Price => Host.LastPrice;
+
+    // ----------------------------------------------------------------- order book
+
+    /// <summary>
+    /// The order book at this moment: live, or the recorded one in a backtest (the book is recorded from the moment an instrument is opened
+    /// with "Record the order book" on, 4 snapshots a second, 20 levels per side). null when there is none: always check it.
+    /// </summary>
+    public DepthSnapshot? Book => Host.Book;
+
+    /// <summary>
+    /// (bid size - ask size) / (bid size + ask size) over the first <paramref name="levels"/> levels: +1 = all bids, -1 = all asks,
+    /// 0 = balanced or no book.
+    /// </summary>
+    public decimal BookImbalance(int levels = 5)
+    {
+        if (Host.Book is not { } b) return 0;
+        decimal bid = 0, ask = 0;
+        for (int i = 0; i < Math.Min(levels, b.Bids.Length); i++) bid += b.Bids[i].Size;
+        for (int i = 0; i < Math.Min(levels, b.Asks.Length); i++) ask += b.Asks[i].Size;
+        return bid + ask == 0 ? 0 : (bid - ask) / (bid + ask);
+    }
+
+    /// <summary>Set it to true in OnInit to have <see cref="Icebergs"/> filled (it costs a little on every trade, so it is off by default).</summary>
+    protected bool TrackIcebergs { get; set; }
+    internal bool WantsIcebergs => TrackIcebergs;
+
+    /// <summary>
+    /// Iceberg orders found so far (levels that absorbed much more than they showed; needs the book and TrackIcebergs).
+    /// An iceberg with <c>Ask</c> true is a resting sell (buyers kept hitting it), false a resting buy.
+    /// </summary>
+    public IReadOnlyList<IcebergEvent> Icebergs => Host.Icebergs;
     public decimal TickSize => Host.Instrument.TickSize;
     public bool IsBacktest => Host.IsBacktest;
 

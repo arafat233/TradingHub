@@ -54,6 +54,8 @@ internal sealed class ConnectionsView : UserControl, IPage
         ConnectionKind.Oanda => MaterialIconKind.Earth,
         ConnectionKind.Alpaca => MaterialIconKind.Finance,
         ConnectionKind.Databento => MaterialIconKind.DatabaseArrowDownOutline,
+        ConnectionKind.DxFeed => MaterialIconKind.Layers,
+        ConnectionKind.LondonStrategicEdge => MaterialIconKind.CloudDownloadOutline,
         _ => MaterialIconKind.Bank,
     };
 
@@ -73,7 +75,9 @@ internal sealed class ConnectionsView : UserControl, IPage
                 ConnectionKind.CTrader => "CFDs and forex from IC Markets, Pepperstone, FxPro…",
                 ConnectionKind.Oanda => "index, gold and forex CFDs (free practice)",
                 ConnectionKind.Alpaca => "free US stocks and ETFs (SPY, QQQ)",
-                ConnectionKind.Databento => "CME futures history since 2010",
+                ConnectionKind.Databento => "CME futures history since 2010, and live with Level 2",
+                ConnectionKind.DxFeed => "CME futures live with Level 2 (your dxFeed token)",
+                ConnectionKind.LondonStrategicEdge => "free stocks, forex, crypto and indices: live ticks and history (your free key)",
                 _ => null,
             };
             object itemHeader = hint == null ? Ui.EnumName(kind) : Ui.V(1, new TextBlock { Text = Ui.EnumName(kind) }, new TextBlock { Text = hint, Classes = { "faint", "small" } });
@@ -147,10 +151,12 @@ internal sealed class ConnectionsView : UserControl, IPage
             ConnectionKind.Bybit => "public data",
             ConnectionKind.Rithmic or ConnectionKind.AmpFutures => string.IsNullOrWhiteSpace(p.RithmicUser) ? "no user configured" : $"{p.RithmicUser} · {p.RithmicSystem}",
             ConnectionKind.Tradovate => string.IsNullOrWhiteSpace(p.TradovateUser) ? "no user configured" : $"{p.TradovateUser} · {(p.Testnet ? "demo" : p.AllowRealOrders ? "REAL" : "real (read only)")}",
-            ConnectionKind.CTrader => string.IsNullOrWhiteSpace(p.CTraderClientId) ? "no application configured" : $"{(p.Testnet ? "demo" : "real")}{(p.CTraderLogin > 0 ? " · cuenta " + p.CTraderLogin : "")}",
+            ConnectionKind.CTrader => string.IsNullOrWhiteSpace(p.CTraderClientId) ? "no application configured" : $"{(p.Testnet ? "demo" : "real")}{(p.CTraderLogin > 0 ? " · account " + p.CTraderLogin : "")}",
             ConnectionKind.Oanda => (p.Testnet ? "practice" : "real") + (string.IsNullOrWhiteSpace(p.OandaAccount) ? "" : " · " + p.OandaAccount),
             ConnectionKind.Alpaca => string.IsNullOrWhiteSpace(p.ApiKey) ? "no keys" : $"SIP history · live {p.AlpacaLiveFeed.ToUpperInvariant()}",
-            ConnectionKind.Databento => "CME futures history (pay per use)",
+            ConnectionKind.Databento => p.DatabentoLevel2 ? "CME history + live with Level 2" : "CME history + live trades",
+            ConnectionKind.DxFeed => p.DxFeedUrl.TrimEnd('/') == TradingHub.Feeds.DxFeed.DxFeedSettings.DemoUrl ? "demo server (delayed)" : $"live · Level 2 {p.DxFeedDomSource}",
+            ConnectionKind.LondonStrategicEdge => "free · ticks (24 h) + candles",
             _ => $"{p.IbHost}:{p.IbPort}",
         };
         return prefix + detail;
@@ -163,9 +169,11 @@ internal sealed class ConnectionsView : UserControl, IPage
         if (kind is ConnectionKind.CTrader) p.Name = n > 1 ? $"cTrader {n}" : "cTrader";
         if (kind is ConnectionKind.Alpaca) p.Name = n > 1 ? $"Alpaca {n}" : "Alpaca";
         if (kind is ConnectionKind.Databento) p.Name = "Databento";
+        if (kind is ConnectionKind.DxFeed) p.Name = n > 1 ? $"dxFeed {n}" : "dxFeed";
+        if (kind is ConnectionKind.LondonStrategicEdge) p.Name = "London Strategic Edge";
         // the first one of each type uses its data's id (so the tick files end up with a clear name)
         string defaultId = ConnectionProfile.DefaultId(kind);
-        if (kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento
+        if (kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.DxFeed or ConnectionKind.LondonStrategicEdge
             && _svc.Connections.Profiles.All(x => x.Id != defaultId))
             p.Id = defaultId;
         if (kind == ConnectionKind.Simulator) p.HistoryHours = 6;
@@ -255,8 +263,15 @@ internal sealed class ConnectionsView : UserControl, IPage
                 sections.Children.Add(Ui.Card(AlpacaSection(p, apply)));
                 break;
             case ConnectionKind.Databento:
-                dataSection.IsVisible = false;
+                dataSection.Children.Add(Note(MaterialIconKind.ShieldCheckOutline, "Charts show what you downloaded in Data plus what arrives live: Trading Hub never buys history from Databento on its own."));
                 sections.Children.Add(Ui.Card(DatabentoSection(p, apply)));
+                break;
+            case ConnectionKind.DxFeed:
+                sections.Children.Add(Ui.Card(DxFeedSection(p, apply)));
+                break;
+            case ConnectionKind.LondonStrategicEdge:
+                dataSection.Children.Add(Note(MaterialIconKind.InformationOutline, "No order book and no trade side from this service: each trade's side is inferred from the tick rule (whether the price rose or fell), so the footprint, delta and CVD are estimates, and the heatmap needs a feed with depth. The last 24 hours come as real ticks, older history as candles."));
+                sections.Children.Add(Ui.Card(LseSection(p, apply)));
                 break;
         }
 
@@ -265,7 +280,7 @@ internal sealed class ConnectionsView : UserControl, IPage
         var save = Ui.Button("Save", MaterialIconKind.ContentSaveOutline, () => { }, "primary");
         var delete = Ui.Button("Delete", MaterialIconKind.DeleteOutline, () => { }, "ghost");
         delete.IsVisible = _svc.Connections.Profiles.Count(x => x.Kind == p.Kind) > 1 || p.Kind is ConnectionKind.InteractiveBrokers or ConnectionKind.AmpFutures
-            or ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento;
+            or ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.DxFeed or ConnectionKind.LondonStrategicEdge;
 
         void Save()
         {
@@ -823,21 +838,70 @@ internal sealed class ConnectionsView : UserControl, IPage
             Note(MaterialIconKind.ShieldKeyOutline, "Trading Hub uses the keys for data only (it sends no orders to Alpaca)."));
     }
 
-    /// <summary>Databento: API key (CME futures history from 2010, pay as you go with gift credits).</summary>
-    private Control DatabentoSection(ConnectionProfile p, List<Action> apply)
+    /// <summary>London Strategic Edge: one free API key.</summary>
+    private Control LseSection(ConnectionProfile p, List<Action> apply)
     {
-        var key = SecretBox(p, null, "API key (db-…)");
+        var key = SecretBox(p, null, "API key");
         apply.Add(() =>
         {
             if (!string.IsNullOrWhiteSpace(key.Text)) _svc.Connections.SetSecret(p, key.Text.Trim());
             key.Text = "";
         });
         return Ui.V(14,
+            Ui.H2("London Strategic Edge"),
+            Note(MaterialIconKind.InformationOutline, "Free stocks, ETFs, forex, crypto, commodities, indices and futures. Live ticks over a websocket (one key streams up to 16 symbols), the last 24 hours as ticks and long history as candles (US stocks back to 2003, forex to 2009, crypto to 2017). The free plan allows 10 downloads an hour. The picker lists everything in the service's catalog; which symbols your free plan actually serves is up to the service."),
+            Ui.Field("API key", key),
+            Ui.H(16, Link("Get a free key", "https://londonstrategicedge.com/data")),
+            Note(MaterialIconKind.ShieldKeyOutline, "The key is stored in the Keychain (Windows Credential Manager on Windows), never in a file. Trading Hub uses it for data only."));
+    }
+
+    /// <summary>Databento: API key (CME futures history from 2010, pay as you go with gift credits).</summary>
+    private Control DatabentoSection(ConnectionProfile p, List<Action> apply)
+    {
+        var key = SecretBox(p, null, "API key (db-…)");
+        var level2 = new ToggleSwitch { IsChecked = p.DatabentoLevel2, OnContent = "Live trades + Level 2 (MBP-10, top 10 levels)", OffContent = "Live trades only (cheaper)" };
+        var products = new TextBox { Text = string.Join(", ", p.DatabentoProducts), Watermark = "ES, NQ, MES, MNQ, GC, MGC…" };
+        apply.Add(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(key.Text)) _svc.Connections.SetSecret(p, key.Text.Trim());
+            key.Text = "";
+            p.DatabentoLevel2 = level2.IsChecked == true;
+            p.DatabentoProducts = (products.Text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.ToUpperInvariant()).Distinct().ToList();
+        });
+        return Ui.V(14,
             Ui.H2("Databento"),
             Note(MaterialIconKind.InformationOutline, "Tick-by-tick history for CME futures (NQ, ES, MNQ, MES, CL, GC…) since 2010, with each trade's real aggressor side: exactly what Rithmic does not keep. It is pay per use; new accounts come with US$ 125 of free credits."),
             Ui.Field("API key", key),
             Ui.H(16, Link("Create an account (with free credits)", "https://databento.com/signup"), Link("Prices", "https://databento.com/pricing")),
+            Ui.H2("Live data"),
+            Note(MaterialIconKind.InformationOutline, "Live CME futures on charts, DOM and tape (continuous front month, it rolls on its own). Live is a separate Databento licence (CME, non-professional) plus usage; Level 2 streams much more data than trades only, so it costs more. “Test connection” tells you whether your key has live access."),
+            level2,
+            Ui.Field("Products", products),
             Note(MaterialIconKind.ShieldCheckOutline, "It is used from Data → “CME futures with Databento”: Trading Hub computes the cost first and only downloads if you confirm. It is stored separately (“Databento” in Data) and in backtests you choose Databento only, Rithmic only or both combined (Rithmic first, with Databento filling the gaps)."));
+    }
+
+    /// <summary>dxFeed: dxLink address and token of your plan, Level 2 source and products.</summary>
+    private Control DxFeedSection(ConnectionProfile p, List<Action> apply)
+    {
+        var url = new TextBox { Text = p.DxFeedUrl, Watermark = TradingHub.Feeds.DxFeed.DxFeedSettings.DemoUrl };
+        var token = SecretBox(p, null, "token from your dxFeed plan (empty on the demo server)");
+        var source = new TextBox { Text = p.DxFeedDomSource, Watermark = "glbx" };
+        var products = new TextBox { Text = string.Join(", ", p.DxFeedProducts), Watermark = "ES, NQ, MES, MNQ, GC, MGC, /CLZ26:XNYM…" };
+        apply.Add(() =>
+        {
+            p.DxFeedUrl = string.IsNullOrWhiteSpace(url.Text) ? TradingHub.Feeds.DxFeed.DxFeedSettings.DemoUrl : url.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(token.Text)) _svc.Connections.SetSecret(p, token.Text.Trim());
+            token.Text = "";
+            p.DxFeedDomSource = string.IsNullOrWhiteSpace(source.Text) ? "glbx" : source.Text.Trim();
+            p.DxFeedProducts = (products.Text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().ToList();
+        });
+        return Ui.V(14,
+            Ui.H2("dxFeed (dxLink)"),
+            Note(MaterialIconKind.InformationOutline, "Live CME futures with every trade (aggressor side included) and the full order book (Level 2) in the DOM. You need the dxLink address and token of your own dxFeed plan; the demo server works without a token but its data is delayed. There is no history download: the chart fills from the moment it connects."),
+            TwoColumns(Ui.Field("dxLink address", url), Ui.Field("Token", token)),
+            TwoColumns(Ui.Field("Level 2 source", source), Ui.Field("Products", products)),
+            Note(MaterialIconKind.InformationOutline, "Indices (ES, NQ, YM, RTY and micros) and gold (GC, MGC) use the front month on their own. Anything else, type its exact dxFeed symbol, for example /CLZ26:XNYM. glbx is CME Globex by price level (lower case: dxFeed rejects GLBX); “Test connection” tells you whether Level 2 is arriving."),
+            Note(MaterialIconKind.ShieldKeyOutline, "The token is stored in the Credential Manager / Keychain. Trading Hub uses dxFeed for data only (it sends no orders)."));
     }
 
     private Control IbSection(ConnectionProfile p, List<Action> apply)

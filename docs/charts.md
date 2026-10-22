@@ -99,6 +99,15 @@ on the chart immediately.
 | Dragging the time axis / double click | Changes the candle width / back to the latest |
 | Bottom-right button | Appears if you scrolled back: returns to the latest |
 
+**Keeping the price in the middle**: the crosshair button in the chart bar («Keep the price in the middle of the chart», also in the chart
+settings, *Price* tab) keeps the last price in the vertical middle while the chart follows the live edge: as the price goes up or down the
+price scale moves with it, still showing every visible candle. Off, the scale just fits the visible candles. Dragging the price scale or
+the chart vertically (manual scale), or scrolling back to the past, suspends it; a double click on the price axis brings the automatic scale back.
+
+**Candle countdown**: for time candles (seconds, minutes, hours, daily…) a small tag under the last price on the axis shows the time left in the
+current candle (`04:12`, `1:02:30`, `2d 05h`), counted with the connection's clock (a replay counts its own time). Candles by ticks, range or
+volume have no clock, so no countdown. It can be switched off in the chart settings.
+
 The keys from [Getting started](getting-started.md#keyboard-shortcuts) also work and, in the Chart menu, «Auto scale»
 (⌥⌘A) and «Go to last price» (⌘End).
 
@@ -188,6 +197,62 @@ the size from which the book is highlighted, the book bars and the colors.
 The **Time and sales tape** lists trades as they arrive; executions from the same aggressive order (same millisecond and
 side) are added up into one row. With the wheel you scroll back and the list holds still; a click on the header returns
 to the latest. How to trade with the DOM is covered in [Trading](trading.md#trading-with-the-dom).
+
+## Liquidity heatmap
+
+The **flame button** in the chart bar opens the order book as a heatmap in its own window (it can go to another monitor).
+Time runs to the right and price goes up; the color of each cell is how much was **resting in the book** at that price at
+that moment: near-black for little, then blue, yellow, orange and red for the largest orders. On top you see the best
+bid and ask (a pale band), the last price (white), **bubbles** for the biggest trades (green when buyers hit the ask, red
+when sellers hit the bid), **icebergs**, a ladder on the right (the live book as bars and the volume traded at each price,
+buy green / sell red), the volume traded below and a **CVD** line (cumulative delta since the session start, 00:00 UTC).
+
+- **Wheel**: how much time fits on the screen (30 seconds to 30 minutes). **Ctrl + wheel**, or **dragging on the price
+  axis**: the height of each price row.
+- **Drag** up or down moves the price range; **double click** (or *Follow price*) follows the price again. **Hover** shows a
+  crosshair with the price, the time and how much was resting there. *Pause* freezes the picture (the book keeps recording).
+- *Contrast* makes smaller resting orders stand out; the checkboxes switch the bid/ask lines, bubbles, volume, icebergs, CVD
+  and ladder on and off. The window remembers its size and position.
+- **Icebergs**: a level that had far more traded against it than it ever showed (3x the biggest size it displayed, and
+  at least 4x the median level) is boxed with the volume it absorbed: green = resting buy, red = resting sell. It is a
+  heuristic (stops and fast market makers can look the same).
+
+### The ladder, the boxes, the dials and the tags
+
+These are defined here so you know exactly what each number is (make the rows taller with Ctrl + wheel to see the numbers):
+
+- **Ladder** (right of the price axis, one row per price): **COB** = size resting in the book right now (red asks, green bids);
+  **SVP** = volume traded at that price since the session start, buy green / sell red; **CQC** = how the resting size at that
+  price changed over the time on screen (+ added, − pulled or filled); **Delta** = session buy minus sell volume at that price.
+  The session starts at 00:00 UTC.
+- **Market Vol** (box, bottom left): what traded in the last 10 seconds at the ask (buyers) and at the bid (sellers).
+  **Avg. Liquidity**: the average size resting on the first 10 levels of each side, averaged over the time on screen.
+- **Dials** (under the ladder): *Hidden Bid* / *Hidden Ask* = volume absorbed by the icebergs found on each side; *Hit Bid* /
+  *Hit Ask* = what sellers / buyers traded in the window; *Delta / Depth* = the window's delta divided by the average resting
+  size (full scale at ±3); *CVD* = the session CVD, scaled to its range in the window.
+- **Blocks**: a big level (at least half the "a lot" size) whose size stays within 10% of itself for 20 seconds or more is covered
+  by a pale block with its size: a wall that sits there, as opposed to orders that come and go.
+- **Tags at the price**: on the last price, `size (n)` = the size of the last trade and how many trades hit that price in the last
+  second; on the best bid and best ask, the size resting there.
+
+The *Stats*, *Gauges* and *Blocks* checkboxes switch the boxes, the dials and the blocks on and off.
+
+## Recording the book and replaying it
+
+With **Settings → Record the order book** on (the default), every instrument you open with a live connection also records its
+book to `.vdk` files next to its ticks: 4 snapshots a second, 20 levels per side, one file per UTC day (roughly 20-40 MB a day
+per instrument; it only applies to instruments opened after you turn it on). Only the app that holds an instrument's recording
+lock writes it.
+
+- **Replay**: in the heatmap window, *Replay a recorded day* plays a recorded day back (speed 1x to 60x, a time-of-day
+  slider, *Pause* / *Play*). It reads about an hour and a half around the cursor at a time, so a whole day never has to fit in
+  memory. Icebergs, bubbles and CVD work in a replay the same way.
+- **Backtests and strategies**: a backtest uses the recorded book for the days it has: the strategy gets `Book`,
+  `BookImbalance()` and (with `TrackIcebergs`) `Icebergs`; see [Strategies](strategies.md). A day with no recorded book simply
+  has `Book == null`. There is no depth history to download, so only days the app recorded are available.
+
+It needs a connection that sends the order book (Rithmic, dxFeed, Databento, Tradovate, Binance, Bybit or the simulator).
+Databento sends 10 levels per side and Alpaca and cTrader only the best bid and ask, so their heatmaps are thinner.
 
 ## Volume profile
 

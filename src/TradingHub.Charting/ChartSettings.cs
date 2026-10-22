@@ -55,6 +55,16 @@ public sealed class ChartSettings
     public bool ShowIndicatorNames { get; set; } = true;
     public bool ShowLastPriceLine { get; set; } = true;
 
+    /// <summary>Time left in the current candle, under the last price on the price axis (time candles only).</summary>
+    public bool ShowCountdown { get; set; } = true;
+
+    /// <summary>
+    /// Keeps the last price in the vertical middle of the chart while the chart follows the live edge: the price scale re-centres on it as the
+    /// price goes up or down (still showing every visible candle). Off, the scale just fits the visible candles. Dragging the price scale or the
+    /// chart vertically switches the automatic scale off, as always; a double click brings it back.
+    /// </summary>
+    public bool CenterOnPrice { get; set; } = true;
+
     /// <summary>Mark your own trades (fills and closed trades).</summary>
     public bool ShowTradeMarks { get; set; } = true;
 

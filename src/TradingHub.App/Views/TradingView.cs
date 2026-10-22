@@ -1254,6 +1254,8 @@ public sealed partial class TradingView : UserControl
             m.Settings.ShowGrid = src.Settings.ShowGrid;
             m.Settings.ShowSessionLines = src.Settings.ShowSessionLines;
             m.Settings.ShowLastPriceLine = src.Settings.ShowLastPriceLine;
+            m.Settings.ShowCountdown = src.Settings.ShowCountdown;
+            m.Settings.CenterOnPrice = src.Settings.CenterOnPrice;
             m.Settings.ShowInfoPanel = src.Settings.ShowInfoPanel;
             m.Settings.ShowTradeMarks = src.Settings.ShowTradeMarks;
             m.ApplyColors();
@@ -1377,6 +1379,15 @@ public sealed partial class TradingView : UserControl
             CheckAlerts(t);
             if (t.Model.IsDirty) t.View.InvalidateVisual();
             if (slowFrame) w.Toolbar.UpdateQuote();
+        }
+
+        // the candle countdown changes every second even when no trade arrives
+        if (_frame % 60 == 0)
+        {
+            foreach (var t in visible)
+                if (t.Model is { } cm && cm.Settings.ShowCountdown && cm.Period.IsTimeBased) cm.Invalidate();
+            foreach (var w in _floating)
+                if (w.Chart.Model is { } fm && fm.Settings.ShowCountdown && fm.Period.IsTimeBased) fm.Invalidate();
         }
 
         if (slowFrame)

@@ -49,11 +49,16 @@ internal static class ConnectionsScene
         using var oanda = FakeBrokers.Oanda();
         using var databento = FakeBrokers.Databento();
         using var alpaca = FakeBrokers.Alpaca();
+        using var lse = TradingHub.Tests.FakeLse.Server(out _);
         using var tradovate = new FakeTradovate();
         using var ctrader = new FakeCTrader();
         Environment.SetEnvironmentVariable("TRADINGHUB_OANDA_REST", oanda.Http);
         Environment.SetEnvironmentVariable("TRADINGHUB_OANDA_STREAM", oanda.Http);
         Environment.SetEnvironmentVariable("TRADINGHUB_DATABENTO_URL", databento.Http + "/v0");
+        // ponytail: a closed local port, so the Databento test never reaches the real live gateway (it reports "Live: …" and goes on)
+        Environment.SetEnvironmentVariable("TRADINGHUB_DATABENTO_LIVE", "127.0.0.1:9");
+        Environment.SetEnvironmentVariable("TRADINGHUB_LSE_WS", lse.Ws);
+        Environment.SetEnvironmentVariable("TRADINGHUB_LSE_API", lse.Http);
         Environment.SetEnvironmentVariable("TRADINGHUB_ALPACA_DATA", alpaca.Http);
         Environment.SetEnvironmentVariable("TRADINGHUB_ALPACA_TRADING", alpaca.Http);
         Environment.SetEnvironmentVariable("TRADINGHUB_ALPACA_STREAM", alpaca.Ws + "/v2/iex");
@@ -65,13 +70,15 @@ internal static class ConnectionsScene
         var svc = App.Services;
         var conns = svc.Connections;
         Check(!AppPaths.Root.StartsWith(TradingHub.Common.Product.AppData, StringComparison.Ordinal), "data in a temporary folder (never the real one)");
-        conns.Profiles.RemoveAll(p => p.Kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento);
+        conns.Profiles.RemoveAll(p => p.Kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.LondonStrategicEdge);
         var pOanda = new ConnectionProfile { Id = "oanda", Kind = ConnectionKind.Oanda, Name = "OANDA", Testnet = true };
         var pDb = new ConnectionProfile { Id = "databento", Kind = ConnectionKind.Databento, Name = "Databento" };
         var pTv = new ConnectionProfile { Id = "tradovate", Kind = ConnectionKind.Tradovate, Name = "Tradovate", Testnet = true, TradovateUser = "demo", TradovateCid = "123" };
         var pCt = new ConnectionProfile { Id = "ctrader", Kind = ConnectionKind.CTrader, Name = "IC Markets", Testnet = true, CTraderClientId = "ID" };
         var pAl = new ConnectionProfile { Id = "alpaca", Kind = ConnectionKind.Alpaca, Name = "Alpaca", ApiKey = "KEY" };
-        conns.Profiles.AddRange(new[] { pTv, pCt, pOanda, pAl, pDb });
+        var pLse = new ConnectionProfile { Id = "lse", Kind = ConnectionKind.LondonStrategicEdge, Name = "London Strategic Edge" };
+        conns.Profiles.AddRange(new[] { pTv, pCt, pOanda, pAl, pDb, pLse });
+        conns.SetSecret(pLse, "KEY");
         conns.SetSecret(pOanda, "TOKEN");
         conns.SetSecret(pDb, "db-KEY");
         conns.SetSecret(pTv, "pw");
@@ -81,10 +88,11 @@ internal static class ConnectionsScene
         conns.SetSecret(pAl, "SECRET");
         conns.Save();
         Check(conns.GetSecret(pTv, "apisecret") == "SEC", "the secrets go to the test keychain (a separate file)");
-        Check(pCt.MarketDataId == "ctrader" && !pDb.HasMarketData && pTv.HasMarketData, "data ids and connections with no charts");
+        Check(pCt.MarketDataId == "ctrader" && pDb.HasMarketData && pTv.HasMarketData && !new ConnectionProfile { Kind = ConnectionKind.InteractiveBrokers }.HasMarketData,
+            "data ids and connections with no charts (only IB; Databento has live data)");
 
         // ----- test each connection
-        foreach (var p in new[] { pTv, pCt, pOanda, pAl, pDb })
+        foreach (var p in new[] { pTv, pCt, pOanda, pAl, pDb, pLse })
         {
             var t = conns.TestAsync(p, CancellationToken.None);
             Await(t);
@@ -96,7 +104,7 @@ internal static class ConnectionsScene
         window.Navigate("connections");
         pump(1);
         var cview = window.GetType().GetField("_pages", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window) is Dictionary<string, Control> pages ? pages["connections"] : null;
-        foreach (var (p, name) in new[] { (pTv, "tradovate"), (pCt, "ctrader"), (pOanda, "oanda"), (pAl, "alpaca"), (pDb, "databento") })
+        foreach (var (p, name) in new[] { (pTv, "tradovate"), (pCt, "ctrader"), (pOanda, "oanda"), (pAl, "alpaca"), (pDb, "databento"), (pLse, "lse") })
         {
             Call(cview!, "Select", p);
             Shot("connection_" + name);
@@ -177,6 +185,17 @@ internal static class ConnectionsScene
             var model = window.Trading.ActiveTab?.Model;
             Check(model?.Instrument.FeedId == "oanda" && model.Data.Trades.Count > 0, $"a NAS100_USD chart with OANDA data ({model?.Data.Trades.Count} trades, status {model?.Data.Status})");
             Shot("chart_oanda");
+        }
+
+        // ----- a chart with London Strategic Edge prices (24 h replay as history, then live ticks)
+        if (window.Trading.ActiveTab is { } tab2)
+        {
+            var open2 = window.Trading.OpenInTabAsync(tab2, "lse", "EUR/USD", ChartPeriod.M1, tab2.Model?.Settings.Clone());
+            Await(open2, 60);
+            pump(4);
+            var m2 = window.Trading.ActiveTab?.Model;
+            Check(m2?.Instrument.FeedId == "lse" && m2.Data.Trades.Count >= 5, $"a EUR/USD chart with London Strategic Edge data ({m2?.Data.Trades.Count} trades, status {m2?.Data.Status})");
+            Shot("chart_lse");
         }
 
         Console.WriteLine(Failures.Count == 0 ? "CONNECTIONS: all OK" : $"CONNECTIONS: {Failures.Count} failure(s)");

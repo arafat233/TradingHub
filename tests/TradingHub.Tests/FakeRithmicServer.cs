@@ -11,7 +11,7 @@ namespace TradingHub.Tests;
 /// </summary>
 internal sealed class FakeRithmicServer : IDisposable
 {
-    private readonly HttpListener _listener = new();
+    private HttpListener _listener = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly object _gate = new();
     private WebSocket? _pnlSocket;
@@ -52,7 +52,8 @@ internal sealed class FakeRithmicServer : IDisposable
             int port = rnd.Next(30000, 45000);
             try
             {
-                _listener.Prefixes.Clear();
+                _listener.Close();
+                _listener = new HttpListener(); // a failed Start (the port is taken by another test) leaves the listener unusable
                 _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
                 _listener.Start();
                 Uri = $"ws://127.0.0.1:{port}";
@@ -179,6 +180,14 @@ internal sealed class FakeRithmicServer : IDisposable
                     {
                         string sym = m.String(110100) ?? "ESZ6", exch = m.String(110101) ?? "CME";
                         bool subscribe = m.Int(100000) != 2;
+                        long bits = m.Int(154211);
+                        if (subscribe) lock (_gate) SubscribeBits.Add(bits);
+                        if (subscribe && NoLevel2 && (bits & 4) != 0)
+                        {
+                            await Send(ws, Msg(101, m).String(132766, "13").String(132766, "permission denied"));
+                            break;
+                        }
+
                         lock (_gate)
                         {
                             if (!_marketData.TryGetValue(ws, out var set)) _marketData[ws] = set = new HashSet<string>();
@@ -374,6 +383,33 @@ internal sealed class FakeRithmicServer : IDisposable
             .String(156970, (StartBalance + ClosedPnl).ToString("0.00", inv)).String(156971, (StartBalance + ClosedPnl).ToString("0.00", inv))
             .String(157015, (StartBalance + ClosedPnl - Math.Abs(Position) * 500).ToString("0.00", inv)).String(156961, open.ToString("0.00", inv))
             .Double(157955, ClosedPnl).Double(157956, ClosedPnl + open));
+    }
+
+    /// <summary>update_bits of every market data subscription received.</summary>
+    public List<long> SubscribeBits { get; } = new();
+
+    /// <summary>The account has no Level 2: a subscription that asks for the order book is rejected.</summary>
+    public bool NoLevel2 { get; set; }
+
+    /// <summary>Sends an order book message (template 156) to the quote sessions subscribed to that contract.</summary>
+    public async Task PushBook(string symbol, int updateType, (double Price, int Size)[] bids, (double Price, int Size)[] asks)
+    {
+        WebSocket[] targets;
+        lock (_gate) targets = _marketData.Where(kv => kv.Key.State == WebSocketState.Open && kv.Value.Contains(symbol)).Select(kv => kv.Key).ToArray();
+        var w = new ProtoWriter().Int(154467, 156).String(110100, symbol).String(110101, "CME").Int(157608, updateType);
+        foreach (var b in bids) w.Double(154282, b.Price).Int(154283, b.Size);
+        foreach (var a in asks) w.Double(154284, a.Price).Int(154285, a.Size);
+        foreach (var ws in targets) await Send(ws, w);
+    }
+
+    /// <summary>Sends a best bid/offer (template 151) to the quote sessions subscribed to that contract.</summary>
+    public async Task PushBbo(string symbol, double bid, int bidSize, double ask, int askSize)
+    {
+        WebSocket[] targets;
+        lock (_gate) targets = _marketData.Where(kv => kv.Key.State == WebSocketState.Open && kv.Value.Contains(symbol)).Select(kv => kv.Key).ToArray();
+        foreach (var ws in targets)
+            await Send(ws, new ProtoWriter().Int(154467, 151).String(110100, symbol).String(110101, "CME")
+                .Double(100022, bid).Int(100030, bidSize).Double(100025, ask).Int(100031, askSize));
     }
 
     /// <summary>Sends a live trade to the quote sessions subscribed to that contract.</summary>

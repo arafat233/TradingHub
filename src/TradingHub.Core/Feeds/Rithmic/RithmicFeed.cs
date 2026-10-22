@@ -60,6 +60,18 @@ internal static class Rp
     public const int ResponseFrontMonth = 114;
     public const int LastTrade = 150;
     public const int BestBidOffer = 151;
+    public const int OrderBook = 156;
+
+    // order book (Level 2): levels with their absolute size, 0 = the level is gone
+    public const int BookUpdateType = 157608;
+    public const int BookBidPrice = 154282;
+    public const int BookBidSize = 154283;
+    public const int BookAskPrice = 154284;
+    public const int BookAskSize = 154285;
+    public const int BookClear = 1, BookNone = 2, BookBegin = 4, BookMiddle = 5;
+
+    /// <summary>update_bits: last trade, best bid/offer and order book.</summary>
+    public const int TradesQuotes = 1 | 2, TradesQuotesBook = 1 | 2 | 4;
 }
 
 /// <summary>

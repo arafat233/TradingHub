@@ -12,6 +12,8 @@
     <!-- and the OANDA, Alpaca, Databento, cTrader and Tradovate ones -->
     <Compile Include="..\..\tests\TradingHub.Tests\FakeHttpServer.cs" Link="FakeHttpServer.cs" />
     <Compile Include="..\..\tests\TradingHub.Tests\FakeBrokers.cs" Link="FakeBrokers.cs" />
+    <!-- and London Strategic Edge's -->
+    <Compile Include="..\..\tests\TradingHub.Tests\FakeLse.cs" Link="FakeLse.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless" Version="$(AvaloniaVersion)" />

@@ -416,10 +416,10 @@ public static class TickFile
         return (mant, Math.Min(scale, 31));
     }
 
-    private static ulong ZigZag(long v) => (ulong)((v << 1) ^ (v >> 63));
-    private static long UnZigZag(ulong v) => (long)(v >> 1) ^ -(long)(v & 1);
+    internal static ulong ZigZag(long v) => (ulong)((v << 1) ^ (v >> 63));
+    internal static long UnZigZag(ulong v) => (long)(v >> 1) ^ -(long)(v & 1);
 
-    private static int WriteVarint(Span<byte> buf, ulong v)
+    internal static int WriteVarint(Span<byte> buf, ulong v)
     {
         int n = 0;
         while (v >= 0x80)
@@ -432,7 +432,7 @@ public static class TickFile
         return n;
     }
 
-    private static ulong ReadVarint(byte[] data, ref int pos)
+    internal static ulong ReadVarint(byte[] data, ref int pos)
     {
         ulong result = 0;
         int shift = 0;

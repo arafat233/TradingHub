@@ -1,5 +1,8 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using TradingHub.Common.Logging;
@@ -14,8 +17,8 @@ using TradingHub.Trading;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// Stores secrets (passwords, API secrets) in the macOS keychain. The test tools set
-/// TRADINGHUB_KEYCHAIN_FILE and use their own file with fake data: they never read the real keychain.
+/// Stores secrets (passwords, API secrets) in the macOS keychain, or in the Windows Credential Manager on Windows.
+/// The test tools set TRADINGHUB_KEYCHAIN_FILE and use their own file with fake data: they never read the real keychain.
 /// </summary>
 public static class Keychain
 {
@@ -55,6 +58,12 @@ public static class Keychain
             return;
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            WindowsCredentials.Set($"{Service}:{account}", secret);
+            return;
+        }
+
         if (string.IsNullOrEmpty(secret))
         {
             Run("delete-generic-password", "-s", Service, "-a", account);
@@ -65,9 +74,89 @@ public static class Keychain
     }
 
     public static string Get(string account) =>
-        IsolatedFile != null
-            ? LoadIsolated().GetValueOrDefault(account, "")
-            : Run("find-generic-password", "-s", Service, "-a", account, "-w");
+        IsolatedFile != null ? LoadIsolated().GetValueOrDefault(account, "")
+        : OperatingSystem.IsWindows() ? WindowsCredentials.Get($"{Service}:{account}")
+        : Run("find-generic-password", "-s", Service, "-a", account, "-w");
+}
+
+/// <summary>Generic credentials of the Windows Credential Manager (advapi32), per user and encrypted by Windows.</summary>
+internal static class WindowsCredentials
+{
+    private const uint Generic = 1, PersistLocalMachine = 2;
+    private const int NotFound = 1168;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct Credential
+    {
+        public uint Flags;
+        public uint Type;
+        public string TargetName;
+        public string? Comment;
+        public long LastWritten;
+        public uint CredentialBlobSize;
+        public IntPtr CredentialBlob;
+        public uint Persist;
+        public uint AttributeCount;
+        public IntPtr Attributes;
+        public string? TargetAlias;
+        public string UserName;
+    }
+
+    [DllImport("advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CredWrite(ref Credential credential, uint flags);
+
+    [DllImport("advapi32.dll", EntryPoint = "CredReadW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
+
+    [DllImport("advapi32.dll", EntryPoint = "CredDeleteW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CredDelete(string target, uint type, uint flags);
+
+    [DllImport("advapi32.dll")]
+    private static extern void CredFree(IntPtr buffer);
+
+    public static void Set(string target, string? secret)
+    {
+        if (string.IsNullOrEmpty(secret))
+        {
+            if (!CredDelete(target, Generic, 0) && Marshal.GetLastWin32Error() != NotFound) throw new Win32Exception();
+            return;
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(secret);
+        var blob = Marshal.AllocHGlobal(bytes.Length);
+        try
+        {
+            Marshal.Copy(bytes, 0, blob, bytes.Length);
+            var cred = new Credential
+            {
+                Type = Generic, TargetName = target, UserName = Environment.UserName, Persist = PersistLocalMachine,
+                CredentialBlob = blob, CredentialBlobSize = (uint)bytes.Length,
+            };
+            // a secret that is not stored has to be noticed: the connection would fail later with no clue why
+            if (!CredWrite(ref cred, 0)) throw new Win32Exception();
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(blob);
+        }
+    }
+
+    public static string Get(string target)
+    {
+        if (!CredRead(target, Generic, 0, out var ptr)) return "";
+        try
+        {
+            var cred = Marshal.PtrToStructure<Credential>(ptr);
+            if (cred.CredentialBlobSize == 0) return "";
+            var bytes = new byte[cred.CredentialBlobSize];
+            Marshal.Copy(cred.CredentialBlob, bytes, 0, bytes.Length);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        finally
+        {
+            CredFree(ptr);
+        }
+    }
 }
 
 public enum ConnectionKind
@@ -84,6 +173,8 @@ public enum ConnectionKind
     [Display(Name = "OANDA")] Oanda,
     [Display(Name = "Alpaca")] Alpaca,
     [Display(Name = "Databento")] Databento,
+    [Display(Name = "dxFeed")] DxFeed,
+    [Display(Name = "London Strategic Edge")] LondonStrategicEdge,
 }
 
 /// <summary>A configured connection (the secrets go to the keychain, not to this file).</summary>
@@ -134,6 +225,15 @@ public sealed class ConnectionProfile
     // Alpaca: live data iex (free) or sip (paid)
     public string AlpacaLiveFeed { get; set; } = "iex";
 
+    // Databento live: Level 2 (MBP-10) or trades only, and the futures it offers on charts
+    public bool DatabentoLevel2 { get; set; } = true;
+    public List<string> DatabentoProducts { get; set; } = new TradingHub.Feeds.Databento.DatabentoLiveSettings().Products;
+
+    // dxFeed (dxLink): address, Level 2 source and products; the token goes to the keychain
+    public string DxFeedUrl { get; set; } = TradingHub.Feeds.DxFeed.DxFeedSettings.DemoUrl;
+    public string DxFeedDomSource { get; set; } = "glbx";
+    public List<string> DxFeedProducts { get; set; } = new TradingHub.Feeds.DxFeed.DxFeedSettings().Products;
+
     // Interactive Brokers
     public string IbHost { get; set; } = "127.0.0.1";
     public int IbPort { get; set; } = 7497;
@@ -159,11 +259,13 @@ public sealed class ConnectionProfile
         ConnectionKind.Oanda => TradingHub.Feeds.Oanda.OandaFeed.FeedId,
         ConnectionKind.Alpaca => TradingHub.Feeds.Alpaca.AlpacaFeed.FeedId,
         ConnectionKind.Databento => "databento",
+        ConnectionKind.DxFeed => TradingHub.Feeds.DxFeed.DxFeedFeed.FeedId,
+        ConnectionKind.LondonStrategicEdge => TradingHub.Feeds.LondonStrategicEdge.LseFeed.FeedId,
         _ => "ib",
     };
 
-    /// <summary>Provides market data for charts (Databento and IB do not).</summary>
-    [JsonIgnore] public bool HasMarketData => Kind is not (ConnectionKind.InteractiveBrokers or ConnectionKind.Databento);
+    /// <summary>Provides market data for charts (IB does not).</summary>
+    [JsonIgnore] public bool HasMarketData => Kind is not ConnectionKind.InteractiveBrokers;
 
     /// <summary>Default id of the first profile of each type (the same as its data's).</summary>
     public static string DefaultId(ConnectionKind kind) => kind switch
@@ -173,6 +275,8 @@ public sealed class ConnectionProfile
         ConnectionKind.Oanda => TradingHub.Feeds.Oanda.OandaFeed.FeedId,
         ConnectionKind.Alpaca => TradingHub.Feeds.Alpaca.AlpacaFeed.FeedId,
         ConnectionKind.Databento => "databento",
+        ConnectionKind.DxFeed => TradingHub.Feeds.DxFeed.DxFeedFeed.FeedId,
+        ConnectionKind.LondonStrategicEdge => TradingHub.Feeds.LondonStrategicEdge.LseFeed.FeedId,
         _ => Guid.NewGuid().ToString("N")[..8],
     };
 
@@ -293,7 +397,20 @@ public sealed class ConnectionManager
             ConnectionKind.CTrader => CTraderFeedOf(p),
             ConnectionKind.Oanda => new TradingHub.Feeds.Oanda.OandaFeed(OandaSettingsOf(p)),
             ConnectionKind.Alpaca => new TradingHub.Feeds.Alpaca.AlpacaFeed(AlpacaSettingsOf(p)),
-            ConnectionKind.Databento => throw new NotSupportedException("Databento provides no live data: it is used from Data to download futures history."),
+            ConnectionKind.Databento => new TradingHub.Feeds.Databento.DatabentoLiveFeed(new()
+            {
+                ApiKey = GetSecret(p),
+                Level2 = p.DatabentoLevel2,
+                Products = p.DatabentoProducts,
+                Gateway = Environment.GetEnvironmentVariable("TRADINGHUB_DATABENTO_LIVE") is { Length: > 0 } g ? g : null,
+            }),
+            ConnectionKind.DxFeed => new TradingHub.Feeds.DxFeed.DxFeedFeed(DxFeedSettingsOf(p)),
+            ConnectionKind.LondonStrategicEdge => new TradingHub.Feeds.LondonStrategicEdge.LseFeed(new()
+            {
+                ApiKey = GetSecret(p),
+                WsUrl = Environment.GetEnvironmentVariable("TRADINGHUB_LSE_WS") is { Length: > 0 } w ? w : null,
+                ApiUrl = Environment.GetEnvironmentVariable("TRADINGHUB_LSE_API") is { Length: > 0 } a ? a : null,
+            }),
             _ => throw new NotSupportedException("Interactive Brokers does not provide data in Trading Hub yet (connection test only)."),
         };
         _feeds[p.Id] = f;
@@ -381,6 +498,15 @@ public sealed class ConnectionManager
     };
 
     /// <summary>Databento client with the connection's API key (TRADINGHUB_DATABENTO_URL points it at another server).</summary>
+    /// <summary>dxFeed settings (TRADINGHUB_DXFEED_URL points it at another server in the tests).</summary>
+    public TradingHub.Feeds.DxFeed.DxFeedSettings DxFeedSettingsOf(ConnectionProfile p) => new()
+    {
+        Url = Environment.GetEnvironmentVariable("TRADINGHUB_DXFEED_URL") is { Length: > 0 } u ? u : p.DxFeedUrl,
+        Token = GetSecret(p),
+        DomSource = p.DxFeedDomSource,
+        Products = p.DxFeedProducts,
+    };
+
     public TradingHub.Feeds.Databento.DatabentoClient DatabentoOf(ConnectionProfile p) =>
         new(GetSecret(p), Environment.GetEnvironmentVariable("TRADINGHUB_DATABENTO_URL") is { Length: > 0 } u ? u : null);
 
@@ -435,6 +561,11 @@ public sealed class ConnectionManager
                     return await ((TradingHub.Feeds.Oanda.OandaFeed)GetFeed(p.Id)).TestAsync(ct);
                 case ConnectionKind.Alpaca:
                     return await ((TradingHub.Feeds.Alpaca.AlpacaFeed)GetFeed(p.Id)).TestAsync(ct);
+                case ConnectionKind.DxFeed:
+                    return await ((TradingHub.Feeds.DxFeed.DxFeedFeed)GetFeed(p.Id)).TestAsync(ct);
+                case ConnectionKind.LondonStrategicEdge:
+                    if (string.IsNullOrWhiteSpace(GetSecret(p))) return (false, "The London Strategic Edge API key is missing (it is free at londonstrategicedge.com/data).");
+                    return await ((TradingHub.Feeds.LondonStrategicEdge.LseFeed)GetFeed(p.Id)).TestAsync(ct);
                 case ConnectionKind.Databento:
                 {
                     if (string.IsNullOrWhiteSpace(GetSecret(p))) return (false, "The Databento API key is missing.");
@@ -444,7 +575,10 @@ public sealed class ConnectionManager
                     var day = DateOnly.FromDateTime(end.AddDays(-3));
                     while (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) day = day.AddDays(-1);
                     decimal cost = await db.CostAsync("NQ", day, day, ct);
-                    return (true, $"API key OK. Globex from {start:dd/MM/yyyy} to {end:dd/MM/yyyy}. One day of NQ tick by tick costs ≈ US$ {cost:0.00} of your credits.");
+                    // live is a separate licence: a key with history only is still OK, it just says so
+                    var (liveOk, live) = await ((TradingHub.Feeds.Databento.DatabentoLiveFeed)GetFeed(p.Id)).TestAsync(ct);
+                    return (true, $"API key OK. Globex from {start:dd/MM/yyyy} to {end:dd/MM/yyyy}. One day of NQ tick by tick costs ≈ US$ {cost:0.00} of your credits. "
+                        + (liveOk ? live : "Live: " + live));
                 }
             }
         }

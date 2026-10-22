@@ -64,11 +64,23 @@ public sealed class TickData
             sides[k] = _sides[i];
         }
 
-        return new TickData(Instrument, times, prices, volumes, sides, 0, n, compressed: true);
+        return new TickData(Instrument, times, prices, volumes, sides, 0, n, compressed: true) { DepthRoot = DepthRoot };
     }
 
     private bool SameRun(int a, int b) =>
         _prices[a] == _prices[b] && _sides[a] == _sides[b] && _times[a] / TimeSpan.TicksPerSecond == _times[b] / TimeSpan.TicksPerSecond;
+
+    /// <summary>
+    /// Folder with the recorded order books (.vdk) of this instrument, if there are any for the range: a backtest then gives
+    /// the strategy <see cref="Strategy.Book"/>. Every run reads them with its own <see cref="DepthCursor"/>.
+    /// </summary>
+    public string? DepthRoot { get; init; }
+
+    /// <summary>The same ticks, with the recorded books of that folder available if there are any between the first and last tick.</summary>
+    public TickData WithDepth(string root) =>
+        Count > 0 && DepthCursor.Exists(root, Instrument.FeedId, Instrument.Symbol, FirstTime, LastTime)
+            ? new TickData(Instrument, _times, _prices, _volumes, _sides, Start, End, Compressed) { DepthRoot = root }
+            : this;
 
     public Instrument Instrument { get; }
     public int Start { get; }
@@ -89,7 +101,7 @@ public sealed class TickData
     public TickData Slice(DateTime fromUtc, DateTime toUtc)
     {
         int a = Lower(fromUtc.Ticks), b = Lower(toUtc.Ticks);
-        return new TickData(Instrument, _times, _prices, _volumes, _sides, a, b, Compressed);
+        return new TickData(Instrument, _times, _prices, _volumes, _sides, a, b, Compressed) { DepthRoot = DepthRoot };
     }
 
     private int Lower(long t)

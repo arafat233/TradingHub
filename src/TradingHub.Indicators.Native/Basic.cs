@@ -320,7 +320,7 @@ public class Rsi : Indicator
         Panel = IndicatorDataProvider.NewPanel;
         DataSeries[0] = _rsi;
         LineSeries.Add(new LineSeries("70", "Overbought") { Value = 70, Color = Color.FromArgb(150, 232, 69, 72) });
-        LineSeries.Add(new LineSeries("30", "Sobreventa") { Value = 30, Color = Color.FromArgb(150, 73, 209, 73) });
+        LineSeries.Add(new LineSeries("30", "Oversold") { Value = 30, Color = Color.FromArgb(150, 73, 209, 73) });
     }
 
     [Display(Name = "Period", GroupName = "Calculation", Order = 10)]

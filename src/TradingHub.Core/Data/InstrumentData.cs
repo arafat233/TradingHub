@@ -21,6 +21,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     private IDisposable? _subscription;
     private CancellationTokenSource? _cts;
     private TickRecorder? _recorder;
+    private DepthRecorder? _depthRecorder;
     private FeedStatus _status = FeedStatus.Disconnected;
     private string? _statusMessage;
     private volatile bool _statusDirty;
@@ -36,6 +37,9 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     public IMarketDataFeed Feed { get; }
     public TradeStore Trades { get; }
     public DepthSnapshot Depth { get; private set; } = DepthSnapshot.Empty;
+
+    /// <summary>The book over the last minutes (for the liquidity heatmap); it only has data on feeds that send depth.</summary>
+    public DepthHistory DepthHistory { get; } = new();
 
     public FeedStatus Status => _status;
     public string? StatusMessage => _statusMessage;
@@ -76,6 +80,12 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     /// <summary>Whether it records what arrives live (the folder keeps being read even if it does not record).</summary>
     public bool RecordLive { get; set; } = true;
 
+    /// <summary>Also record the order book (.vdk files) when the feed sends depth.</summary>
+    public bool RecordDepth { get; set; } = true;
+
+    /// <summary>Levels per side that are recorded.</summary>
+    public int RecordDepthLevels { get; set; } = 20;
+
     // ----------------------------------------------------------------- startup
 
     /// <summary>Subscribes to the live feed and loads history from <paramref name="historyFrom"/>.</summary>
@@ -93,6 +103,10 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
 
         if (Feed.IsLive && RecordingRoot != null && RecordLive)
             _recorder = new TickRecorder(RecordingRoot, Instrument);
+
+        // the book too (the heatmap can then be replayed and strategies can be backtested on it); it shares the ticks' lock
+        if (_recorder is { IsActive: true } && RecordDepth)
+            _depthRecorder = new DepthRecorder(RecordingRoot!, Instrument) { Levels = RecordDepthLevels };
 
         // 1) live first (it accumulates while the history loads)
         try
@@ -351,6 +365,8 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
         _subscription = null;
         _recorder?.Dispose();
         _recorder = null;
+        _depthRecorder?.Dispose();
+        _depthRecorder = null;
     }
 
     private static IEnumerable<DateOnly> EachDay(DateTime fromUtc, DateTime toUtc)
@@ -459,6 +475,8 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
             while (_depthChanges.TryDequeue(out var c)) changes.Add(c);
             bool full = _depthFull;
             _depthFull = false;
+            DepthHistory.Add(Feed.Now, depth);
+            _depthRecorder?.Offer(Feed.Now, depth);
             DepthUpdated?.Invoke(new DepthUpdate { Snapshot = depth, Changes = changes, IsFullRefresh = full });
         }
     }
@@ -568,6 +586,12 @@ public sealed class MarketDataHub : IDisposable
     /// <summary>Whether new instruments record the live feed.</summary>
     public bool RecordLive { get; set; } = true;
 
+    /// <summary>Also record the order book (.vdk files) when the feed sends depth.</summary>
+    public bool RecordDepth { get; set; } = true;
+
+    /// <summary>Levels per side that are recorded.</summary>
+    public int RecordDepthLevels { get; set; } = 20;
+
     public IReadOnlyCollection<InstrumentData> Items => _items.Values;
 
     public InstrumentData GetOrStart(IMarketDataFeed feed, Instrument instrument, TimeSpan history)
@@ -575,7 +599,7 @@ public sealed class MarketDataHub : IDisposable
         if (_items.TryGetValue(instrument.Key, out var d)) return d;
         // exchange ticks for the recent part; the older part is filled in with candles (fast even for years)
         var window = history < TimeSpan.FromHours(2) ? TimeSpan.FromHours(2) : history > TimeSpan.FromDays(1) ? TimeSpan.FromDays(1) : history;
-        d = new InstrumentData(instrument, feed) { RecordingRoot = RecordingRoot, RecordLive = RecordLive, TickWindow = window };
+        d = new InstrumentData(instrument, feed) { RecordingRoot = RecordingRoot, RecordLive = RecordLive, RecordDepth = RecordDepth, RecordDepthLevels = RecordDepthLevels, TickWindow = window };
         _items[instrument.Key] = d;
         d.Start(feed.Now - history);
         return d;

@@ -75,6 +75,12 @@ internal sealed class SettingsView : UserControl, IPage
             _svc.Hub.RecordLive = v;
         });
 
+        var recordDepth = Switch(s.RecordDepth, v =>
+        {
+            s.RecordDepth = v;
+            _svc.Hub.RecordDepth = v;
+        });
+
         var appearance = new Ui.Segmented<string>(new[] { (AppTheme.Dark, "Dark", (string?)"Black"), (AppTheme.Light, "Light", "White") });
         appearance.Select(AppTheme.IsLight ? AppTheme.Light : AppTheme.Dark);
         appearance.SelectionChanged += mode =>
@@ -95,6 +101,7 @@ internal sealed class SettingsView : UserControl, IPage
 
         var data = Section("Data", MaterialIconKind.DatabaseOutline,
             Setting("Record incoming live data", "It stores every incoming trade so charts reopen instantly, and for replay and backtests.", record),
+            Setting("Record the order book", "Also stores the book (20 levels per side, 4 times a second; roughly 20-40 MB a day per instrument) so the heatmap can be replayed and strategies can be backtested on it. It applies to instruments opened from now on.", recordDepth),
             Setting("Data folder", AppPaths.Root, Ui.Button("Open", MaterialIconKind.FolderOpenOutline, () => Shell.OpenFolder(AppPaths.Root))),
             Setting("Own indicators (C#)", AppPaths.UserIndicators, Ui.Button("Open", MaterialIconKind.FolderOpenOutline, () => Shell.OpenFolder(AppPaths.UserIndicators))),
             Setting("Strategies (C#)", AppPaths.Strategies, Ui.Button("Open", MaterialIconKind.FolderOpenOutline, () => Shell.OpenFolder(AppPaths.Strategies))));

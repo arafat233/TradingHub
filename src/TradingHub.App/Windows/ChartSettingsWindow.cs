@@ -74,6 +74,8 @@ internal sealed class ChartSettingsWindow : Window
             ColorRow("Last price (down)", nameof(ChartTheme.LastPriceDown)),
             ColorRow("Last price line", nameof(ChartTheme.LastPriceLine)),
             Toggle("Show the last price line", () => _model.Settings.ShowLastPriceLine, v => _model.Settings.ShowLastPriceLine = v),
+            Toggle("Countdown to the end of the candle (under the last price)", () => _model.Settings.ShowCountdown, v => _model.Settings.ShowCountdown = v),
+            Toggle("Keep the price in the middle of the chart", () => _model.Settings.CenterOnPrice, v => _model.Settings.CenterOnPrice = v),
             ColorRow("Cursor (crosshair)", nameof(ChartTheme.Crosshair)),
             ColorRow("Crosshair label", nameof(ChartTheme.CrosshairLabelBack)),
             ColorRow("Session start", nameof(ChartTheme.NewSession)),

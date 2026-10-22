@@ -167,6 +167,32 @@ open goes through and the rest comes back cancelled («Context filter: not openi
 always go through and, with no data to judge on, the filter does not block. Live it is changed without restarting: see
 [Live](live.md).
 
+## The order book and icebergs
+
+| Member | What it is |
+|---|---|
+| `Book` | The order book right now: a `DepthSnapshot` with `Bids` and `Asks` (arrays of `BookLevel` with `PriceTicks` and `Size`, best price first). Live it is the feed's book; in a backtest it is the recorded one. **`null` when there is none**: always check |
+| `BookImbalance(levels = 5)` | `(bid − ask) / (bid + ask)` over the first levels: +1 all bids, −1 all asks, 0 balanced or no book |
+| `TrackIcebergs` | Set it to `true` in `OnInit` to fill `Icebergs` (off by default: it costs a little on every trade) |
+| `Icebergs` | `IcebergEvent`s found so far: levels that absorbed more than 3× the biggest size they ever showed. `Ask` = resting sell, `Volume`, `Ticks`, `Start`, `Last` |
+
+The book is recorded to disk (`.vdk` files next to the ticks: 4 snapshots a second, 20 levels per side, about 20-40 MB a day
+per instrument) from the moment an instrument is opened with **Settings → Record the order book** on. A backtest uses it for the
+days it has and gives the strategy `Book` (the log says «Using the recorded order book»); for the other days `Book` is `null`.
+A book older than 30 seconds is not shown (a gap in the recording). Icebergs are a heuristic: stops and fast market makers can
+look the same.
+
+```csharp
+protected override void OnInit() => TrackIcebergs = true;
+
+protected override void OnBar(Bar bar)
+{
+    if (Book == null) return;                       // no recorded book for this moment
+    var wall = Icebergs.LastOrDefault(i => !i.Ask && Time - i.Last < TimeSpan.FromMinutes(2));
+    if (wall != null && BookImbalance(5) > 0.3m) Buy(name: "bid iceberg + bid heavy book");
+}
+```
+
 ## Example 1: moving average cross with a time window
 
 ```csharp

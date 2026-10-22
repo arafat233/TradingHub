@@ -142,6 +142,10 @@ public sealed class AppSettings
 
     public bool RecordLiveData { get; set; } = true;
 
+    /// <summary>Also record the order book (about 20-40 MB per day per instrument) for heatmap replay and backtests on the book.</summary>
+    public bool RecordDepth { get; set; } = true;
+
+
     /// <summary>No-sleep mode: the Mac does not go to sleep while there are live strategies or agents working.</summary>
     public bool KeepAwake { get; set; } = true;
 
@@ -215,6 +219,9 @@ public sealed class AppSettings
 
     /// <summary>DOM settings (columns, sizes, colors).</summary>
     public TradingHub.Charting.Dom.DomSettings Dom { get; set; } = new();
+
+    /// <summary>Liquidity heatmap settings (time on screen, contrast, what it shows).</summary>
+    public TradingHub.Charting.Heatmap.HeatmapSettings Heatmap { get; set; } = new();
 
     /// <summary>Automatic stop and targets per instrument (instrument key).</summary>
     public Dictionary<string, BracketTemplate> Brackets { get; set; } = new();
@@ -357,6 +364,7 @@ public sealed class AppServices
         // the ones running when Trading Hub closed (the periodic save marks them stopped right away): to resume them on opening
         RunningAtLastClose = TradingHub.Strategies.LiveStore.LoadRunners().Where(i => i.Running && !LiveEntry.IsManaged(i.Source)).ToList();
         Hub.RecordLive = Settings.RecordLiveData;
+        Hub.RecordDepth = Settings.RecordDepth;
         StatsProvider.SetSource(Statistics);
         Catalog.Scan(typeof(TradingHub.Indicators.Native.BigTrades).Assembly, "Trading Hub");
         // the technical indicators, if they ship in this version (the open source one does not include them)

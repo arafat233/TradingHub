@@ -53,6 +53,7 @@ key's public identifier (for example, the Binance API key or the Alpaca Key ID) 
 | OANDA | Index, gold and forex CFDs | An API token | No (data only) |
 | Alpaca | US stocks and ETFs | API key ID and secret key | No (data only) |
 | Databento | CME futures history since 2010 | API key (pay per use) | No (history only) |
+| London Strategic Edge | Free stocks, ETFs, forex, crypto, indices: live ticks, 24 h of ticks, older history as candles | A free API key | No (data only) |
 | Interactive Brokers | For now, only a connection test | TWS or IB Gateway with the API enabled | No |
 
 Any connection with data can be traded with the **simulated account**.
@@ -169,6 +170,31 @@ is pay per use; new accounts come with free credits.
   nothing.
 - It does not provide live data and does not appear in the instrument search: it is used from **Data → CME futures with
   Databento**. See [Data](data.md#databento).
+
+## London Strategic Edge
+
+A free market data service ([londonstrategicedge.com/data](https://londonstrategicedge.com/data)) with stocks, ETFs, forex, crypto,
+commodities, indices and futures. It only asks for a free **API key**, stored in the Keychain (Windows Credential Manager on Windows).
+
+- **Live**: ticks over a websocket (one key streams up to 16 symbols).
+- **History**: the last 24 hours as real ticks (the service replays them), and anything older as candles (US stocks back to 2003,
+  forex to 2009, crypto to 2017), the way Binance's long history works. The free plan allows 10 downloads an hour.
+- **What it does not give**: the order book (no heatmap, recorded book or icebergs on this connection), the aggressor side of each
+  trade (it is inferred with the tick rule, because the service's "bid" is just the trade price, so the footprint, delta and CVD are estimates),
+  a trade id, and the volume of some markets (each tick of those counts as 1).
+- **What it carries** (checked with a free key): about 4,200 symbols: US and international stocks, ETFs, 62 forex pairs, 58 cryptos,
+  commodities, 19 indices (NAS100/USD, SPX500/USD…) and 68 futures. `ES.F`, `NQ.F` and `GC.F` (S&P 500, Nasdaq 100 and gold futures)
+  stream live and have candles back to 2016 and ticks since September 2025; the server may call the symbol by an alias (ES.F ticks say
+  SP500.F), which is fine. Some Eurex futures are history only (the picker says so).
+- Tick sizes are not in the service's catalog, so they are a sensible one per class (forex 0.00001, JPY pairs 0.001, crypto 0.0001, the
+  rest 0.01), with the real ones for ES, NQ, GC, SI and a few Eurex futures. The service's "bid" is always the trade price, so no quote
+  or book is shown.
+- **One websocket at a time**: the free plan allows a single websocket per key («Max 1 concurrent websocket(s) for this API key»). Trading Hub
+  shares that one connection between the live chart and the history replay (the live chart steps aside for a second while the history
+  loads, then reconnects by itself), so one London Strategic Edge chart works fully. A **second chart** (or another program using the key, for
+  example the service's own Python client) has to wait: it shows «the free plan allows only 1 websocket per key at a time» and keeps retrying
+  until the first one is closed.
+- **Test connection** checks the key against the service's usage endpoint and uses none of your allowance.
 
 ## Interactive Brokers
 

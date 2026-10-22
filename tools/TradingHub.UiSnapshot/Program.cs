@@ -270,6 +270,18 @@ foreach (var page in pages)
     }
 
 
+    if (page == "settings-record")
+    {
+        exitCode += SettingsScene.Run(window, Pump, outDir);
+        continue;
+    }
+
+    if (page == "heatmap")
+    {
+        exitCode += HeatmapScene.Run(window, Pump, outDir);
+        continue;
+    }
+
     if (page == "panel")
     {
         exitCode += PanelScene.Run(window, Pump, outDir);

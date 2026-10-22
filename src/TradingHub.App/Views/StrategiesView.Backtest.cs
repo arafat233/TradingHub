@@ -414,7 +414,7 @@ internal sealed partial class StrategiesView
             _runProgress.Value = p;
             _runStatus.Text = $"Loading {s.Symbol} trades… {p * 100:0}%";
         });
-        var data = await Task.Run(() => TickData.Load(AppPaths.Ticks, inst, s.FromUtc, s.ToUtc, progress, ct), ct);
+        var data = await Task.Run(() => TickData.Load(AppPaths.Ticks, inst, s.FromUtc, s.ToUtc, progress, ct).WithDepth(AppPaths.Ticks), ct);
         if (data.Count == 0)
         {
             _runStatus.Text = "There are no stored trades in that range. Download those days in the Data section.";

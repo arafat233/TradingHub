@@ -749,7 +749,7 @@ internal static class LabServer
             _ticks = null;
             GC.Collect();
             var inst = await ResolveInstrumentAsync(settings.FeedId, settings.Symbol);
-            var data = await Task.Run(() => TickData.Load(AppPaths.Ticks, inst, settings.FromUtc, settings.ToUtc, null, CancellationToken.None, compress));
+            var data = await Task.Run(() => TickData.Load(AppPaths.Ticks, inst, settings.FromUtc, settings.ToUtc, null, CancellationToken.None, compress).WithDepth(AppPaths.Ticks));
             if (data.Count == 0)
                 throw new ArgumentException($"There are no stored ticks for {settings.Symbol} ({settings.FeedId}) in that range. Check list_data or download days with download_data.");
             _ticks = data;
