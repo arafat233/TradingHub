@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds Trading Hub and assembles “Trading Hub.app” (Apple Silicon Mac). Usage: ./build-app.sh [--install]
+# Builds Trading Hub and assembles “Trading Hub.app” (Apple Silicon or Intel Mac). Usage: ./build-app.sh [--install]
 # The bundle is assembled and signed away from the Desktop: iCloud adds attributes that break the signature.
 # Optional: a build.local.env file (not pushed to GitHub) with your own BUNDLE_ID and SIGN_IDENTITY.
 set -e
@@ -11,13 +11,24 @@ BUNDLE_ID="app.tradinghub.desktop"
 SIGN_IDENTITY=""
 [ -f build.local.env ] && source ./build.local.env
 
+# TH_RID: the target runtime. By default it follows the Mac it is built on (arm64 or Intel x64).
+case "${TH_RID:-}" in
+  "") case "$(uname -m)" in
+        arm64)  RID="osx-arm64" ;;
+        x86_64) RID="osx-x64" ;;
+        *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+      esac ;;
+  *) RID="$TH_RID" ;;
+esac
+echo "Building for $RID"
+
 # TH_OUT / TH_STAGE: a different output and staging folder (by default dist and a temporary one)
 OUT="${TH_OUT:-dist}"
 STAGE="${TH_STAGE:-${TMPDIR:-/tmp}tradinghub-app}"
 APP="$STAGE/$NAME.app"
 rm -rf "$OUT/publish" "$STAGE"
 mkdir -p "$STAGE"
-dotnet publish src/TradingHub.App/TradingHub.App.csproj -c Release -r osx-arm64 --self-contained true -o "$OUT/publish" -v q
+dotnet publish src/TradingHub.App/TradingHub.App.csproj -c Release -r "$RID" --self-contained true -o "$OUT/publish" -v q
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 ditto --noextattr --norsrc "$OUT/publish" "$APP/Contents/MacOS"
 cat > "$APP/Contents/Info.plist" <<PLIST
