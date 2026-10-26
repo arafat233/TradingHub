@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>bubble-study</AssemblyName>
+    <RootNamespace>BubbleStudyRunner</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- the strategy itself lives one level up, where Trading Hub's Roslyn editor can also read it -->
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../BubbleStudy.cs" />
+  </ItemGroup>
+
+  <!-- built by `dotnet build src/TradingHub.Strategies -c Release` from the repository root -->
+  <ItemGroup>
+    <Reference Include="TradingHub.Core">
+      <HintPath>../../../src/TradingHub.Strategies/bin/Release/net10.0/TradingHub.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="TradingHub.Strategies">
+      <HintPath>../../../src/TradingHub.Strategies/bin/Release/net10.0/TradingHub.Strategies.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
