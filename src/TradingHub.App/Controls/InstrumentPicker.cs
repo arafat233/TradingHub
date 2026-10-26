@@ -24,12 +24,13 @@ public sealed class InstrumentPicker : Button
     private readonly TextBlock _symbol = new() { FontWeight = FontWeight.SemiBold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _exchange = new() { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
     // minimum widths: if the text changed width on every tick, the bar would reflow and move everything
-    private readonly TextBlock _price = new() { FontSize = 13, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Menlo, SF Mono"), MinWidth = 88, TextAlignment = TextAlignment.Right };
+    private readonly TextBlock _price = new() { FontSize = 13, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily(Plat.Mono), MinWidth = 88, TextAlignment = TextAlignment.Right };
     private readonly TextBlock _change = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, MinWidth = 54 };
 
     // menu
     private readonly TextBox _search = new() { Watermark = "Search (BTC, ETH, NQ…)", MinWidth = 360 };
-    private readonly StackPanel _connTabs = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
+    // a wrapping row: with more connections than fit in the popup (Coinbase, Bitfinex...) the last ones were cut off and could not be reached
+    private readonly WrapPanel _connTabs = new() { Orientation = Orientation.Horizontal };
     private readonly StackPanel _chips = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     private readonly ListBox _list = new() { Height = 430 };
     private readonly TextBlock _hint = new() { Classes = { "faint", "small" } };
@@ -60,7 +61,7 @@ public sealed class InstrumentPicker : Button
         _list.DoubleTapped += (_, _) => PickSelected(newTab: false);
         _list.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter) PickSelected(e.KeyModifiers.HasFlag(KeyModifiers.Meta));
+            if (e.Key == Key.Enter) PickSelected(e.KeyModifiers.HasFlag(Plat.Cmd));
         };
         _search.TextChanged += (_, _) => Refill();
         _search.KeyDown += (_, e) =>
@@ -78,7 +79,7 @@ public sealed class InstrumentPicker : Button
                     e.Handled = true;
                     break;
                 case Key.Enter:
-                    PickSelected(e.KeyModifiers.HasFlag(KeyModifiers.Meta));
+                    PickSelected(e.KeyModifiers.HasFlag(Plat.Cmd));
                     e.Handled = true;
                     break;
             }
@@ -177,6 +178,7 @@ public sealed class InstrumentPicker : Button
             _favoritesOnly = fav.IsChecked == true;
             await LoadAsync(_profileId);
         };
+        fav.Margin = new Thickness(0, 0, 4, 4);
         _connTabs.Children.Add(fav);
         foreach (var p in _svc.Connections.Enabled.Where(p => p.HasMarketData))
         {
@@ -187,6 +189,7 @@ public sealed class InstrumentPicker : Button
                 _filterQuote = "";
                 await LoadAsync(p.Id);
             };
+            b.Margin = new Thickness(0, 0, 4, 4);
             _connTabs.Children.Add(b);
         }
     }
@@ -198,9 +201,11 @@ public sealed class InstrumentPicker : Button
             b.IsChecked = b.Tag == null ? _favoritesOnly : (!_favoritesOnly && Equals(b.Tag, _profileId));
         _hint.Text = "Loading instruments…";
         var rows = new List<Row>();
-        var profiles = _favoritesOnly
+        // a snapshot: the list of connections can change while an instrument list is being fetched (a connection added or saved), which
+        // made the lazy query throw "Collection was modified" half way through and the picker stop loading
+        var profiles = (_favoritesOnly
             ? _svc.Connections.Enabled.Where(p => p.HasMarketData && _svc.Settings.Favorites.Any(f => f.StartsWith(p.Id + ":", StringComparison.Ordinal)))
-            : _svc.Connections.Enabled.Where(p => p.HasMarketData && p.Id == _profileId);
+            : _svc.Connections.Enabled.Where(p => p.HasMarketData && p.Id == _profileId)).ToList();
 
         foreach (var p in profiles)
         {
@@ -308,7 +313,7 @@ public sealed class InstrumentPicker : Button
         g.Children.Add(desc);
         if (r.Stats != null)
         {
-            var price = new TextBlock { Text = r.Instrument.FormatPrice(r.Stats.LastPrice), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily("Menlo, SF Mono"), FontSize = 12 };
+            var price = new TextBlock { Text = r.Instrument.FormatPrice(r.Stats.LastPrice), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FontFamily = new FontFamily(Plat.Mono), FontSize = 12 };
             Grid.SetColumn(price, 3);
             g.Children.Add(price);
             var ch = new TextBlock

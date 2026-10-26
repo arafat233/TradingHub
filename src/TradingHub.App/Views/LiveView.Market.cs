@@ -150,6 +150,9 @@ internal sealed partial class LiveView
         "binance-futures" => "Binance perpetual",
         "binance-spot" => "Binance spot",
         "bybit-linear" => "Bybit perpetual",
+        "kraken-spot" => "Kraken spot",
+        "coinbase-spot" => "Coinbase spot",
+        "bitfinex" => "Bitfinex spot",
         "sim" => "simulator",
         _ => feed,
     };
@@ -207,7 +210,7 @@ internal sealed partial class LiveView
         if (c != null)
         {
             var price = Ui.H(8,
-                new TextBlock { Text = c.LastPrice.ToString("#,##0.##", Fmt), FontSize = 15, FontWeight = FontWeight.SemiBold, FontFamily = new FontFamily("Menlo, SF Mono"), VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = c.LastPrice.ToString("#,##0.##", Fmt), FontSize = 15, FontWeight = FontWeight.SemiBold, FontFamily = new FontFamily(Plat.Mono), VerticalAlignment = VerticalAlignment.Center },
                 new TextBlock
                 {
                     Text = c.Change is { } ch ? $"{ch.ToString("+0.00;-0.00;0.00", Fmt)} % in 24 h" : "",

@@ -220,6 +220,8 @@ if (open != null && open.Split(':') is [var feedId, var symbol] && window.Tradin
     while (!task.IsCompleted) Pump(0.02);
 }
 
+if (Environment.GetEnvironmentVariable("TRADINGHUB_SNAP_WATCH_RELATED") == "1") App.Services.Settings.WatchRelated = true; // the Insights panel's related markets, on
+
 if (Environment.GetEnvironmentVariable("TRADINGHUB_SNAP_INDICATORS") is { Length: > 0 } wanted && window.Trading.ActiveTab?.Model is { } chart)
 {
     // adds indicators to the active chart (by display name)
@@ -234,6 +236,12 @@ if (Environment.GetEnvironmentVariable("TRADINGHUB_SNAP_INDICATORS") is { Length
 }
 
 Pump(seconds);
+if (Environment.GetEnvironmentVariable("TRADINGHUB_SNAP_PANEL_TEXT") == "1")
+    foreach (var hd in App.Services.Hub.Items) Console.WriteLine($"HUB {hd.Instrument.Key} trades {hd.Trades.Count} first {hd.Trades.FirstTime:u} last {hd.Trades.LastTime:u} status {hd.Status} loading {hd.IsLoadingHistory}");
+if (Environment.GetEnvironmentVariable("TRADINGHUB_SNAP_PANEL_TEXT") == "1")
+    foreach (var tb in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.TextBlock>())
+        if (tb.Text is { Length: > 0 } txt && Avalonia.VisualTree.VisualExtensions.GetVisualAncestors(tb).OfType<TradingHub.App.Controls.InsightsPanel>().Any()) Console.WriteLine("PANEL: " + txt.Replace("\n", " / "));
+
 if (Environment.GetEnvironmentVariable("TRADINGHUB_SNAP_INDICATORS") is { Length: > 0 } && window.Trading.ActiveTab?.Model is { } chart2)
     foreach (var slot in chart2.Indicators) Console.WriteLine($"  {slot.Indicator.Name}: {(slot.Error ?? "OK")}");
 
@@ -1032,6 +1040,88 @@ foreach (var page in pages)
             tv.DockDom();
             Pump(1);
             Console.WriteLine($"DOM back: floating={tv.DomIsFloating}");
+            continue;
+        }
+        else if (action == "insightsui")
+        {
+            // the Insights round's windows and flyouts: the Guide, the Gamma view, the Levels flyout, the alert flyout and the second profile column
+            const System.Reflection.BindingFlags NP = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            int fails = 0;
+            void Check(bool ok, string what) { Console.WriteLine((ok ? "OK   " : "FAIL ") + what); if (!ok) fails++; }
+            Pump(2);
+            var guide = new TradingHub.App.Windows.GuideWindow();
+            guide.Show();
+            Pump(1);
+            guide.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "insightsui_guide.png"));
+            int texts = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(guide).OfType<Avalonia.Controls.TextBlock>().Count();
+            Check(texts > 15, $"the guide window shows the embedded document ({texts} text blocks)");
+            guide.Close();
+
+            var quotes = new List<TradingHub.Data.OptionQuote>();
+            var exp = DateTime.UtcNow.AddDays(10);
+            foreach (var k in new[] { 70000m, 75000m, 80000m, 85000m, 90000m })
+            {
+                quotes.Add(new(k, true, exp, 100 + (90000m - k) / 500, 55));
+                quotes.Add(new(k, false, exp, 100 + (k - 70000m) / 400, 55));
+            }
+
+            var rows = TradingHub.Data.OptionsProfile.Build(quotes, 80000m, DateTime.UtcNow);
+            var set = TradingHub.Data.OptionLevelSet.Compute(quotes, 80000m, DateTime.UtcNow);
+            var gw = new TradingHub.App.Windows.GammaWindow("BTC", rows, set);
+            gw.Show();
+            Pump(1);
+            gw.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "insightsui_gamma.png"));
+            Check(rows.Count == 5, $"the gamma view has a row per strike ({rows.Count})");
+            gw.Close();
+
+            // the Levels flyout: it adds the indicators, then lists the families
+            var tb = tv.Toolbar;
+            var ensure = typeof(TradingHub.App.Views.ChartToolbar).GetMethod("EnsureIndicators", NP)!;
+            ensure.Invoke(tb, new object[] { new Type[] { typeof(TradingHub.Indicators.Native.MarketLevelsLines), typeof(TradingHub.Indicators.Native.BigTrades), typeof(TradingHub.Indicators.Native.BigOrderProfile) } });
+            Pump(1);
+            var panel = (Avalonia.Controls.Control)typeof(TradingHub.App.Views.ChartToolbar).GetMethod("LevelsPanel", NP)!.Invoke(tb, null)!;
+            var host = new Avalonia.Controls.Window { Width = 380, Height = 420, Content = panel };
+            host.Show();
+            Pump(1);
+            host.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "insightsui_levels.png"));
+            var boxes = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(panel).OfType<Avalonia.Controls.CheckBox>().ToList();
+            Check(boxes.Count == 5, $"the Levels flyout has the five switches ({boxes.Count})");
+            var lines = tv.ActiveTab!.Model!.Indicators.Select(s => s.Indicator).OfType<TradingHub.Indicators.Native.MarketLevelsLines>().First();
+            boxes[0].IsChecked = false;
+            Check(!lines.ShowOptions, "unticking Options turns that family off on the chart");
+            var combo = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(panel).OfType<Avalonia.Controls.ComboBox>().FirstOrDefault();
+            Check(combo != null, "the whale detect mode picker is there");
+            if (combo != null)
+            {
+                combo.SelectedItem = TradingHub.Data.WhaleMode.Sweep;
+                var big = tv.ActiveTab!.Model!.Indicators.Select(s => s.Indicator).OfType<TradingHub.Indicators.Native.BigTrades>().First();
+                Check(big.Detect == TradingHub.Data.WhaleMode.Sweep, "choosing Sweep changes Big Trades' detect mode");
+            }
+
+            host.Close();
+
+            // the bell flyout (it must open without error) and the user's levels
+            var anchor = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tv).OfType<Avalonia.Controls.Button>().FirstOrDefault(x => x.Content as string == "🔔");
+            Check(anchor != null, "the bell is in the Insights panel");
+            if (anchor != null) typeof(TradingHub.App.Views.TradingView).GetMethod("ShowInsightAlertSettings", NP)!.Invoke(tv, new object[] { anchor });
+            Pump(1);
+            window.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "insightsui_bell.png"));
+            var inst = tv.ActiveTab!.Model!.Instrument;
+            typeof(TradingHub.App.Views.TradingView).GetMethod("ChangeMyLevels", NP)!.Invoke(tv, new object[] { new Action<List<decimal>>(l => l.Add(80000m)) });
+            Pump(1);
+            Check(TradingHub.Data.MarketLevels.For(inst).Any(m => m.Source == "mine" && m.Price == 80000m), "a level added in the panel is on the shared board for the chart");
+
+            // the second column of the big-order profile: it needs the Big Trades save file, so only its switch is exercised
+            var prof = tv.ActiveTab!.Model!.Indicators.Select(s => s.Indicator).OfType<TradingHub.Indicators.Native.BigOrderProfile>().First();
+            prof.VisibleColumn = true;
+            tv.ActiveTab.Model.Invalidate();
+            Pump(2);
+            window.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "insightsui_chart.png"));
+            var pt = typeof(TradingHub.Indicators.Native.BigOrderProfile);
+            Console.WriteLine($"PROFILE: rows={((System.Collections.ICollection)pt.GetField("_rows", NP)!.GetValue(prof)!).Count} visible={((System.Collections.ICollection)pt.GetField("_visible", NP)!.GetValue(prof)!).Count} bands={((System.Collections.ICollection)pt.GetField("_bands", NP)!.GetValue(prof)!).Count} from={pt.GetField("_visibleFrom", NP)!.GetValue(prof)}");
+            var firstRow = ((System.Collections.IEnumerable)pt.GetField("_rows", NP)!.GetValue(prof)!).Cast<object>().FirstOrDefault();
+            Console.WriteLine($"PROFILE: first row {firstRow} · first visible candle {tv.ActiveTab.Model.Series[Math.Max(0, tv.ActiveTab.Model.FirstVisibleBar)].Time} kind={tv.ActiveTab.Model.Series[Math.Max(0, tv.ActiveTab.Model.FirstVisibleBar)].Time.Kind}");
+            Console.WriteLine(fails == 0 ? "INSIGHTSUI: all good" : $"INSIGHTSUI: {fails} failure(s)");
             continue;
         }
         else if (action == "domsettings")

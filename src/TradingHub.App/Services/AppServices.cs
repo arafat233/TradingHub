@@ -142,8 +142,46 @@ public sealed class AppSettings
 
     public bool RecordLiveData { get; set; } = true;
 
+    /// <summary>Instruments opened at startup with no chart, only to record them ("feedId|symbol").</summary>
+    public List<string> AutoRecord { get; set; } = new();
+
     /// <summary>Also record the order book (about 20-40 MB per day per instrument) for heatmap replay and backtests on the book.</summary>
     public bool RecordDepth { get; set; } = true;
+
+    /// <summary>The daily recap also gets a short comment written by Claude (it uses the user's Claude Code session).</summary>
+    public bool RecapComment { get; set; }
+
+    /// <summary>Send indicator alerts to the user's own Telegram bot (needs the token in the credential store and a chat id). Off by default.</summary>
+    public bool TelegramAlerts { get; set; }
+
+    public string TelegramChatId { get; set; } = "";
+
+    /// <summary>Every indicator alert also saves a picture of the chart into the journal.</summary>
+    public bool AlertSnapshots { get; set; }
+
+    /// <summary>Alerts are also read out loud with the Windows voice.</summary>
+    public bool SpokenAlerts { get; set; }
+
+    /// <summary>A briefing (events, levels near price, scoreboard) is made at the times below. Off by default.</summary>
+    public bool BriefingsOn { get; set; }
+
+    /// <summary>Local times of the briefings, "HH:mm" separated by commas.</summary>
+    public string BriefingTimes { get; set; } = "08:00,13:00";
+
+    /// <summary>Mine the day's levels and rerun the research every night (the app has to be open). Off by default.</summary>
+    public bool ResearchNightly { get; set; }
+
+    /// <summary>Local time of the nightly research, "HH:mm".</summary>
+    public string ResearchTime { get; set; } = "03:00";
+
+    /// <summary>Money the risk calculator is allowed to lose on one trade.</summary>
+    public decimal RiskPerTrade { get; set; } = 100m;
+
+    /// <summary>Commission for a round trip of one contract, in money. The research tools turn it into ticks to count it as a cost.</summary>
+    public decimal CommissionPerRoundTrip { get; set; } = 4m;
+
+    /// <summary>The Telegram bot also answers read-only commands from the user's own chat (needs phone alerts on). Off by default.</summary>
+    public bool TelegramCommands { get; set; }
 
 
     /// <summary>No-sleep mode: the Mac does not go to sleep while there are live strategies or agents working.</summary>
@@ -164,6 +202,23 @@ public sealed class AppSettings
     public bool ShowTicket { get; set; } = true;
     public bool ShowDom { get; set; } = true;
     public bool ShowTape { get; set; } = true;
+    public bool ShowInsights { get; set; } = true;
+    public bool WatchRelated { get; set; }
+
+    /// <summary>The price levels the user marked (Insights panel), by instrument key.</summary>
+    public Dictionary<string, List<decimal>> MyLevels { get; set; } = new();
+
+    // alerts from the Insights panel (see InsightAlertEngine): they go out through the same path as every alert (log, Telegram, speech, sound)
+    public bool AlertToxicity { get; set; } = true;
+    public bool AlertWalls { get; set; } = true;
+    public decimal AlertWallUsd { get; set; } = 1_000_000;
+    public bool AlertOptions { get; set; } = true;
+    public bool AlertLiquidations { get; set; } = true;
+    public decimal AlertLiquidationUsd { get; set; } = 1_000_000;
+    public bool AlertSetup { get; set; }
+
+    /// <summary>Round-trip cost in basis points that the Insights decision must beat (0 = automatic: 8 for crypto, 2 for the rest).</summary>
+    public decimal InsightsCostBps { get; set; }
     public double SidePanelWidth { get; set; } = 340;
 
     /// <summary>The per-chart Chart Trader has already been shown (the first time the general ticket is hidden).</summary>
@@ -333,6 +388,12 @@ public sealed class AppServices
     /// <summary>Id of a Rithmic account in Trading Hub: rithmic|connection|account.</summary>
     public static string RithmicAccountId(ConnectionProfile p, string account) => $"rithmic|{p.Id}|{account}";
 
+    /// <summary>Big market orders on every open instrument (the Big orders window shows them).</summary>
+    public BigOrderFeed BigOrders { get; } = new();
+
+    /// <summary>How late live ticks arrive, per open instrument.</summary>
+    public LatencyMonitor Latency { get; } = new();
+
     public AppServices()
     {
         Portfolio.BeginBalance = Portfolio.Balance = Settings.SimStartBalance;
@@ -448,12 +509,59 @@ public sealed class AppServices
     /// <summary>Applies an approved size: to the strategy if it is running and to what is stored for next time.</summary>
     public void ApplySize(string key, decimal size) => Live.ApplySize(key, size);
 
-    public TimeSpan HistoryFor(string profileId) =>
-        TimeSpan.FromHours(Math.Clamp(Connections.Find(profileId)?.HistoryHours ?? 1.5, 0.1, 24 * 60));
+    /// <summary>At least the whole current day (since midnight in the chosen time zone), so a chart opened at 3 pm has the morning too.</summary>
+    public TimeSpan HistoryFor(string profileId)
+    {
+        var configured = TimeSpan.FromHours(Math.Clamp(Connections.Find(profileId)?.HistoryHours ?? 1.5, 0.1, 24 * 60));
+        try
+        {
+            var tz = Settings.TimeZoneId is { Length: > 0 } id ? TimeZoneInfo.FindSystemTimeZoneById(id) : TimeZoneInfo.Local;
+            var sinceMidnight = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz).TimeOfDay + TimeSpan.FromMinutes(5);
+            return configured > sinceMidnight ? configured : sinceMidnight;
+        }
+        catch (Exception)
+        {
+            return configured;
+        }
+    }
 
     /// <summary>Opens (or reuses) the data of an instrument of a connection.</summary>
     public InstrumentData Open(string profileId, Instrument instrument) =>
         Hub.GetOrStart(Connections.GetFeed(profileId), instrument, HistoryFor(profileId));
+
+    /// <summary>Opens every instrument of <see cref="AppSettings.AutoRecord"/> (a few seconds after start: the connections need to be up). The recorder runs while the data is open.</summary>
+    public async Task StartBackgroundRecordingAsync()
+    {
+        foreach (var key in Settings.AutoRecord.ToList()) await OpenForRecordingAsync(key);
+    }
+
+    /// <summary>Opens one "feedId|symbol" entry; returns what went wrong, or null.</summary>
+    public async Task<string?> OpenForRecordingAsync(string key)
+    {
+        var parts = key.Split('|', 2);
+        if (parts.Length != 2) return "bad entry " + key;
+        string? error = null;
+        for (int attempt = 1; attempt <= 4; attempt++)
+        {
+            try
+            {
+                var profile = Connections.Find(parts[0]);
+                if (profile is not { Enabled: true }) return $"the connection {parts[0]} is not enabled";
+                var instruments = await Controls.InstrumentPicker.InstrumentsAsync(this, profile.Id);
+                var inst = instruments.FirstOrDefault(i => i.Symbol.Equals(parts[1], StringComparison.OrdinalIgnoreCase));
+                if (inst == null) return $"{parts[1]} is not in {profile.Name}";
+                Open(profile.Id, inst);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                await Task.Delay(TimeSpan.FromSeconds(5 * attempt));
+            }
+        }
+
+        return error;
+    }
 
     /// <summary>Opens a replay of stored data (nothing is recorded or saved in the workspace).</summary>
     public InstrumentData OpenReplay(Instrument source, DateTime startUtc, DateTime endUtc, TimeSpan preload)
@@ -501,6 +609,9 @@ public sealed class AppServices
     public event Action<BracketManager>? BracketsCreated;
 
     /// <summary>Accounts this instrument can be traded with.</summary>
+    /// <summary>The running trade copier, if any (one at a time).</summary>
+    public TradingHub.Trading.TradeCopier? Copier { get; set; }
+
     public IEnumerable<AccountOption> AccountsFor(InstrumentData data)
     {
         yield return new AccountOption("sim", "Simulated account", false);

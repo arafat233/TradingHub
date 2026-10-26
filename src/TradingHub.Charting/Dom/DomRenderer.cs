@@ -17,15 +17,22 @@ public sealed class DomModel
     private int _processed;
     private DateOnly _sessionDate;
 
+    // size that left the book without trading: each removal minus what traded at that price since the last update, per row, for the session
+    private readonly Dictionary<long, decimal> _cancelled = new();
+    private readonly Dictionary<(BookSide, long), decimal> _tradedSince = new();
+    private DepthSnapshot _prevDepth = DepthSnapshot.Empty;
+
     public DomModel(InstrumentData data, DomSettings? settings = null)
     {
         Data = data;
         Settings = settings ?? new DomSettings();
         AutoCenter = Settings.AutoCenter;
         data.TradesAppended += (_, _) => UpdateVolume();
+        data.DepthUpdated += OnDepth;
         data.HistoryLoaded += () =>
         {
             _sessionVolume.Clear();
+            _cancelled.Clear();
             _processed = 0;
             UpdateVolume();
         };
@@ -63,7 +70,31 @@ public sealed class DomModel
     /// <summary>Volume traded in the session per row (bid = aggressive sellers, ask = aggressive buyers).</summary>
     public IReadOnlyDictionary<long, (decimal Bid, decimal Ask)> SessionVolume => _sessionVolume;
 
+    /// <summary>Size pulled from the book without trading, per row, this session (an estimate: a pull and a trade in the same update are told apart by the tape).</summary>
+    public IReadOnlyDictionary<long, decimal> Cancelled => _cancelled;
+
     public long RowOf(long ticks) => CandleSeries.FloorDiv(ticks, Step);
+
+    private void OnDepth(DepthUpdate u)
+    {
+        var prev = _prevDepth;
+        _prevDepth = u.Snapshot;
+        if (!u.IsFullRefresh && prev.Bids.Length + prev.Asks.Length > 0)
+            // several changes to one level in a batch are one removal from what the book last showed there: only the last counts
+            foreach (var c in u.Changes.GroupBy(c => (c.Side, c.PriceTicks)).Select(g => g.Last()))
+            {
+                decimal before = prev.GetSize(c.Side, c.PriceTicks);
+                if (c.Size >= before) continue;
+                // a bid is eaten by sells and an ask by buys
+                _tradedSince.TryGetValue((c.Side, c.PriceTicks), out var traded);
+                decimal pulled = before - c.Size - traded;
+                if (pulled <= 0) continue;
+                long row = RowOf(c.PriceTicks);
+                _cancelled[row] = _cancelled.GetValueOrDefault(row) + pulled;
+            }
+
+        _tradedSince.Clear();
+    }
 
     private void UpdateVolume()
     {
@@ -74,6 +105,7 @@ public sealed class DomModel
         {
             _sessionDate = today;
             _sessionVolume.Clear();
+            _cancelled.Clear();
             _processed = store.LowerBound(Session.SessionStartUtc(today));
         }
 
@@ -83,6 +115,8 @@ public sealed class DomModel
             long row = RowOf(store.GetPriceTicks(i));
             _sessionVolume.TryGetValue(row, out var v);
             var vol = store.GetVolume(i);
+            var hit = (store.GetSide(i) == TradeSide.Sell ? BookSide.Bid : BookSide.Ask, store.GetPriceTicks(i));
+            _tradedSince[hit] = _tradedSince.GetValueOrDefault(hit) + vol;
             _sessionVolume[row] = store.GetSide(i) == TradeSide.Sell ? (v.Bid + vol, v.Ask) : (v.Bid, v.Ask + vol);
         }
 
@@ -92,6 +126,7 @@ public sealed class DomModel
     public void ResetVolume()
     {
         _sessionVolume.Clear();
+        _cancelled.Clear();
         _processed = 0;
         _sessionDate = default;
         UpdateVolume();
@@ -136,6 +171,7 @@ public sealed class DomRenderer
         DomColumn.Delta => new[] { "Delta", "Δ" },
         DomColumn.TradedBid => new[] { "Vol. bid", "V.bid", "Vb" },
         DomColumn.TradedAsk => new[] { "Vol. ask", "V.ask", "Va" },
+        DomColumn.Cancelled => new[] { "Cxl", "X" },
         _ => new[] { c.ToString() },
     };
 
@@ -240,10 +276,11 @@ public sealed class DomRenderer
         long bestBidRow = book.HasBid ? dom.RowOf(book.BestBidTicks) : long.MinValue;
         long bestAskRow = book.HasAsk ? dom.RowOf(book.BestAskTicks) : long.MaxValue;
 
-        decimal maxBook = 0, maxVol = 0, maxDelta = 0, maxSide = 0;
+        decimal maxBook = 0, maxVol = 0, maxDelta = 0, maxSide = 0, maxCxl = 0;
         for (int i = 0; i < drawRows; i++)
         {
             long r = _topRow - i;
+            maxCxl = Math.Max(maxCxl, dom.Cancelled.GetValueOrDefault(r));
             maxBook = Math.Max(maxBook, Math.Max(bids.GetValueOrDefault(r), asks.GetValueOrDefault(r)));
             if (!dom.SessionVolume.TryGetValue(r, out var sv)) continue;
             maxVol = Math.Max(maxVol, sv.Bid + sv.Ask);
@@ -338,6 +375,14 @@ public sealed class DomRenderer
                         _fill.Color = sellVol;
                         canvas.DrawRect(x + w - 2 - bw, y + 2, bw, _rowH - 4, _fill);
                         Text(canvas, VolumeFormat.Compact(sv.Bid, volDec), x, y, w, small, t.Text, 1);
+                        break;
+                    }
+                    case DomColumn.Cancelled when dom.Cancelled.TryGetValue(r, out var cx) && cx > 0 && maxCxl > 0:
+                    {
+                        float cw = (float)(cx / maxCxl) * (w - 4);
+                        _fill.Color = new SKColor(230, 170, 60, 150);
+                        canvas.DrawRect(x + 2, y + 2, cw, _rowH - 4, _fill);
+                        Text(canvas, VolumeFormat.Compact(cx, volDec), x, y, w, small, t.Text, -1);
                         break;
                     }
                     case DomColumn.TradedAsk when dom.SessionVolume.TryGetValue(r, out var sv) && sv.Ask > 0 && maxSide > 0:

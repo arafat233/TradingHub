@@ -719,6 +719,9 @@ namespace TradingHub.Indicators
             for (int bar = Math.Max(0, fromBar); bar < n; bar++) OnCalculate(bar, SourceValue(bar));
         }
 
+        /// <summary>Prices this indicator wants tagged on the price axis (the chart paints them over the axis, which an indicator's own drawing cannot).</summary>
+        public virtual IEnumerable<(decimal Price, string Text, Color Background)> AxisTags() => Array.Empty<(decimal, string, Color)>();
+
         internal void HostRender(RenderContext context, DrawingLayouts layout) => OnRender(context, layout);
         internal void HostNewTrades(IEnumerable<MarketDataArg> trades) => OnNewTrades(trades);
         internal void HostBestBidAsk(MarketDataArg arg) => OnBestBidAskChanged(arg);

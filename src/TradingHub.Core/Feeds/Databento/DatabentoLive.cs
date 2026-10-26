@@ -14,6 +14,9 @@ public sealed class DatabentoLiveSettings
     /// <summary>Level 2: the MBP-10 schema (top 10 levels on every book change, trades included); otherwise only trades (cheaper).</summary>
     public bool Level2 { get; set; } = true;
 
+    /// <summary>Level 3: the MBO schema (every order add, modify, cancel and fill). The book is rebuilt from the orders, so it is deeper than MBP-10; it streams the most data.</summary>
+    public bool Mbo { get; set; }
+
     public List<string> Products { get; set; } = new() { "ES", "NQ", "MES", "MNQ", "YM", "MYM", "RTY", "M2K", "GC", "MGC", "CL", "MCL" };
 
     /// <summary>Live gateway (host:port); null = Databento's for CME Globex. The tests point it at a fake one.</summary>
@@ -32,7 +35,7 @@ public sealed class DatabentoLiveFeed : IMarketDataFeed
     public const string FeedId = "databento";
     private const string Host = "glbx-mdp3.lsg.databento.com";
     private const int Port = 13000;
-    private const byte RTypeTrade = 0x00, RTypeMbp10 = 0x0A, RTypeError = 0x15, RTypeSystem = 0x17;
+    private const byte RTypeTrade = 0x00, RTypeMbp10 = 0x0A, RTypeMbo = 0xA0, RTypeError = 0x15, RTypeSystem = 0x17;
     private readonly DatabentoLiveSettings _s;
 
     public DatabentoLiveFeed(DatabentoLiveSettings settings) => _s = settings;
@@ -111,7 +114,8 @@ public sealed class DatabentoLiveFeed : IMarketDataFeed
                 if (auth.GetValueOrDefault("success") != "1")
                     throw new InvalidOperationException("Databento rejected the connection: " + (auth.GetValueOrDefault("error") ?? "check the API key and that your plan includes live CME data"));
 
-                await Send($"schema={(_s.Level2 ? "mbp-10" : "trades")}|stype_in=continuous|symbols={DatabentoClient.Continuous(instrument.Symbol)}|snapshot=0|is_last=1").ConfigureAwait(false);
+                // MBO asks for a snapshot too: the orders already resting when we connect (the book is empty without them)
+                await Send($"schema={(_s.Mbo ? "mbo" : _s.Level2 ? "mbp-10" : "trades")}|stype_in=continuous|symbols={DatabentoClient.Continuous(instrument.Symbol)}|snapshot={(_s.Mbo ? 1 : 0)}|is_last=1").ConfigureAwait(false);
                 await Send("start_session=0").ConfigureAwait(false);
 
                 // 2) DBN: "DBN" + version + metadata length, the metadata (not needed) and then the records
@@ -123,6 +127,7 @@ public sealed class DatabentoLiveFeed : IMarketDataFeed
 
                 var book = new OrderBookBuilder();
                 long lastBook = 0;
+                var mbo = new MboState();
                 while (!conn.IsCancellationRequested)
                 {
                     conn.CancelAfter(TimeSpan.FromSeconds(90)); // the gateway sends a heartbeat every 30 s
@@ -131,6 +136,17 @@ public sealed class DatabentoLiveFeed : IMarketDataFeed
                     var rec = (await r.ExactAsync(length - 1, conn.Token).ConfigureAwait(false)).Span; // without the length byte: offsets below are -1
                     byte rtype = rec[0];
                     if (rtype == RTypeError) throw new InvalidOperationException("Databento: " + Text(rec[15..]));
+                    if (rtype == RTypeMbo)
+                    {
+                        if (length >= 56)
+                        {
+                            any = true;
+                            ApplyMbo(rec, instrument, sink, mbo, ref lastId, ref lastBook);
+                        }
+
+                        continue;
+                    }
+
                     if (rtype == RTypeSystem || length < 48 || (rtype != RTypeTrade && rtype != RTypeMbp10)) continue;
 
                     any = true;
@@ -187,6 +203,118 @@ public sealed class DatabentoLiveFeed : IMarketDataFeed
         live.SetChannel("data", FeedStatus.Disconnected, null);
     }
 
+    /// <summary>The resting orders by id and the book summed from them.</summary>
+    private sealed class MboState
+    {
+        public readonly Dictionary<long, (bool Ask, long Ticks, long Size)> Orders = new();
+        public readonly Dictionary<(bool Ask, long Ticks), long> Levels = new();
+        public readonly OrderBookBuilder Book = new();
+
+        public void Level(bool ask, long ticks, long delta)
+        {
+            long total = Math.Max(0, Levels.GetValueOrDefault((ask, ticks)) + delta);
+            if (total == 0) Levels.Remove((ask, ticks));
+            else Levels[(ask, ticks)] = total;
+            Book.Set(ask ? BookSide.Ask : BookSide.Bid, ticks, total);
+        }
+
+        public void Clear()
+        {
+            Orders.Clear();
+            Levels.Clear();
+            Book.Clear();
+        }
+    }
+
+    /// <summary>
+    /// One MboMsg (rtype 0xA0, 56 bytes; offsets are -1 because the length byte is gone): order id 15, price 23, size 31, flags 35, action 37, side 38.
+    /// A add, M modify, C cancel (size = what was cancelled), F fill (size = what was filled), T trade (it does not touch the book), R clear.
+    /// Records of the initial snapshot (flag 32) build the book but are not announced as order events.
+    /// </summary>
+    private static void ApplyMbo(ReadOnlySpan<byte> rec, Instrument inst, IMarketDataSink sink, MboState st, ref long lastId, ref long lastBook)
+    {
+        long tsNs = BinaryPrimitives.ReadInt64LittleEndian(rec[7..]);
+        long id = unchecked((long)BinaryPrimitives.ReadUInt64LittleEndian(rec[15..]));
+        var price = Px(BinaryPrimitives.ReadInt64LittleEndian(rec[23..]));
+        long size = BinaryPrimitives.ReadUInt32LittleEndian(rec[31..]);
+        bool silent = (rec[35] & 32) != 0;
+        char action = (char)rec[37], side = (char)rec[38];
+        var time = DateTime.UnixEpoch.AddTicks(tsNs / 100);
+
+        void Event(OrderEventKind kind, bool ask, long ticks, long sz)
+        {
+            if (!silent) sink.OnOrderEvents(inst, new[] { new OrderEvent(time, kind, id, ask, ticks, sz) });
+        }
+
+        void Add(bool ask)
+        {
+            long ticks = inst.ToTicks(price!.Value);
+            st.Orders[id] = (ask, ticks, size);
+            st.Level(ask, ticks, size);
+            Event(OrderEventKind.Add, ask, ticks, size);
+        }
+
+        // a cancel or a fill takes `size` off the order; what is left stays on the book
+        void Reduce(OrderEventKind gone)
+        {
+            if (!st.Orders.TryGetValue(id, out var o)) return;
+            long left = o.Size - size;
+            st.Level(o.Ask, o.Ticks, -Math.Min(size, o.Size));
+            if (left > 0)
+            {
+                st.Orders[id] = (o.Ask, o.Ticks, left);
+                Event(OrderEventKind.Modify, o.Ask, o.Ticks, left);
+            }
+            else
+            {
+                st.Orders.Remove(id);
+                Event(gone, o.Ask, o.Ticks, o.Size);
+            }
+        }
+
+        switch (action)
+        {
+            case 'T':
+                if (price is { } p && size > 0)
+                {
+                    var tside = side switch { 'B' => TradeSide.Buy, 'A' => TradeSide.Sell, _ => TradeSide.None };
+                    sink.OnTrades(inst, new[] { new Trade(HistoryBuilder.TimeId(time, ref lastId), time, inst.RoundPrice(p), size, tside) });
+                }
+
+                return;
+            case 'R':
+                st.Clear();
+                break;
+            case 'A' when price != null && side is 'A' or 'B':
+                Add(side == 'A');
+                break;
+            case 'M':
+                if (st.Orders.TryGetValue(id, out var old) && price != null)
+                {
+                    long ticks = inst.ToTicks(price.Value);
+                    st.Level(old.Ask, old.Ticks, -old.Size);
+                    st.Level(old.Ask, ticks, size);
+                    st.Orders[id] = (old.Ask, ticks, size);
+                    Event(OrderEventKind.Modify, old.Ask, ticks, size);
+                }
+                else if (price != null && side is 'A' or 'B') Add(side == 'A'); // modifying an order we never saw
+                break;
+            case 'C':
+                Reduce(OrderEventKind.Cancel);
+                break;
+            case 'F':
+                Reduce(OrderEventKind.Fill);
+                break;
+            default:
+                return;
+        }
+
+        // ponytail: shown at most every 50 ms like the other schemas; the book itself is always exact, only the redraw waits
+        if (Environment.TickCount64 - lastBook < 50) return;
+        lastBook = Environment.TickCount64;
+        sink.OnDepth(inst, st.Book.BuildUpdate(time, 50, true));
+    }
+
     /// <summary>Fixed-point price (1e-9); i64.MaxValue means "no price".</summary>
     private static decimal? Px(long fixedPx) => fixedPx == long.MaxValue ? null : fixedPx / 1_000_000_000m;
 
@@ -212,7 +340,7 @@ public sealed class DatabentoLiveFeed : IMarketDataFeed
                 if (st == FeedStatus.Connected) connected = true;
                 else if (st is FeedStatus.Error or FeedStatus.Reconnecting) done.TrySetResult((false, msg ?? "Databento did not accept the connection"));
             },
-            depth => done.TrySetResult((true, $"Live data OK: {DatabentoClient.Continuous(instruments[0].Symbol)}" + (depth ? " with Level 2 (MBP-10)." : "."))));
+            depth => done.TrySetResult((true, $"Live data OK: {DatabentoClient.Continuous(instruments[0].Symbol)}" + (depth ? (_s.Mbo ? " with Level 3 (MBO)." : " with Level 2 (MBP-10).") : "."))));
         using var sub = Subscribe(instruments[0], sink);
         try
         {

@@ -41,6 +41,23 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     /// <summary>The book over the last minutes (for the liquidity heatmap); it only has data on feeds that send depth.</summary>
     public DepthHistory DepthHistory { get; } = new();
 
+    /// <summary>Big orders added, pulled, flashed and eaten, from feeds that publish individual orders (Level 3); empty on the others.</summary>
+    public OrderFlowDetector OrderFlow { get; } = new();
+
+    /// <summary>The liquidations of the last 24 hours (feeds that publish them), oldest first.</summary>
+    public List<Liquidation> Liquidations { get; } = new();
+
+    private readonly ConcurrentQueue<Liquidation> _liquidations = new();
+    private DateTime _liqMarksAt;
+    private DateTime _liqEstAt;
+
+    private InsightsState? _insights;
+
+    /// <summary>The Insights panel's state for this instrument (flow tracker, edge meter), made when first asked for.</summary>
+    public InsightsState Insights => _insights ??= new InsightsState(this);
+
+    private readonly ConcurrentQueue<OrderEvent> _orderEvents = new();
+
     public FeedStatus Status => _status;
     public string? StatusMessage => _statusMessage;
     public bool IsLoadingHistory { get; private set; }
@@ -397,6 +414,19 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
 
     void IMarketDataSink.OnStatus(Instrument instrument, FeedStatus status, string? message) => SetStatus(status, message);
 
+    void IMarketDataSink.OnLiquidations(Instrument instrument, IReadOnlyList<Liquidation> liquidations)
+    {
+        foreach (var l in liquidations) _liquidations.Enqueue(l);
+        while (_liquidations.Count > 20_000) _liquidations.TryDequeue(out _);
+    }
+
+    void IMarketDataSink.OnOrderEvents(Instrument instrument, IReadOnlyList<OrderEvent> events)
+    {
+        _lastDataAt = DateTime.UtcNow.Ticks;
+        foreach (var e in events) _orderEvents.Enqueue(e);
+        while (_orderEvents.Count > 100_000) _orderEvents.TryDequeue(out _); // the UI is stuck: keep the newest
+    }
+
     private void SetStatus(FeedStatus status, string? message)
     {
         _status = status;
@@ -465,6 +495,36 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
             }
 
             DrainIncoming(skipKnown: true, raise: true);
+        }
+
+        if (!_orderEvents.IsEmpty)
+        {
+            var batch = new List<OrderEvent>();
+            while (_orderEvents.TryDequeue(out var oe)) batch.Add(oe);
+            OrderFlow.Apply(batch);
+        }
+
+        OrderFlow.Resolve(Trades, Feed.Now);
+
+        if (!_liquidations.IsEmpty)
+        {
+            while (_liquidations.TryDequeue(out var lq)) Liquidations.Add(lq);
+            var cut = DateTime.UtcNow.AddHours(-24);
+            if (Liquidations.Count > 0 && Liquidations[0].Time < cut) Liquidations.RemoveAll(l => l.Time < cut);
+        }
+
+        // the clusters go on the shared board for the chart overlay and the panel (at most every 10 s)
+        if (Liquidations.Count > 0 && DateTime.UtcNow - _liqMarksAt > TimeSpan.FromSeconds(10))
+        {
+            _liqMarksAt = DateTime.UtcNow;
+            MarketLevels.Set(Instrument.Key, "liquidations", LiquidationClusters.Marks(Liquidations, Instrument, DateTime.UtcNow, TimeSpan.FromHours(6)));
+        }
+
+        // estimated liquidation prices from where the big orders went in (a scan of the last hours: once a minute is plenty)
+        if (DateTime.UtcNow - _liqEstAt > TimeSpan.FromMinutes(1) && Trades.Count > 1000)
+        {
+            _liqEstAt = DateTime.UtcNow;
+            MarketLevels.Set(Instrument.Key, "liq-estimate", LiquidationProjection.Marks(Trades, Instrument, Feed.Now, TimeSpan.FromHours(6)));
         }
 
         var depth = _latestDepth;

@@ -175,6 +175,9 @@ public enum ConnectionKind
     [Display(Name = "Databento")] Databento,
     [Display(Name = "dxFeed")] DxFeed,
     [Display(Name = "London Strategic Edge")] LondonStrategicEdge,
+    [Display(Name = "Kraken")] Kraken,
+    [Display(Name = "Coinbase")] Coinbase,
+    [Display(Name = "Bitfinex")] Bitfinex,
 }
 
 /// <summary>A configured connection (the secrets go to the keychain, not to this file).</summary>
@@ -227,6 +230,14 @@ public sealed class ConnectionProfile
 
     // Databento live: Level 2 (MBP-10) or trades only, and the futures it offers on charts
     public bool DatabentoLevel2 { get; set; } = true;
+    public bool DatabentoMbo { get; set; }
+    // Bybit: the perpetuals whose history is built from Bybit's free public daily files, and how many days back (see BybitBackfill)
+    public List<string> BybitBackfill { get; set; } = new() { "BTCUSDT", "ETHUSDT" };
+    public int BackfillDays { get; set; } = 30;
+
+    // London Strategic Edge: the futures whose finished days are downloaded in the background (see LseBackfill)
+    public List<string> LseBackfill { get; set; } = new() { "ES.F", "NQ.F", "GC.F" };
+
     public List<string> DatabentoProducts { get; set; } = new TradingHub.Feeds.Databento.DatabentoLiveSettings().Products;
 
     // dxFeed (dxLink): address, Level 2 source and products; the token goes to the keychain
@@ -252,6 +263,9 @@ public sealed class ConnectionProfile
         ConnectionKind.BinanceFutures => BinanceFeed.FuturesId,
         ConnectionKind.BinanceSpot => BinanceFeed.SpotId,
         ConnectionKind.Bybit => BybitFeed.LinearId,
+        ConnectionKind.Kraken => TradingHub.Feeds.Kraken.KrakenFeed.SpotId,
+        ConnectionKind.Coinbase => TradingHub.Feeds.Coinbase.CoinbaseFeed.SpotId,
+        ConnectionKind.Bitfinex => TradingHub.Feeds.Bitfinex.BitfinexFeed.FeedId,
         ConnectionKind.Rithmic or ConnectionKind.AmpFutures => RithmicFeed.FeedId,
         ConnectionKind.Tradovate => TradingHub.Feeds.Tradovate.TradovateFeed.FeedId,
         // each cTrader broker has its own prices: the first one uses "ctrader" and the rest their own id
@@ -332,7 +346,11 @@ public sealed class ConnectionManager
         }
         catch (Exception ex)
         {
-            this.LogWarn("Could not read the connections: " + ex.Message);
+            // keep the unreadable file: the defaults saved right after would otherwise silently replace the user's connections
+            try { File.Copy(FilePath, Path.ChangeExtension(FilePath, $".unreadable-{DateTime.Now:yyyyMMdd-HHmmss}.json"), true); }
+            catch (Exception) { /* nothing more to do */ }
+            Profiles.Clear();
+            this.LogWarn("Could not read the connections (a copy of the file was kept next to it): " + ex.Message);
         }
     }
 
@@ -355,7 +373,7 @@ public sealed class ConnectionManager
     public void ClearSecrets(ConnectionProfile p)
     {
         SetSecret(p, null);
-        foreach (var name in new[] { "apisecret", "token", "refresh" }) SetSecret(p, name, null);
+        foreach (var name in new[] { "apisecret", "token", "refresh", "passphrase" }) SetSecret(p, name, null);
     }
 
     /// <summary>A connection's configuration changed (the Rithmic ones report it so their order session updates too).</summary>
@@ -392,6 +410,9 @@ public sealed class ConnectionManager
             ConnectionKind.BinanceFutures => new BinanceFeed(futures: true),
             ConnectionKind.BinanceSpot => new BinanceFeed(futures: false),
             ConnectionKind.Bybit => new BybitFeed(),
+            ConnectionKind.Kraken => new TradingHub.Feeds.Kraken.KrakenFeed(),
+            ConnectionKind.Coinbase => new TradingHub.Feeds.Coinbase.CoinbaseFeed(CoinbaseKeysOf(p)),
+            ConnectionKind.Bitfinex => new TradingHub.Feeds.Bitfinex.BitfinexFeed(),
             ConnectionKind.Rithmic or ConnectionKind.AmpFutures => new RithmicFeed(RithmicSettingsOf(p)),
             ConnectionKind.Tradovate => TradovateFeedOf(p),
             ConnectionKind.CTrader => CTraderFeedOf(p),
@@ -401,6 +422,7 @@ public sealed class ConnectionManager
             {
                 ApiKey = GetSecret(p),
                 Level2 = p.DatabentoLevel2,
+                Mbo = p.DatabentoMbo,
                 Products = p.DatabentoProducts,
                 Gateway = Environment.GetEnvironmentVariable("TRADINGHUB_DATABENTO_LIVE") is { Length: > 0 } g ? g : null,
             }),
@@ -487,6 +509,9 @@ public sealed class ConnectionManager
         StreamUrl = Environment.GetEnvironmentVariable("TRADINGHUB_OANDA_STREAM") is { Length: > 0 } s ? s : null,
     };
 
+    /// <summary>The Coinbase Exchange API key (key id in the profile, secret and passphrase in the keychain); incomplete = the public feed.</summary>
+    public TradingHub.Feeds.Coinbase.CoinbaseKeys CoinbaseKeysOf(ConnectionProfile p) => new(p.ApiKey ?? "", GetSecret(p), GetSecret(p, "passphrase"));
+
     public TradingHub.Feeds.Alpaca.AlpacaSettings AlpacaSettingsOf(ConnectionProfile p) => new()
     {
         KeyId = p.ApiKey,
@@ -540,6 +565,20 @@ public sealed class ConnectionManager
                 {
                     var inst = await new BybitFeed().GetInstrumentsAsync(ct);
                     return (true, $"{inst.Count} perpetuals available (public data).");
+                }
+                case ConnectionKind.Kraken:
+                case ConnectionKind.Bitfinex:
+                {
+                    var inst = await GetFeed(p.Id).GetInstrumentsAsync(ct);
+                    return (true, $"{inst.Count} markets available (public data).");
+                }
+                case ConnectionKind.Coinbase:
+                {
+                    var feed = (TradingHub.Feeds.Coinbase.CoinbaseFeed)GetFeed(p.Id);
+                    var inst = await feed.GetInstrumentsAsync(ct);
+                    if (!feed.HasOrderLevel) return (true, $"{inst.Count} markets available (public data). Add an API key for the order-level feed.");
+                    var (ok, msg) = await feed.TestKeysAsync(ct);
+                    return (ok, ok ? $"{inst.Count} markets available. {msg}" : msg);
                 }
                 case ConnectionKind.Rithmic:
                 case ConnectionKind.AmpFutures:

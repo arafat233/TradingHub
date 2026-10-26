@@ -93,6 +93,36 @@ public static class KlineHistory
         return Path.Combine(CacheRoot!, Clean(inst.FeedId), Clean(inst.Symbol), $"{month:yyyy-MM}.{minutes}m{(tag.Length > 0 ? "." + tag : "")}.bin");
     }
 
+    /// <summary>
+    /// Every cached candle of an instrument (the closed months already stored), oldest first. Reads the same files the charts use; nothing is
+    /// downloaded. Used by the research tools that need months of history.
+    /// </summary>
+    public static List<Kline> ReadCached(string cacheRoot, string feedId, string symbol, int minutes = 1)
+    {
+        static string Clean(string s) => string.Concat(s.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        var dir = Path.Combine(cacheRoot, Clean(feedId), Clean(symbol));
+        var all = new List<Kline>();
+        if (!Directory.Exists(dir)) return all;
+        foreach (var file in Directory.GetFiles(dir, $"*.{minutes}m*.bin").OrderBy(f => f, StringComparer.Ordinal))
+        {
+            try
+            {
+                using var r = new BinaryReader(File.OpenRead(file));
+                int n = r.ReadInt32();
+                for (int i = 0; i < n; i++)
+                {
+                    long t = r.ReadInt64();
+                    decimal o = r.ReadDecimal(), h = r.ReadDecimal(), l = r.ReadDecimal(), c = r.ReadDecimal(), v = r.ReadDecimal(), b = r.ReadDecimal();
+                    bool hb = r.ReadBoolean();
+                    all.Add(new Kline(t, o, h, l, c, v, b, hb));
+                }
+            }
+            catch (Exception) { /* a damaged month is skipped */ }
+        }
+
+        return all;
+    }
+
     private static List<Kline>? ReadCache(Instrument inst, DateTime month, int minutes, string tag)
     {
         try

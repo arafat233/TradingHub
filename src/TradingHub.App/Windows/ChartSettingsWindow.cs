@@ -236,7 +236,7 @@ internal sealed class ChartSettingsWindow : Window
     private Control ColorRow(string label, string property)
     {
         var swatch = new Border { Width = 34, Height = 18, CornerRadius = new CornerRadius(4), BorderBrush = Ui.Line, BorderThickness = new Thickness(1) };
-        var code = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Text2, FontFamily = new FontFamily("Menlo") };
+        var code = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Text2, FontFamily = new FontFamily(Plat.Mono) };
         var changed = new TextBlock { Text = "•", Foreground = Ui.Accent, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeight.Bold };
         ToolTip.SetTip(changed, "Changed on this chart");
         var hex = new TextBox { Width = 110, Watermark = "#RRGGBB o #RRGGBBAA", FontSize = 12 };

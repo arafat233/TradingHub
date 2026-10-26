@@ -30,5 +30,6 @@
   <ItemGroup>
     <None Remove="Assets/**" />
     <AvaloniaResource Include="Assets/**" Exclude="Assets/*.icns;Assets/icon-512.png" />
+    <EmbeddedResource Include="..\..\docs\insights.md" LogicalName="insights.md" />
   </ItemGroup>
 </Project>

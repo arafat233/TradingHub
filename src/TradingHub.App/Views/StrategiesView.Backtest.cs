@@ -42,7 +42,7 @@ internal sealed partial class StrategiesView
     private readonly EquityChart _equity = new() { Height = 270 };
     private readonly ListBox _tradesList = new() { Background = Brushes.Transparent };
     private readonly Grid _metricsGrid = new() { ColumnDefinitions = new ColumnDefinitions("*,20,*") };
-    private readonly TextBox _logBox = new() { IsReadOnly = true, AcceptsReturn = true, FontFamily = new FontFamily("Menlo, monospace"), FontSize = 11.5, TextWrapping = TextWrapping.NoWrap };
+    private readonly TextBox _logBox = new() { IsReadOnly = true, AcceptsReturn = true, FontFamily = new FontFamily(Plat.Mono), FontSize = 11.5, TextWrapping = TextWrapping.NoWrap };
     private readonly EquityChart _mcChart = new() { Height = 260, EmptyText = "Run the simulation to see possible paths" };
     private readonly WrapPanel _mcKpis = new() { ItemSpacing = 10, LineSpacing = 10 };
     private readonly Panel _resultsPanel = new();
@@ -130,6 +130,7 @@ internal sealed partial class StrategiesView
             ("metrics", "Metrics", (string?)null),
             ("market", "By market regime", (string?)"How it did in range, mixed or trend and at low, normal or high volatility; and re-running it only in the conditions you choose"),
             ("mc", "Monte Carlo", (string?)null),
+            ("verdict", "Verdict", (string?)"A plain traffic light: does the direction of the trades beat chance, does it survive costs and higher costs, and do both halves pay"),
             ("log", "Log", (string?)null),
         });
         var tradesBox = BuildTradesTable();
@@ -138,18 +139,20 @@ internal sealed partial class StrategiesView
         var mcBox = Ui.V(14, Ui.H(12, mcRun, new TextBlock { Text = "It shuffles the order of the trades to see which drawdowns could have happened with the same edge.", Classes = { "muted", "small" }, TextWrapping = TextWrapping.Wrap, MaxWidth = 520 }), _mcKpis, _mcChart);
         var logBox = _logBox;
         var marketBox = new ScrollViewer { Content = _marketBox };
-        var tabPanels = new Panel { Children = { tradesBox, metricsBox, marketBox, mcBox, logBox } };
+        var verdictBox = new ScrollViewer { Content = _verdictText };
+        var tabPanels = new Panel { Children = { tradesBox, metricsBox, marketBox, mcBox, verdictBox, logBox } };
         resultTabs.SelectionChanged += id =>
         {
             tradesBox.IsVisible = id == "trades";
             metricsBox.IsVisible = id == "metrics";
             marketBox.IsVisible = id == "market";
             mcBox.IsVisible = id == "mc";
+            verdictBox.IsVisible = id == "verdict";
             logBox.IsVisible = id == "log";
         };
         _resultTabs = resultTabs;
         resultTabs.Select("trades");
-        metricsBox.IsVisible = marketBox.IsVisible = mcBox.IsVisible = logBox.IsVisible = false;
+        metricsBox.IsVisible = marketBox.IsVisible = mcBox.IsVisible = logBox.IsVisible = verdictBox.IsVisible = false;
 
         var bottom = new DockPanel();
         DockPanel.SetDock(resultTabs, Dock.Top);
@@ -589,7 +592,12 @@ internal sealed partial class StrategiesView
         RenderMarket(r);
         _mcKpis.Children.Clear();
         _mcChart.SetData(Array.Empty<EquityPoint>(), r.Settings.InitialCapital);
+        var verdict = StrategyVerdict.Build(r.Trades.Select(t => (t.EntryTime, (double)t.Pnl, (double)t.Commission)).ToList());
+        _verdictText.Text = $"{verdict.Light.ToUpperInvariant()}\n\n{verdict.Text}";
+        _verdictText.Foreground = verdict.Light switch { "green" => Ui.Up, "red" => Ui.Down, "amber" => Ui.Warn, _ => Ui.Text2 };
     }
+
+    private readonly TextBlock _verdictText = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(6), FontSize = 13 };
 
     private static Control Kpi(string title, string value, string sub, IBrush? color)
     {

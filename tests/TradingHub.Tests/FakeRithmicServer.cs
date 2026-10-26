@@ -201,6 +201,13 @@ internal sealed class FakeRithmicServer : IDisposable
                                 .Double(100006, MarketPrice).Int(100178, 1).Int(150100, LastTradeSsboe).Int(150101, 0));
                         break;
                     }
+                    case 117:
+                    {
+                        bool subscribe = m.Int(100000) != 2;
+                        if (subscribe) lock (_gate) MboRequests.Add(m.String(110100) ?? "");
+                        await Send(ws, subscribe && NoMbo ? Msg(118, m).String(132766, "13").String(132766, "no MBO") : Msg(118, m).String(132766, "0"));
+                        break;
+                    }
                     case 206:
                         await TickReplay(ws, m);
                         break;
@@ -390,6 +397,22 @@ internal sealed class FakeRithmicServer : IDisposable
 
     /// <summary>The account has no Level 2: a subscription that asks for the order book is rejected.</summary>
     public bool NoLevel2 { get; set; }
+
+    /// <summary>Symbols of every depth-by-order subscription received.</summary>
+    public List<string> MboRequests { get; } = new();
+
+    /// <summary>The account has no order-level entitlement: the depth-by-order request is rejected.</summary>
+    public bool NoMbo { get; set; }
+
+    /// <summary>Sends a depth-by-order message (template 160): update type 1 new, 2 change, 3 delete; transaction 1 buy, 2 sell.</summary>
+    public async Task PushOrders(string symbol, params (int Type, bool Buy, double Price, int Size, string Id)[] orders)
+    {
+        WebSocket[] targets;
+        lock (_gate) targets = _marketData.Where(kv => kv.Key.State == WebSocketState.Open && kv.Value.Contains(symbol)).Select(kv => kv.Key).ToArray();
+        var w = new ProtoWriter().Int(154467, 160).String(110100, symbol).String(110101, "CME").Int(150100, DateTimeOffset.UtcNow.ToUnixTimeSeconds()).Int(150101, 0);
+        foreach (var o in orders) w.Int(110121, o.Type).Int(153612, o.Buy ? 1 : 2).Double(154405, o.Price).Int(154406, o.Size).String(149238, o.Id);
+        foreach (var ws in targets) await Send(ws, w);
+    }
 
     /// <summary>Sends an order book message (template 156) to the quote sessions subscribed to that contract.</summary>
     public async Task PushBook(string symbol, int updateType, (double Price, int Size)[] bids, (double Price, int Size)[] asks)

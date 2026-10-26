@@ -83,6 +83,57 @@ public class DatabentoLiveTests
         Assert.Equal(12m, book.BestAskSize);
     }
 
+    private sealed class OrderSink : IMarketDataSink
+    {
+        public readonly List<OrderEvent> Orders = new();
+        public readonly List<Trade> Trades = new();
+        public volatile DepthUpdate? Depth;
+        public void OnTrades(Instrument instrument, IReadOnlyList<Trade> trades) { lock (Trades) Trades.AddRange(trades); }
+        public void OnDepth(Instrument instrument, DepthUpdate update) => Depth = update;
+        public void OnStatus(Instrument instrument, FeedStatus status, string? message) { }
+        public void OnOrderEvents(Instrument instrument, IReadOnlyList<OrderEvent> events) { lock (Orders) Orders.AddRange(events); }
+    }
+
+    [Fact]
+    public async Task Mbo_gives_order_events_trades_and_a_book_summed_from_the_orders()
+    {
+        long t = Ns(DateTime.UtcNow);
+        using var gw = new FakeDatabentoGateway();
+        var r = gw.Records;
+        r.Add(FakeDatabentoGateway.Mbo(t, 1, 'A', 'B', 2650.0, 5, 32));   // snapshot: builds the book, no event
+        r.Add(FakeDatabentoGateway.Mbo(t + 1, 2, 'A', 'B', 2650.0, 3));   // bid level 2650.0 = 8
+        r.Add(FakeDatabentoGateway.Mbo(t + 2, 3, 'A', 'A', 2650.1, 4));
+        r.Add(FakeDatabentoGateway.Mbo(t + 3, 2, 'M', 'B', 2649.9, 6));   // order 2 moves
+        r.Add(FakeDatabentoGateway.Mbo(t + 4, 3, 'T', 'B', 2650.1, 1));   // a buy takes 1: the book does not change
+        r.Add(FakeDatabentoGateway.Mbo(t + 5, 3, 'F', 'A', 2650.1, 1));   // order 3 loses 1 -> 3 left
+        r.Add(FakeDatabentoGateway.Mbo(t + 6, 3, 'C', 'A', 2650.1, 3));   // the rest is cancelled
+        for (int i = 0; i < 14; i++) r.Add(FakeDatabentoGateway.Mbo(t + 7, 9, 'X', 'N', null, 0)); // ignored records: the gateway sends one every 5 ms, so 50 ms pass
+        r.Add(FakeDatabentoGateway.Mbo(t + 8, 1, 'C', 'B', 2650.0, 5));   // after the 50 ms throttle: the final book is shown
+        var feed = new DatabentoLiveFeed(new DatabentoLiveSettings { ApiKey = gw.Key, Gateway = gw.Gateway, Mbo = true, Products = new() { "GC" } });
+        var gc = Assert.Single(await feed.GetInstrumentsAsync(CancellationToken.None));
+        var sink = new OrderSink();
+        using var sub = feed.Subscribe(gc, sink);
+        await Until(() => { lock (sink.Orders) return sink.Orders.Count >= 6; });
+        await Task.Delay(150);
+
+        lock (gw.Lines) Assert.Contains("schema=mbo|stype_in=continuous|symbols=GC.v.0|snapshot=1|is_last=1", gw.Lines);
+        OrderEvent[] e;
+        lock (sink.Orders) e = sink.Orders.ToArray();
+        Assert.Equal(new[] { OrderEventKind.Add, OrderEventKind.Add, OrderEventKind.Modify, OrderEventKind.Modify, OrderEventKind.Cancel, OrderEventKind.Cancel },
+            e.Select(x => x.Kind).ToArray());
+        Assert.Equal(new long[] { 2, 3, 2, 3, 3, 1 }, e.Select(x => x.OrderId).ToArray()); // order 1 (snapshot) was silent when added, announced when cancelled
+        Assert.Equal((false, gc.ToTicks(2649.9m), 6m), (e[2].Ask, e[2].PriceTicks, e[2].Size)); // the moved bid
+        Assert.Equal(3m, e[3].Size);                                                            // 4 - 1 filled
+        Assert.Equal(3m, e[4].Size);                                                            // the cancel reports what it still had
+        Assert.Equal(TradeSide.Buy, Assert.Single(sink.Trades).Side);
+
+        // book: order 1 gone, order 3 gone -> only order 2 at 2649.9
+        var book = sink.Depth!.Snapshot;
+        Assert.Single(book.Bids);
+        Assert.Empty(book.Asks);
+        Assert.Equal((gc.ToTicks(2649.9m), 6m), (book.BestBidTicks, book.BestBidSize));
+    }
+
     [Fact]
     public async Task Trades_only_subscribes_to_the_trades_schema()
     {

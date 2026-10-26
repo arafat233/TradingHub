@@ -16,7 +16,7 @@ namespace TradingHub.App.Lab;
 /// backtests, optimizations, walk-forwards and Monte Carlo on its own, and save a report.
 /// Everything it runs ends up in the strategy's history, exactly as if the user had run it.
 /// </summary>
-internal static class LabServer
+internal static partial class LabServer
 {
     private static StrategyCatalog? _catalog;
     private static TickData? _ticks;
@@ -159,6 +159,22 @@ internal static class LabServer
             Tool("compile_indicator", "Compiles the user's own indicators and returns the errors of the requested file (line and message). If it compiles, it shows up on the chart under Indicators → “My indicators”.",
                 Schema(("file", "string", "File without .cs (in the indicators folder)", true))),
             Tool("list_data", "Tick-by-tick data stored per instrument (available days). The backtests use only this data.", Schema()),
+            Tool("today_report", "The same report as the platform's Today window: alerts, today's remembered big-trade levels per instrument with the biggest ones price has not come back to, the level scoreboard (held / broke), the shadow (paper) trader's results, the learned hold probability, when big orders appear, the data coverage and yesterday's recap. Read-only.", Schema()),
+            Tool("list_levels", "The remembered big-trade levels of one instrument (market orders far above the usual size that the Big Trades indicator saved), newest first, with side, size, price, time and whether price has come back and what happened (held / broke). Read-only.",
+                Schema(("instrument", "string", "Instrument symbol as saved, for example GC.F", true), ("untouched", "boolean", "Only levels price has not come back to (true by default)", false), ("limit", "integer", "How many to return (25, at most 200)", false))),
+            Tool("next_events", "The market-moving events the user keeps in their events file (CPI, FOMC...), upcoming first, with the time in UTC. Read-only.", Schema(("days", "integer", "How many days ahead to look (14)", false))),
+            Tool("similar_days", "Finds the past sessions most like a given one at the end of the first hour (gap, where it opened against the previous value, first-hour size, yesterday's range, direction and shape) and what they went on to do, next to the base rate of all days. New York 08:00-17:00 sessions from the cached 1-minute candles. Read-only; a hint, not a forecast.",
+                Schema(("symbol", "string", "Instrument symbol as cached, for example GC.F (all cached ones if left out)", false), ("date", "string", "Session day YYYY-MM-DD (the latest one if left out)", false), ("count", "integer", "How many look-alikes (10, 3 to 40)", false))),
+            Tool("event_study", "Tests an order-flow idea on the stored ticks of one instrument: at every minute it checks whether the event is on and reports where price was 1, 5, 15 and 30 minutes later, in basis points, before and after costs, split into an earlier 'train' part and a later 'test' part, next to the opposite trade and an always-long baseline. Events: lean (buyers or sellers took 20%+ more of the last 5 minutes), stacked_imbalance, absorption (heavy one-sided volume that did not move price: fade it), big_trade (a trade 8x the usual: follow it) and delta_divergence (a new 30-minute high or low that the delta did not confirm). Read-only; an idea needs a positive net on the test rows to be worth anything.",
+                Schema(("symbol", "string", "Instrument symbol as stored, for example GC.F (see list_data)", true), ("event", "string", "lean, stacked_imbalance, absorption, big_trade or delta_divergence", true),
+                    ("feed", "string", "The connection, if the symbol exists on more than one (see list_data)", false), ("days", "integer", "How many of the latest stored days to use (20, 3 to 180)", false), ("cost_bps", "number", "Round-trip cost in basis points (8 for crypto, 2 for the rest if left out)", false), ("tests_tried", "integer", "How many event-and-horizon combinations you have looked at on this data, for the multiple-testing correction (4 if left out: one event, four horizons; pass 20 if you tried all five events)", false))),
+            Tool("fill_quality", "What an account's fills really cost: each fill compared with the price of the last trade a second before it on the recorded ticks (slippage, positive = you paid up), plus commissions, overall and by hour, instrument and side, and the round-trip cost in basis points to put in the Insights costs box. Read-only. A simulated account fills at the tape's price, so it shows about zero slippage: this is for real accounts.",
+                Schema(("account", "string", "Account id (see list_accounts; \"sim\" if left out)", false), ("days", "integer", "How many days back (30, 1 to 365)", false))),
+            Tool("stress_test", "The overfit adversary: re-runs one strategy on the same ticks with costs doubled and tripled, each half of the history alone, the first or last quarter dropped, and each optimizable parameter nudged one step up and down. It returns a verdict (ROBUST, MIXED, FRAGILE, NO EDGE, TOO FEW TRADES) and every scenario's result. Runs about 10 backtests; nothing is saved in the run history.",
+                Schema(RangeProps)),
+            Tool("list_accounts", "The accounts that have a trade journal (fills), by id, for trade_autopsy.", Schema()),
+            Tool("trade_autopsy", "Your closed trades from the journal with what the tape did around each: how far it went against you and for you, how much of the best move you kept, whether the tape was pushing your way before you entered, where in the last 4 hours' range you entered, the distance to the nearest remembered level, and what price did in the 5 minutes after you exited. Numbers only; read-only. Needs stored ticks for the traded instrument.",
+                Schema(("account", "string", "Account id from list_accounts (sim if left out)", false), ("date", "string", "Only trades opened that day, YYYY-MM-DD (UTC)", false), ("limit", "integer", "Most recent N trades (15, at most 60)", false))),
             Tool("download_data", "Downloads complete days of ticks from the public files (Binance Futures/Spot and Bybit; ~5 s per day). Up to 62 days per call.",
                 Schema(("feed", "string", "binance-futures, binance-spot or bybit-linear", true), ("symbol", "string", "Symbol", true),
                     ("from", "string", "First day YYYY-MM-DD", true), ("to", "string", "Last day YYYY-MM-DD (inclusive)", true))),
@@ -232,6 +248,15 @@ internal static class LabServer
                 "list_indicators" => ListIndicators(),
                 "compile_indicator" => CompileIndicator(Str(args, "file")),
                 "list_data" => ListData(),
+                "today_report" => new JsonObject { ["report"] = TodayReport.Build() },
+                "list_levels" => ListLevels(args),
+                "next_events" => NextEvents(args),
+                "list_accounts" => ListAccounts(),
+                "trade_autopsy" => TradeAutopsyTool(args),
+                "stress_test" => await StressTestAsync(args),
+                "event_study" => EventStudyTool(args),
+                "fill_quality" => FillQualityTool(args),
+                "similar_days" => new JsonObject { ["report"] = SimilarDays.Find(args["symbol"] == null ? null : Str(args, "symbol"), args["date"] == null ? null : DateOnly.Parse(Str(args, "date"), Inv), (int)Num(args, "count", 10)) },
                 "download_data" => await DownloadDataAsync(args),
                 "run_backtest" => await RunBacktestAsync(args),
                 "run_optimization" => await RunOptimizationAsync(args),
@@ -618,6 +643,35 @@ internal static class LabServer
     }
 
     // ===================================================================== data
+
+    private static JsonNode ListLevels(JsonObject a)
+    {
+        string instrument = Str(a, "instrument");
+        bool untouched = Bool(a, "untouched", true);
+        int limit = (int)Math.Clamp(Num(a, "limit", 25), 1, 200);
+        var rows = TodayReport.Load().FirstOrDefault(l => string.Equals(l.Instrument, instrument, StringComparison.OrdinalIgnoreCase)).Levels ?? new List<SavedLevel>();
+        var arr = new JsonArray();
+        foreach (var r in rows.Where(r => !untouched || (!r.Touched && !r.Hidden)).OrderByDescending(r => r.Time).Take(limit))
+            arr.Add(new JsonObject
+            {
+                ["time_utc"] = r.Time.ToString("yyyy-MM-dd HH:mm:ss", Inv),
+                ["side"] = r.Buy ? "buy" : "sell",
+                ["size"] = (double)r.Volume,
+                ["price"] = (double)r.Price,
+                ["price_came_back"] = r.Touched,
+                ["result"] = r.Outcome == 1 ? "held" : r.Outcome == 2 ? "broke" : null,
+            });
+        return new JsonObject { ["instrument"] = instrument, ["count_saved"] = rows.Count, ["levels"] = arr };
+    }
+
+    private static JsonNode NextEvents(JsonObject a)
+    {
+        double days = Math.Clamp(Num(a, "days", 14), 1, 365);
+        var arr = new JsonArray();
+        foreach (var e in TradingHub.Indicators.Native.EventCalendar.All().Where(e => e.Utc >= DateTime.UtcNow && e.Utc <= DateTime.UtcNow.AddDays(days)))
+            arr.Add(new JsonObject { ["time_utc"] = e.Utc.ToString("yyyy-MM-dd HH:mm", Inv), ["name"] = e.Name });
+        return new JsonObject { ["events"] = arr, ["file"] = TradingHub.Indicators.Native.EventCalendar.FilePath };
+    }
 
     private static JsonNode ListData()
     {

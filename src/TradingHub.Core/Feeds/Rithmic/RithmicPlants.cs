@@ -29,6 +29,10 @@ internal sealed class RithmicTickerPlant : IDisposable
         /// <summary>Full depth is arriving (the best bid/ask no longer touch the book) / Rithmic refused the depth (it asks without it).</summary>
         public bool HasBook, NoBook, BookFull;
 
+        /// <summary>Resting orders by exchange id (a delete message carries no size) / the account has no order-level entitlement.</summary>
+        public readonly Dictionary<long, (bool Ask, long Ticks, decimal Size)> Orders = new();
+        public bool NoMbo;
+
         public int Bits => NoBook ? Rp.TradesQuotes : Rp.TradesQuotesBook;
         public string Key => Symbol + "|" + Exchange;
     }
@@ -139,7 +143,10 @@ internal sealed class RithmicTickerPlant : IDisposable
         if (sub.Sinks.Count > 0 || sub.Probes > 0) return;
         _subs.Remove(sub.Instrument.Key);
         if (sub.Subscribed && _client is { } c && !_subs.Values.Any(s => s.Subscribed && s.Key == sub.Key))
+        {
             _ = SafeSend(c, MarketData(sub.Symbol, sub.Exchange, 2, sub.Bits), CancellationToken.None);
+            if (!sub.NoMbo) _ = SafeSend(c, DepthByOrder(sub.Symbol, sub.Exchange, 2), CancellationToken.None);
+        }
     }
 
     /// <summary>Front-month contract and last trade: from the live subscription if there is one, otherwise a short query.</summary>
@@ -203,6 +210,10 @@ internal sealed class RithmicTickerPlant : IDisposable
         new ProtoWriter().Int(Rp.TemplateId, Rp.RequestMarketDataUpdate).String(Rp.UserMsg, "md|" + symbol + "|" + exchange)
             .String(Rp.Symbol, symbol).String(Rp.Exchange, exchange).Int(Rp.Request, request).Int(Rp.UpdateBits, bits);
 
+    private static ProtoWriter DepthByOrder(string symbol, string exchange, int request) =>
+        new ProtoWriter().Int(Rp.TemplateId, Rp.RequestDepthByOrder).String(Rp.UserMsg, "mbo|" + symbol + "|" + exchange)
+            .String(Rp.Symbol, symbol).String(Rp.Exchange, exchange).Int(Rp.Request, request);
+
     private Task AskFrontMonth(RithmicClient c, Sub sub, CancellationToken ct) =>
         SafeSend(c, new ProtoWriter().Int(Rp.TemplateId, Rp.RequestFrontMonth).String(Rp.UserMsg, "fm|" + sub.Instrument.Key)
             .String(Rp.Symbol, sub.Instrument.Symbol).String(Rp.Exchange, sub.Instrument.Exchange).Bool(Rp.NeedUpdates, false), ct);
@@ -220,6 +231,8 @@ internal sealed class RithmicTickerPlant : IDisposable
 
         foreach (var sink in Sinks(sub)) sink.OnStatus(sub.Instrument, FeedStatus.Connected, $"Rithmic: {symbol} ({_settings().System})");
         await SafeSend(c, MarketData(symbol, exchange, 1, sub.Bits), ct).ConfigureAwait(false);
+        // order-level feed on top of the book; without the entitlement Rithmic refuses it and the Level 2 book carries on alone
+        if (!sub.NoMbo && !sub.NoBook) await SafeSend(c, DepthByOrder(symbol, exchange, 1), ct).ConfigureAwait(false);
     }
 
     private IMarketDataSink[] Sinks(Sub sub)
@@ -330,6 +343,7 @@ internal sealed class RithmicTickerPlant : IDisposable
                         sub.LastBid = long.MinValue;
                         sub.LastAsk = long.MaxValue;
                         sub.HasBook = sub.NoBook = false;
+                        sub.Orders.Clear();
                     }
                 }
 
@@ -544,6 +558,58 @@ internal sealed class RithmicTickerPlant : IDisposable
 
                     if (update != null)
                         foreach (var sink in Sinks(sub)) sink.OnDepth(inst, update);
+                }
+
+                break;
+            }
+            case Rp.ResponseDepthByOrder:
+            {
+                var codes = m.Strings(Rp.RpCode).ToList();
+                if (codes.Count == 0 || codes[0] == "0" || !tag.StartsWith("mbo|", StringComparison.Ordinal)) break;
+                var parts = tag.Split('|');
+                foreach (var sub in ByContract(parts.ElementAtOrDefault(1), parts.ElementAtOrDefault(2)))
+                    lock (sub.Orders)
+                    {
+                        sub.NoMbo = true; // no order-level entitlement: not an error, the book keeps working
+                        sub.Orders.Clear();
+                    }
+
+                break;
+            }
+            case Rp.DepthByOrder:
+            {
+                var types = m.Ints(Rp.DboUpdateType).ToArray();
+                var sides = m.Ints(Rp.DboTransaction).ToArray();
+                var prices = m.Doubles(Rp.DboPrice).ToArray();
+                var sizes = m.Ints(Rp.DboSize).ToArray();
+                var ids = m.Strings(Rp.DboOrderId).ToArray();
+                long ssboe = m.Int(Rp.Ssboe), usecs = m.Int(Rp.Usecs);
+                var time = ssboe > 0 ? DateTimeOffset.FromUnixTimeSeconds(ssboe).UtcDateTime.AddTicks(usecs * 10) : DateTime.UtcNow;
+                int n = new[] { types.Length, sides.Length, prices.Length, sizes.Length, ids.Length }.Min();
+                foreach (var sub in ByContract(m.String(Rp.Symbol), m.String(Rp.Exchange)))
+                {
+                    var inst = sub.Instrument;
+                    var events = new List<OrderEvent>(n);
+                    lock (sub.Orders)
+                        for (int i = 0; i < n; i++)
+                        {
+                            if (!long.TryParse(ids[i], out long id)) id = ids[i].GetHashCode();
+                            bool ask = sides[i] != Rp.DboBuy;
+                            long ticks = inst.ToTicks((decimal)prices[i]);
+                            if (types[i] == Rp.DboDelete)
+                            {
+                                // the message carries no size: what the order still had comes from the last one seen
+                                if (sub.Orders.Remove(id, out var gone)) events.Add(new OrderEvent(time, OrderEventKind.Remove, id, gone.Ask, gone.Ticks, gone.Size));
+                                continue;
+                            }
+
+                            bool known = sub.Orders.ContainsKey(id);
+                            sub.Orders[id] = (ask, ticks, sizes[i]);
+                            events.Add(new OrderEvent(time, known ? OrderEventKind.Modify : OrderEventKind.Add, id, ask, ticks, sizes[i]));
+                        }
+
+                    if (events.Count > 0)
+                        foreach (var sink in Sinks(sub)) sink.OnOrderEvents(inst, events.ToArray());
                 }
 
                 break;

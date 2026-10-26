@@ -87,6 +87,7 @@ internal static class ConnectionsScene
         conns.SetSecret(pCt, "token", "TOKEN");
         conns.SetSecret(pAl, "SECRET");
         conns.Save();
+        foreach (var q in new[] { pTv, pCt, pOanda, pAl, pDb, pLse }) conns.Invalidate(q); // a feed made before the test keys existed (a saved chart opening at start-up) would keep an empty key
         Check(conns.GetSecret(pTv, "apisecret") == "SEC", "the secrets go to the test keychain (a separate file)");
         Check(pCt.MarketDataId == "ctrader" && pDb.HasMarketData && pTv.HasMarketData && !new ConnectionProfile { Kind = ConnectionKind.InteractiveBrokers }.HasMarketData,
             "data ids and connections with no charts (only IB; Databento has live data)");
@@ -187,14 +188,14 @@ internal static class ConnectionsScene
             Shot("chart_oanda");
         }
 
-        // ----- a chart with London Strategic Edge prices (24 h replay as history, then live ticks)
+        // ----- a chart with London Strategic Edge prices (tick history from the tick export, then live ticks)
         if (window.Trading.ActiveTab is { } tab2)
         {
-            var open2 = window.Trading.OpenInTabAsync(tab2, "lse", "EUR/USD", ChartPeriod.M1, tab2.Model?.Settings.Clone());
+            var open2 = window.Trading.OpenInTabAsync(tab2, "lse", "GC.F", ChartPeriod.M1, tab2.Model?.Settings.Clone());
             Await(open2, 60);
             pump(4);
             var m2 = window.Trading.ActiveTab?.Model;
-            Check(m2?.Instrument.FeedId == "lse" && m2.Data.Trades.Count >= 5, $"a EUR/USD chart with London Strategic Edge data ({m2?.Data.Trades.Count} trades, status {m2?.Data.Status})");
+            Check(m2?.Instrument.FeedId == "lse" && m2.Data.Trades.Count >= 5, $"a GC.F chart with London Strategic Edge data ({m2?.Data.Trades.Count} trades, status {m2?.Data.Status})");
             Shot("chart_lse");
         }
 

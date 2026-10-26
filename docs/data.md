@@ -165,3 +165,16 @@ the backtest summary says how many days each source contributes.
 The history lives in `~/Library/Application Support/Trading Hub/Ticks`, in one folder per connection («rithmic»,
 «databento», «imported»…) and another per instrument, with one file per day. **Open folder** shows it in the Finder.
 See also [Installation](installation.md#where-your-data-is-stored).
+
+## Building a long tick history in the background
+
+Two connections can grow your tick folders on their own, a few days at a time, newest first, only for finished days (today is recorded live by a chart):
+
+- **London Strategic Edge**: the free archive holds the ticks of every futures market in real time but only the last few weeks. In Connections → London
+  Strategic Edge, *Keep the tick history of these futures* (ES, NQ and GC by default; 27 futures are available) downloads their finished days, three
+  every 20 minutes, so the history keeps growing instead of expiring. A day is about 25 MB for ES.
+- **Bybit**: Bybit publishes every trade of every finished day as a free file going back years. In Connections → Bybit, *Tick history* (BTCUSDT and ETHUSDT,
+  30 days by default) downloads two days every 20 minutes. A day is 20 to 150 MB to download and about 6 MB stored. Set the days to 0 to turn it off.
+
+A day that was fetched is remembered (`lse-backfill.json`, `bybit-backfill.json` in the data folder), so nothing is downloaded twice. The event tester and the
+backtester use whatever is stored.

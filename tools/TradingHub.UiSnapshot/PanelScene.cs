@@ -22,6 +22,7 @@ internal static class PanelScene
     {
         window.Navigate("trading");
         var tv = window.Trading;
+        tv.SetPanel("insights", false); // this check is about the three trading sections; Insights is checked below
         foreach (var key in new[] { "ticket", "dom", "tape" }) tv.SetPanel(key, true);
         pump(2);
         window.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "panel_tres.png"));
@@ -35,6 +36,17 @@ internal static class PanelScene
         Console.WriteLine($"Heights: ticket {ticket?.Bounds.Height:0} · DOM {dom?.Bounds.Height:0} · tape {tape?.Bounds.Height:0}");
         Check(ticket is { Bounds.Height: > 80 } && dom is { Bounds.Height: > 60, IsEffectivelyVisible: true } && tape is { Bounds.Height: > 60, IsEffectivelyVisible: true },
             "with all three enabled all three are visible (none covers another)");
+
+        // and with the Insights section as well: none of the four may be squeezed to nothing
+        tv.SetPanel("insights", true);
+        pump(2);
+        window.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "panel_cuatro.png"));
+        var insights = tv.GetVisualDescendants().OfType<TradingHub.App.Controls.InsightsPanel>().FirstOrDefault();
+        dom = tv.GetVisualDescendants().OfType<DomView>().FirstOrDefault();
+        tape = tv.GetVisualDescendants().OfType<TapeView>().FirstOrDefault();
+        Console.WriteLine($"Heights with Insights: insights {insights?.Bounds.Height:0} · DOM {dom?.Bounds.Height:0} · tape {tape?.Bounds.Height:0}");
+        Check(insights is { Bounds.Height: > 100, IsEffectivelyVisible: true } && dom is { Bounds.Height: > 40, IsEffectivelyVisible: true } && tape is { Bounds.Height: > 40, IsEffectivelyVisible: true },
+            "with Insights as well, all four sections stay usable (Insights, DOM and tape each have room)");
 
         // the Chart Trader scrolls
         var sv = ticket?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();

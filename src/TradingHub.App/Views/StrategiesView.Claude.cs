@@ -22,7 +22,7 @@ internal sealed partial class StrategiesView
         TextWrapping = TextWrapping.Wrap,
         MinHeight = 64,
         MaxHeight = 160,
-        Watermark = "Ask Claude for a new strategy or a change to the open one…",
+        Watermark = "Ask Claude for a new strategy or a change to the open one… (Win+H dictates by voice)",
     };
     private readonly TextBlock _claudeStatus = new() { Classes = { "faint", "small" }, TextTrimming = TextTrimming.CharacterEllipsis };
     private Button _sendButton = null!;
@@ -72,12 +72,12 @@ internal sealed partial class StrategiesView
         head.Children.Add(title);
 
         _sendButton = Ui.Button("Send", MaterialIconKind.Send, () => _ = SendToClaudeAsync(_prompt.Text ?? ""), "primary");
-        ToolTip.SetTip(_sendButton, "⌘Enter");
+        ToolTip.SetTip(_sendButton, Plat.Keys(Plat.Cmd, "Enter"));
         _stopButton2 = Ui.Button("Stop", MaterialIconKind.Stop, () => _claude.Cancel());
         _stopButton2.IsVisible = false;
         _prompt.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Meta))
+            if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(Plat.Cmd))
             {
                 _ = SendToClaudeAsync(_prompt.Text ?? "");
                 e.Handled = true;
@@ -141,6 +141,10 @@ internal sealed partial class StrategiesView
                  {
                      ("Research and optimize the open strategy: backtest, optimization, walk-forward and Monte Carlo, and build the report with the verdict", true),
                      ("Review the live book and propose size changes (raise the ones performing, lower the ones that are not)", true),
+                     ("Interview me about how I trade: ask me five questions one at a time, using my journal (list_accounts, trade_autopsy) as evidence, then write my playbook as playbook.md in the strategies folder and test each rule on my past trades, saying honestly which rules show an edge and which are just a story", true),
+                     ("Test an order-flow idea of mine on my stored ticks with event_study (lean, stacked imbalances, absorption, big trades or delta divergence): judge only on the test rows after the multiple-testing correction, write it as a strategy and run the full evaluation only if it survives, and say plainly if nothing worked", true),
+                     ("Check what my fills really cost with fill_quality and tell me whether the costs my backtests assume are realistic", true),
+                     ("Build an indicator for me that marks where price came back to the previous day's high or low, with an alert, and tell me when it is on the chart", false),
                      ("Create a strategy that trades the breakout of the first 30 minutes' range", false),
                      ("Explain what the open strategy does", false),
                      ("Add a filter so it only trades between 10 and 17", false),

@@ -223,6 +223,7 @@ Those indicators belong to their authors: use them in line with each source's li
 | [Connections](docs/connections.md) | Brokers, exchanges and data; real and simulated accounts |
 | [Charts](docs/charts.md) | Periods, footprint, DOM, drawings, indicators and replay |
 | [Trading](docs/trading.md) | Chart Trader, DOM, orders, brackets and accounts |
+| [Insights](docs/insights.md) | The decision panel, danger gauge, edge meter, options and liquidation levels |
 | [Data](docs/data.md) | Recording, downloads, Databento and CSV import |
 | [Strategies](docs/strategies.md) | The C# API with examples |
 | [Backtesting](docs/backtesting.md) | Backtest, optimization, walk-forward, PBO, CPCV and Monte Carlo |

@@ -55,7 +55,8 @@ public sealed partial class TradingView
     // sections of the panel: Chart Trader, DOM and tape, one below the other. They share the height (with splitters to
     // change it) and each one scrolls inside; any of them can be pulled out into a separate window
     private readonly Grid _side = new() { Background = Ui.Bg1 };
-    private Control? _ticketSection, _domSection, _tapeSection;
+    private Control? _ticketSection, _domSection, _tapeSection, _insightsSection;
+    private readonly InsightsPanel _insights = new();
     private string _sideSig = "";
     private bool _sideVisible;
     private readonly Dictionary<string, MenuItem> _panelItems = new();
@@ -68,6 +69,7 @@ public sealed partial class TradingView
         _ticketSection = BuildTicket();
         _domSection = BuildDomSection();
         _tapeSection = BuildTapeSection();
+        _insightsSection = BuildInsightsSection();
 
         _sideSplitter.DragCompleted += (_, _) =>
         {
@@ -234,6 +236,157 @@ public sealed partial class TradingView
         return new Border { Child = panel, BorderBrush = Ui.Line, BorderThickness = new Thickness(0, 1, 0, 0), Background = Ui.Bg1 };
     }
 
+    private Control BuildInsightsSection()
+    {
+        _insights.WatchRelatedChanged += on =>
+        {
+            _svc.Settings.WatchRelated = on;
+            _svc.Settings.Save();
+        };
+        _insights.GuideRequested += () => new Windows.GuideWindow().Show();
+        _insights.AlertsRequested += anchor => ShowInsightAlertSettings(anchor);
+        _insights.GammaRequested += () =>
+        {
+            if (_active?.Model?.Data.Instrument is not { } inst || OptionsLevelService.CurrencyOf(inst) is not { } cur) return;
+            if (OptionsLevelService.QuotesFor(cur) is not { } quotes || OptionsLevelService.LatestFor(cur) is not { } set) return;
+            new Windows.GammaWindow(cur, OptionsProfile.Build(quotes, set.Spot, DateTime.UtcNow), set).Show();
+        };
+        _insights.MyLevelAdded += price => ChangeMyLevels(list => { if (!list.Contains(price)) list.Add(price); });
+        _insights.MyLevelRemoved += price => ChangeMyLevels(list => list.Remove(price));
+        _insights.CostChanged += v =>
+        {
+            _svc.Settings.InsightsCostBps = v;
+            _svc.Settings.Save();
+        };
+        var header = SectionHeader("Insights", () => SetPanel("insights", false));
+        _insights.MinHeight = 80;
+        var box = new DockPanel();
+        DockPanel.SetDock(header, Dock.Top);
+        box.Children.Add(header);
+        box.Children.Add(_insights);
+        return new Border { Child = box, BorderBrush = Ui.Line, BorderThickness = new Thickness(0, 1, 0, 0) };
+    }
+
+    /// <summary>The bell: a flyout with the same alert switches as Settings → Insight alerts.</summary>
+    private void ShowInsightAlertSettings(Control anchor)
+    {
+        var s = _svc.Settings;
+        ToggleSwitch Sw(string text, bool on, Action<bool> set)
+        {
+            var t = new ToggleSwitch { IsChecked = on, OnContent = text, OffContent = text, FontSize = 12 };
+            t.IsCheckedChanged += (_, _) =>
+            {
+                set(t.IsChecked == true);
+                s.Save();
+            };
+            return t;
+        }
+
+        var panel = Ui.V(4,
+            Ui.H3("Insight alerts"),
+            Sw("Toxic tape", s.AlertToxicity, x => s.AlertToxicity = x),
+            Sw("Big resting order pulled or eaten", s.AlertWalls, x => s.AlertWalls = x),
+            Sw("Price at an options level", s.AlertOptions, x => s.AlertOptions = x),
+            Sw("Big liquidation cluster", s.AlertLiquidations, x => s.AlertLiquidations = x),
+            Sw("Setup called", s.AlertSetup, x => s.AlertSetup = x),
+            Ui.Faint("Amounts and the rest are in Settings → Insight alerts. Nothing is said while the data is stale."));
+        panel.Margin = new Thickness(12);
+        panel.Width = 300;
+        new Flyout { Content = panel, Placement = PlacementMode.BottomEdgeAlignedRight }.ShowAt(anchor);
+    }
+
+    private void ChangeMyLevels(Action<List<decimal>> change)
+    {
+        if (_active?.Model?.Data.Instrument is not { } inst) return;
+        if (!_svc.Settings.MyLevels.TryGetValue(inst.Key, out var list)) _svc.Settings.MyLevels[inst.Key] = list = new List<decimal>();
+        change(list);
+        _svc.Settings.Save();
+        MyLevels.Publish(inst.Key, list);
+        RefreshInsights();
+    }
+
+    private readonly HashSet<string> _peerRequests = new();
+
+    /// <summary>One line per related market (null when the instrument has none, empty while they are not being watched). A peer is opened once and stays open.</summary>
+    private IReadOnlyList<string>? RelatedLines(InstrumentData data)
+    {
+        var peers = RelatedMarkets.PeersOf(data.Instrument);
+        if (peers.Count == 0 || _active == null) return null;
+        if (!_svc.Settings.WatchRelated) return Array.Empty<string>();
+        var lines = new List<string>();
+        foreach (var sym in peers)
+        {
+            string key = $"{data.Instrument.FeedId}:{sym}";
+            var other = _svc.Hub.Items.FirstOrDefault(d => d.Instrument.Key == key);
+            if (other == null)
+            {
+                if (_peerRequests.Add(_active.FeedId + "|" + sym)) _ = OpenPeerAsync(_active.FeedId, sym);
+                lines.Add($"{sym}: opening…");
+                continue;
+            }
+
+            lines.Add(RelatedMarkets.Compute(data.Instrument, data.Trades, other.Instrument, other.Trades, data.Feed.Now)?.Text() ?? $"{sym}: collecting the last half hour…");
+        }
+
+        return lines;
+    }
+
+    private async Task OpenPeerAsync(string profileId, string symbol)
+    {
+        try
+        {
+            var list = await InstrumentPicker.InstrumentsAsync(_svc, profileId);
+            var inst = list.FirstOrDefault(i => i.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase));
+            if (inst == null) return;
+            var data = _svc.Open(profileId, inst);
+            // the first load of a market only has its latest minutes (Bybit gives the last 1000 trades): the comparison needs the last half hour at least
+            for (int i = 0; i < 240 && data.IsLoadingHistory; i++) await Task.Delay(250);
+            data.ExtendHistory(data.Feed.Now.AddHours(-1));
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write(ex);
+        }
+    }
+
+    private readonly Dictionary<string, InsightAlertEngine> _insightAlerts = new();
+
+    /// <summary>The Insights alerts of the active chart go out through the same path as every other alert.</summary>
+    private void RaiseInsightAlerts(InstrumentData data, InsightsSnapshot snapshot)
+    {
+        var s = _svc.Settings;
+        if (!_insightAlerts.TryGetValue(data.Instrument.Key, out var engine)) _insightAlerts[data.Instrument.Key] = engine = new InsightAlertEngine();
+        var cfg = new InsightAlertSettings(s.AlertToxicity, s.AlertWalls, s.AlertWallUsd, s.AlertOptions, s.AlertLiquidations, s.AlertLiquidationUsd, s.AlertSetup);
+        foreach (var text in engine.Evaluate(snapshot, data.Instrument, data.LastPrice, MarketLevels.For(data.Instrument), data.Feed.Now, cfg))
+            ShowAlert(new AlertInfo(DateTime.Now, data.Instrument.Symbol, text, "", System.Drawing.Color.FromArgb(255, 60, 60, 80), System.Drawing.Color.White, "Insights"));
+    }
+
+    /// <summary>Recomputes the Insights panel for the active chart (about twice a second, and only while it is on screen).</summary>
+    private void RefreshInsights()
+    {
+        var s = _svc.Settings;
+        if (!s.ShowInsights || !s.ShowSidePanel || _insightsSection is not { IsEffectivelyVisible: true }) return;
+        var data = _active?.Model?.Data;
+        if (data == null) return;
+        decimal cost = s.InsightsCostBps > 0 ? s.InsightsCostBps : MarketInfo.IsCrypto(data.Instrument.FeedId) ? 8m : 2m;
+        decimal stop = 0, target = 0;
+        if (_template is { Enabled: true } t)
+        {
+            stop = t.StopTicks;
+            target = t.Targets.FirstOrDefault()?.Ticks ?? 0;
+        }
+
+        if (OptionsLevelService.CurrencyOf(data.Instrument) is { } currency) OptionsLevelService.Request(currency);
+        decimal last = data.LastPrice;
+        MyLevels.Publish(data.Instrument.Key, s.MyLevels.GetValueOrDefault(data.Instrument.Key) ?? new List<decimal>());
+        var levels = MarketLevels.For(data.Instrument)
+            .Where(m => last <= 0 || Math.Abs(m.Price - last) / last <= 0.2m) // a level 20% away is not one to look at now
+            .Select(m => new LevelLine(last > 0 ? $"{m.ChartText}  {(m.Price - last) / last * 100:+0.0;-0.0}%" : m.ChartText, data.Instrument.RoundPrice(m.Price), m.Tone, m.Source == MyLevels.Source)).ToList();
+        var snapshot = data.Insights.Compute(cost, stop, target);
+        _insights.Show(snapshot, data.Instrument, levels, RelatedLines(data), _svc.Settings.WatchRelated);
+        RaiseInsightAlerts(data, snapshot);
+    }
+
     private Control BuildTapeSection()
     {
         var header = SectionHeader("Time and sales tape", () => SetPanel("tape", false), BuildDetachButton("tape"));
@@ -261,6 +414,7 @@ public sealed partial class TradingView
         Toggle("side", "Right panel");
         menu.Items.Add(new Separator());
         Toggle("ticket", "Chart Trader");
+        Toggle("insights", "Insights");
         Toggle("dom", "DOM");
         Toggle("tape", "Time and sales tape");
         menu.Items.Add(new Separator());
@@ -284,6 +438,7 @@ public sealed partial class TradingView
         {
             "side" => s.ShowSidePanel,
             "ticket" => s.ShowTicket,
+            "insights" => s.ShowInsights,
             "dom" => s.ShowDom,
             "tape" => s.ShowTape,
             _ => false,
@@ -298,6 +453,7 @@ public sealed partial class TradingView
         {
             case "side": s.ShowSidePanel = on; break;
             case "ticket": s.ShowTicket = on; break;
+            case "insights": s.ShowInsights = on; break;
             case "dom": s.ShowDom = on; break;
             case "tape": s.ShowTape = on; break;
         }
@@ -311,7 +467,7 @@ public sealed partial class TradingView
     private void ApplyPanelVisibility()
     {
         var s = _svc.Settings;
-        if (_ticketSection == null || _domSection == null || _tapeSection == null) return;
+        if (_ticketSection == null || _domSection == null || _tapeSection == null || _insightsSection == null) return;
         // it was hidden from its own window: the window is closed (and it comes back through here)
         foreach (var key in _panelWindows.Keys.ToList())
             if (!PanelOn(key))
@@ -322,6 +478,7 @@ public sealed partial class TradingView
 
         var parts = new List<(string Key, Control Section)>();
         if (s.ShowTicket && !_panelWindows.ContainsKey("ticket")) parts.Add(("ticket", _ticketSection));
+        if (s.ShowInsights) parts.Add(("insights", _insightsSection));
         if (s.ShowDom && !_panelWindows.ContainsKey("dom")) parts.Add(("dom", _domSection));
         if (s.ShowTape && !_panelWindows.ContainsKey("tape")) parts.Add(("tape", _tapeSection));
         LayoutSide(parts);
@@ -343,7 +500,7 @@ public sealed partial class TradingView
             mi.Icon = PanelOn(key) ? Ui.Icon(MaterialIconKind.Check, 15, Ui.Accent) : null;
     }
 
-    private static double DefaultWeight(string key) => key switch { "ticket" => 1, "dom" => 1.5, _ => 0.7 };
+    private static double DefaultWeight(string key) => key switch { "ticket" => 1, "insights" => 1.2, "dom" => 1.5, _ => 0.7 };
 
     /// <summary>Puts into the panel the sections that belong there, with a splitter between each one (only if which ones belong changed).</summary>
     private void LayoutSide(List<(string Key, Control Section)> parts)

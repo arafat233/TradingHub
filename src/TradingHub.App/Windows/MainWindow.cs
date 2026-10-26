@@ -32,6 +32,9 @@ public sealed class MainWindow : Window
     private readonly Dictionary<string, ToggleButton> _navButtons = new();
     private readonly List<Page> _pageDefs;
     private readonly TextBlock _statusText = new() { VerticalAlignment = VerticalAlignment.Center, Classes = { "muted", "small" }, TextTrimming = TextTrimming.CharacterEllipsis };
+    private Border? _connPill;
+    private string _lseUsage = "";
+    private DateTime _lseUsageAt;
     private readonly TextBlock _infoText = new() { VerticalAlignment = VerticalAlignment.Center, Classes = { "faint", "small" } };
     private readonly TextBlock _pnlText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 11.5, FontWeight = FontWeight.SemiBold };
     private readonly Avalonia.Controls.Shapes.Ellipse _connDot = new() { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center };
@@ -43,6 +46,7 @@ public sealed class MainWindow : Window
     public MainWindow(AppServices svc)
     {
         _svc = svc;
+        Notifier.Message += m => SetStatus(m);
         Title = TradingHub.Common.Product.Name;
         Width = Math.Max(1000, svc.Settings.WindowWidth);
         Height = Math.Max(640, svc.Settings.WindowHeight);
@@ -62,13 +66,13 @@ public sealed class MainWindow : Window
         svc.Live.Notice += text => Dispatcher.UIThread.Post(() => SetStatus(text));
         _pageDefs = new List<Page>
         {
-            new("trading", "Trading", MaterialIconKind.ChartBoxOutline, () => Trading, new KeyGesture(Key.D1, KeyModifiers.Meta)),
-            new("accounts", "Account", MaterialIconKind.WalletOutline, () => new AccountsView(svc, SetStatus, this), new KeyGesture(Key.D5, KeyModifiers.Meta)),
-            new("strategies", "Backtesting", MaterialIconKind.FlaskOutline, () => new StrategiesView(svc, SetStatus), new KeyGesture(Key.D2, KeyModifiers.Meta)),
-            new("live", "Live", MaterialIconKind.AccessPoint, () => new LiveView(svc, SetStatus, this), new KeyGesture(Key.D7, KeyModifiers.Meta)),
-            new("data", "Data", MaterialIconKind.DatabaseOutline, () => new DataView(svc, SetStatus, this), new KeyGesture(Key.D3, KeyModifiers.Meta)),
-            new("connections", "Connections", MaterialIconKind.LanConnect, () => new ConnectionsView(svc, SetStatus), new KeyGesture(Key.D4, KeyModifiers.Meta)),
-            new("settings", "Settings", MaterialIconKind.CogOutline, () => new SettingsView(svc, SetStatus), new KeyGesture(Key.OemComma, KeyModifiers.Meta)),
+            new("trading", "Trading", MaterialIconKind.ChartBoxOutline, () => Trading, new KeyGesture(Key.D1, Plat.Cmd)),
+            new("accounts", "Account", MaterialIconKind.WalletOutline, () => new AccountsView(svc, SetStatus, this), new KeyGesture(Key.D5, Plat.Cmd)),
+            new("strategies", "Backtesting", MaterialIconKind.FlaskOutline, () => new StrategiesView(svc, SetStatus), new KeyGesture(Key.D2, Plat.Cmd)),
+            new("live", "Live", MaterialIconKind.AccessPoint, () => new LiveView(svc, SetStatus, this), new KeyGesture(Key.D7, Plat.Cmd)),
+            new("data", "Data", MaterialIconKind.DatabaseOutline, () => new DataView(svc, SetStatus, this), new KeyGesture(Key.D3, Plat.Cmd)),
+            new("connections", "Connections", MaterialIconKind.LanConnect, () => new ConnectionsView(svc, SetStatus), new KeyGesture(Key.D4, Plat.Cmd)),
+            new("settings", "Settings", MaterialIconKind.CogOutline, () => new SettingsView(svc, SetStatus), new KeyGesture(Key.OemComma, Plat.Cmd)),
         };
 
         Content = BuildLayout();
@@ -92,6 +96,7 @@ public sealed class MainWindow : Window
         Opened += async (_, _) =>
         {
             await Trading.RestoreOrDefaultAsync();
+            _ = _svc.StartBackgroundRecordingAsync(); // instruments the user asked to record with no chart
             // and your live ones, if that is how Settings has it (a few seconds later: the connections have already started)
             _ = Task.Delay(TimeSpan.FromSeconds(8)).ContinueWith(_ => Dispatcher.UIThread.Post(async () =>
             {
@@ -229,6 +234,7 @@ public sealed class MainWindow : Window
             connMenu.ShowAt(conn);
             e.Handled = true;
         };
+        _connPill = conn;
         ToolTip.SetTip(conn, "The active chart's connection (click: reconnect or go to Connections)");
         // the simulated account's result leads to the Account section
         var pnl = new Border { Child = _pnlText, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center };
@@ -256,7 +262,13 @@ public sealed class MainWindow : Window
             InvalidateVisual();
         };
         var right = Ui.H(12, pnl, themeButton, conn);
-        right.Margin = new Thickness(0, 0, 14, 0);
+        // Windows draws its caption buttons (3 x 46 px) over the top right corner: leave them room
+        void PlaceRight() => right.Margin = new Thickness(0, 0, OperatingSystem.IsWindows() && WindowState != WindowState.FullScreen ? 146 : 14, 0);
+        PlaceRight();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty) PlaceRight();
+        };
 
         var bar = new DockPanel { Height = TopBarHeight, LastChildFill = false };
         DockPanel.SetDock(right, Dock.Right);
@@ -282,7 +294,7 @@ public sealed class MainWindow : Window
             Key.OemComma => ",",
             _ => g.Key.ToString(),
         };
-        return (g.KeyModifiers.HasFlag(KeyModifiers.Shift) ? "⇧" : "") + (g.KeyModifiers.HasFlag(KeyModifiers.Meta) ? "⌘" : "") + key;
+        return (g.KeyModifiers.HasFlag(KeyModifiers.Shift) ? "⇧" : "") + (g.KeyModifiers.HasFlag(Plat.Cmd) ? "⌘" : "") + key;
     }
 
     private Control BuildStatusBar()
@@ -334,25 +346,30 @@ public sealed class MainWindow : Window
         {
             Navigate("trading");
             _ = Trading.NewChartAsync();
-        }, new KeyGesture(Key.T, KeyModifiers.Meta)));
-        file.Menu.Add(Item("Close chart", Trading.CloseActiveTab, new KeyGesture(Key.W, KeyModifiers.Meta)));
+        }, new KeyGesture(Key.T, Plat.Cmd)));
+        file.Menu.Add(Item("Close chart", Trading.CloseActiveTab, new KeyGesture(Key.W, Plat.Cmd)));
         file.Menu.Add(Item("Search instrument…", () =>
         {
             Navigate("trading");
             Trading.Picker.Open();
-        }, new KeyGesture(Key.K, KeyModifiers.Meta)));
+        }, new KeyGesture(Key.K, Plat.Cmd)));
         file.Menu.Add(new NativeMenuItemSeparator());
         file.Menu.Add(Item("Save workspace", () =>
         {
             Workspace.Save(Trading);
             SetStatus("Workspace saved");
-        }, new KeyGesture(Key.S, KeyModifiers.Meta)));
+        }, new KeyGesture(Key.S, Plat.Cmd)));
+        file.Menu.Add(Item("Layouts…", () => _ = LayoutsDialog.ShowAsync(this, Trading, SetStatus)));
         file.Menu.Add(Item("Open data folder", () => Shell.OpenFolder(AppPaths.Root)));
         menu.Add(file);
 
         var chart = new NativeMenuItem("Chart") { Menu = new NativeMenu() };
-        chart.Menu.Add(Item("Indicators…", Trading.OpenIndicators, new KeyGesture(Key.I, KeyModifiers.Meta)));
-        chart.Menu.Add(Item("Edit footprint…", Trading.OpenFootprintEditor, new KeyGesture(Key.F, KeyModifiers.Meta | KeyModifiers.Shift)));
+        chart.Menu.Add(Item("Indicators…", Trading.OpenIndicators, new KeyGesture(Key.I, Plat.Cmd)));
+        chart.Menu.Add(Item("Trade copier…", () =>
+        {
+            if (Trading.ActiveTab is { Model: { } m } tab) _ = CopierDialog.ShowAsync(this, _svc, tab.CrossData ?? m.Data, tab.AccountId);
+        }));
+        chart.Menu.Add(Item("Edit footprint…", Trading.OpenFootprintEditor, new KeyGesture(Key.F, Plat.Cmd | KeyModifiers.Shift)));
         chart.Menu.Add(Item("Auto scale", () =>
         {
             if (Trading.ActiveTab?.Model is { } m)
@@ -360,7 +377,7 @@ public sealed class MainWindow : Window
                 m.Viewport.AutoScale = true;
                 m.Invalidate();
             }
-        }, new KeyGesture(Key.A, KeyModifiers.Meta | KeyModifiers.Alt)));
+        }, new KeyGesture(Key.A, Plat.Cmd | KeyModifiers.Alt)));
         chart.Menu.Add(Item("Go to last price", () =>
         {
             if (Trading.ActiveTab?.Model is { } m)
@@ -368,7 +385,7 @@ public sealed class MainWindow : Window
                 m.Viewport.ScrollBars = 0;
                 m.Invalidate();
             }
-        }, new KeyGesture(Key.End, KeyModifiers.Meta)));
+        }, new KeyGesture(Key.End, Plat.Cmd)));
         chart.Menu.Add(new NativeMenuItemSeparator());
         var layouts = new NativeMenuItem("Layout") { Menu = new NativeMenu() };
         foreach (var (layout, label, _) in TradingView.Layouts)
@@ -382,7 +399,7 @@ public sealed class MainWindow : Window
         {
             Navigate("trading");
             Trading.DetachActive();
-        }, new KeyGesture(Key.D, KeyModifiers.Meta | KeyModifiers.Shift)));
+        }, new KeyGesture(Key.D, Plat.Cmd | KeyModifiers.Shift)));
         chart.Menu.Add(new NativeMenuItemSeparator());
         var panels = new NativeMenuItem("Panels") { Menu = new NativeMenu() };
         foreach (var (key, label) in new[] { ("side", "Right panel"), ("ticket", "Ticket"), ("dom", "DOM"), ("tape", "Time and sales tape") })
@@ -400,7 +417,7 @@ public sealed class MainWindow : Window
         menu.Add(go);
 
         var code = new NativeMenuItem("Code") { Menu = new NativeMenu() };
-        code.Menu.Add(Item("Indicator editor…", () => new CodeEditorWindow(_svc, CodeKind.Indicator).Show(this), new KeyGesture(Key.E, KeyModifiers.Meta | KeyModifiers.Shift)));
+        code.Menu.Add(Item("Indicator editor…", () => new CodeEditorWindow(_svc, CodeKind.Indicator).Show(this), new KeyGesture(Key.E, Plat.Cmd | KeyModifiers.Shift)));
         code.Menu.Add(Item("Open indicators folder", () => Shell.OpenFolder(AppPaths.UserIndicators)));
         code.Menu.Add(Item("Recompile indicators", () => _svc.Scripts?.CompileAll()));
         code.Menu.Add(new NativeMenuItemSeparator());
@@ -442,11 +459,14 @@ public sealed class MainWindow : Window
 
             _lastTickAt = now;
             _svc.Hub.PumpAll();
+            _svc.BigOrders.Poll(_svc.Hub);
+            _svc.Latency.Poll(_svc.Hub, _svc.Settings);
             // the charts in separate windows always refresh; the main window's ones, slower if they are not visible
             Trading.Tick(_current == "trading" && IsVisible);
             if ((DateTime.UtcNow - _lastStatus).TotalMilliseconds > 250)
             {
                 _lastStatus = DateTime.UtcNow;
+                PollMemory();
                 UpdateStatusBar();
                 if (++_liveSaveTick % 12 == 0) _svc.SaveLiveState(); // every ~3 s
                 if (_liveSaveTick % 4 == 0) _svc.Live.Tick();
@@ -472,6 +492,22 @@ public sealed class MainWindow : Window
         Padding = new Thickness(14, 12),
         BoxShadow = BoxShadows.Parse("0 6 24 0 #40000000"),
     };
+
+    private DateTime _memoryChecked;
+    private bool _lowMemory;
+
+    /// <summary>Every 15 seconds: when the PC is short of memory, the app gives some back (see <see cref="MemoryGuard"/>) and says so.</summary>
+    private void PollMemory()
+    {
+        if (DateTime.UtcNow - _memoryChecked < TimeSpan.FromSeconds(15)) return;
+        _memoryChecked = DateTime.UtcNow;
+        if (MemoryGuard.CurrentLoad() is not { } load) return;
+        bool low = MemoryGuard.Decide(load, _lowMemory);
+        if (low == _lowMemory) return;
+        _lowMemory = low;
+        MemoryGuard.Apply(_svc.Hub.Items, low);
+        SetStatus(low ? $"Low memory ({load:P0} of the PC's memory in use): the app kept less history in memory (heatmap book, flow). Close other programs to free more." : "Memory is back to normal: full history is kept again.");
+    }
 
     private void UpdateStatusBar()
     {
@@ -516,6 +552,7 @@ public sealed class MainWindow : Window
 
             _connText.Text = $"{feedName} · {state}";
             ToolTip.SetTip(_connText, tip ?? d.StatusMessage);
+            if (_connPill != null) ToolTip.SetTip(_connPill, HealthTip());
             _infoText.Text = d.IsLoadingHistory || d.IsExtending
                 ? $"Loading history {d.HistoryProgress * 100:0}%"
                 : $"{d.Trades.Count:N0} trades · {m.Series.Count:N0} candles · from {TimeZoneInfo.ConvertTimeFromUtc(d.HistoryFrom, m.Settings.TimeZone):dd/MM HH:mm}";
@@ -526,6 +563,43 @@ public sealed class MainWindow : Window
         _pnlText.Foreground = day >= 0 ? Ui.Up : Ui.Down;
         _pnlText.Text = $"Simulated  {day:+0.00;-0.00;0.00}  ·  {balance:N2}";
         Trading.UpdatePosition();
+    }
+
+    /// <summary>Every open instrument's connection state and how long ago it last sent data, plus the London Strategic Edge plan allowance.</summary>
+    private string HealthTip()
+    {
+        var lines = new List<string>();
+        foreach (var d in _svc.Hub.Items.OrderBy(i => i.Instrument.Key))
+        {
+            string name = _svc.Connections.Find(d.Instrument.FeedId)?.Name ?? d.Feed.DisplayName;
+            var ago = DateTime.UtcNow - d.LastDataAt;
+            string last = d.LastDataAt.Year < 2000 ? "no data yet" : ago.TotalMinutes < 1 ? $"data {ago.TotalSeconds:0} s ago" : ago.TotalHours < 1 ? $"data {ago.TotalMinutes:0} min ago" : $"data {ago.TotalHours:0.#} h ago";
+            var lat = _svc.Latency.Of(d.Instrument.Key);
+            lines.Add($"{name} · {d.Instrument.Symbol}: {StatusName(d.Status)}, {last}{(lat is { } l ? $", delay {l.Median:0.0} s" : "")}");
+        }
+
+        RefreshLseUsage();
+        if (_lseUsage.Length > 0) lines.Add("London Strategic Edge plan: " + _lseUsage);
+        lines.Add("Click: reconnect or go to Connections");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>Asks the London Strategic Edge allowance endpoint (it uses none of the allowance) at most every 5 minutes.</summary>
+    private void RefreshLseUsage()
+    {
+        if (DateTime.UtcNow - _lseUsageAt < TimeSpan.FromMinutes(5)) return;
+        _lseUsageAt = DateTime.UtcNow;
+        var p = _svc.Connections.Enabled.FirstOrDefault(c => c.Kind == ConnectionKind.LondonStrategicEdge);
+        if (p == null) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var (ok, msg) = await _svc.Connections.TestAsync(p, CancellationToken.None);
+                _lseUsage = ok ? msg.Replace("API key OK. ", "") : "";
+            }
+            catch (Exception) { _lseUsage = ""; }
+        });
     }
 
     private static string Day(DateTime local, TimeZoneInfo tz)
@@ -588,7 +662,9 @@ internal static class Shell
         try
         {
             Directory.CreateDirectory(path);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"\"{path}\"") { UseShellExecute = false });
+            // Windows: the shell opens a folder, a file or an address with whatever the user has set for it
+            if (OperatingSystem.IsWindows()) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+            else System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"\"{path}\"") { UseShellExecute = false });
         }
         catch
         {
@@ -601,6 +677,12 @@ internal static class Shell
     {
         try
         {
+            if (OperatingSystem.IsWindows())
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+                return;
+            }
+
             var psi = new System.Diagnostics.ProcessStartInfo("open") { UseShellExecute = false };
             psi.ArgumentList.Add(url);
             System.Diagnostics.Process.Start(psi);
@@ -616,6 +698,12 @@ internal static class Shell
     {
         try
         {
+            if (OperatingSystem.IsWindows())
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = false });
+                return;
+            }
+
             var psi = new System.Diagnostics.ProcessStartInfo("open") { UseShellExecute = false };
             psi.ArgumentList.Add("-R");
             psi.ArgumentList.Add(path);
@@ -631,7 +719,8 @@ internal static class Shell
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"\"{pathOrUrl}\"") { UseShellExecute = false });
+            if (OperatingSystem.IsWindows()) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(pathOrUrl) { UseShellExecute = true });
+            else System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"\"{pathOrUrl}\"") { UseShellExecute = false });
         }
         catch
         {

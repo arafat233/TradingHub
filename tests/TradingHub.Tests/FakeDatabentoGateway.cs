@@ -139,6 +139,19 @@ internal sealed class FakeDatabentoGateway : IDisposable
         return b;
     }
 
+    /// <summary>MboMsg (rtype 0xA0, 56 bytes): one order event. action A add, M modify, C cancel, F fill, T trade, R clear.</summary>
+    public static byte[] Mbo(long tsNs, ulong orderId, char action, char side, double? price, uint size, byte flags = 0)
+    {
+        var b = Header(56, 0xA0, tsNs);
+        BinaryPrimitives.WriteUInt64LittleEndian(b.AsSpan(16), orderId);
+        BinaryPrimitives.WriteInt64LittleEndian(b.AsSpan(24), Fx(price));
+        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(32), size);
+        b[36] = flags;
+        b[38] = (byte)action;
+        b[39] = (byte)side;
+        return b;
+    }
+
     /// <summary>ErrorMsg (0x15) or SystemMsg (0x17) with a text, 320 bytes.</summary>
     public static byte[] Message(byte rtype, string text)
     {

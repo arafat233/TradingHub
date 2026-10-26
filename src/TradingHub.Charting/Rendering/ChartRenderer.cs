@@ -290,6 +290,17 @@ public sealed class ChartRenderer
 
         _series.RenderBands(canvas, layout, main, slots);
         DrawCustomRendersCore(canvas, model, layout, main, slots, above: false);
+        foreach (var slot in slots.Where(s => s.Visible))
+        {
+            IEnumerable<(decimal Price, string Text, System.Drawing.Color Background)> tags;
+            try { tags = slot.Indicator.AxisTags().ToList(); }
+            catch (Exception) { continue; }
+            foreach (var (price, text, c) in tags)
+            {
+                float y = main.Y(price);
+                if (y >= main.Rect.Top && y <= main.Rect.Bottom) axisLabels.Add(new AxisLabel(y, text, new SKColor(c.R, c.G, c.B), SKColors.Black));
+            }
+        }
 
         var paint = _series.CollectPaintBars(model, layout);
         var style = model.Settings.Style;

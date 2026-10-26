@@ -16,12 +16,63 @@ internal static class Program
         System.Globalization.CultureInfo.DefaultThreadCurrentCulture = fmt;
         System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = fmt;
 
+        // mining mode: find the big orders in the recorded ticks, merge them into the saved levels and print what was found (no windows)
+        if (args.Contains("--download-candles"))
+        {
+            var list = args.SkipWhile(x => x != "--download-candles").Skip(1).FirstOrDefault() ?? "ES.F,NQ.F,SI.F";
+            Console.WriteLine(Services.HistoryDownload.RunAsync(new Services.ConnectionManager(), list.Split(','), null).GetAwaiter().GetResult());
+            return;
+        }
+
+        if (args.Contains("--debug-round")) { Console.WriteLine(Services.ResearchHistory.DebugRound(args.SkipWhile(x => x != "--debug-round").Skip(1).FirstOrDefault() ?? "NQ.F")); return; }
+        if (args.Contains("--wicks")) { Console.WriteLine(Services.ResearchHistory.WickCheck()); return; }
+        if (args.Contains("--stops")) { Console.WriteLine(Services.ResearchAuction.StopsInNodes()); return; }
+        if (args.Contains("--accuracy")) { Console.WriteLine(Services.ResearchAuction.ProfileAccuracy()); return; }
+        if (args.Contains("--ledger")) { Console.WriteLine(Services.Ledger.Section()); return; }
+        if (args.Contains("--claims")) { Console.WriteLine(Services.ResearchAuction.Claims()); return; }
+        if (args.Contains("--opens")) { Console.WriteLine(Services.ResearchAuction.OpenAndDayTypes()); return; }
+        if (args.Contains("--cost")) { Console.WriteLine(Services.ResearchHistory.CostMap(null)); return; }
+        if (args.Contains("--season")) { Console.WriteLine(Services.ResearchHistory.Seasonality()); return; }
+        if (args.Contains("--rules")) { Console.WriteLine(Services.ResearchHistory.RuleLab(null)); return; }
+        if (args.Contains("--placebo")) { Console.WriteLine(Services.ResearchExtra.Placebo()); return; }
+        if (args.Contains("--swing")) { Console.WriteLine(Services.ResearchExtra.SwingBaseline()); return; }
+        if (args.Contains("--side")) { Console.WriteLine(Services.ResearchExtra.SideAccuracy()); return; }
+        if (args.Contains("--hyp")) { Console.WriteLine(Services.ResearchExtra.Hypotheses()); return; }
+        if (args.Contains("--events")) { Console.WriteLine(Services.ResearchExtra.EventAtlas()); return; }
+        if (args.Contains("--edge"))
+        {
+            Console.WriteLine(Services.Research.RunEdgeFinder());
+            return;
+        }
+
+        if (args.Contains("--cross"))
+        {
+            Console.WriteLine(Services.Research.RunCrossMarket());
+            return;
+        }
+
+        if (args.Contains("--lab"))
+        {
+            Console.WriteLine(Services.LevelTools.ShadowLab());
+            Console.WriteLine(Services.LevelTools.HoldSection());
+            return;
+        }
+
+        if (args.Contains("--mine"))
+        {
+            Console.WriteLine(Services.LevelTools.Mine());
+            return;
+        }
+
         // lab mode: Trading Hub as an MCP server for Claude Code (no windows)
         if (args.Contains("--mcp"))
         {
             Environment.ExitCode = Lab.LabServer.RunAsync().GetAwaiter().GetResult();
             return;
         }
+
+        Services.SettingsBackup.Run();
+        _ = Task.Run(Services.DailyRecap.Run);
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write(e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, e) =>

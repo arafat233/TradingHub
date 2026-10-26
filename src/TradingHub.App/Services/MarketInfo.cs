@@ -50,7 +50,7 @@ public static class MarketInfo
         return list.FirstOrDefault(m => Split(m).Symbol.Equals(sym, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static bool IsCrypto(string feed) => feed is "binance-futures" or "binance-spot" or "bybit-linear";
+    public static bool IsCrypto(string feed) => feed is "binance-futures" or "binance-spot" or "bybit-linear" or "kraken-spot" or "coinbase-spot" or "bitfinex";
 
     /// <summary>
     /// CME futures (Rithmic or Tradovate: same contracts, same continuous history; also Databento's history and
@@ -70,6 +70,7 @@ public static class MarketInfo
     public static string Describe(string market)
     {
         var (feed, sym) = Split(market);
+        if (feed is "kraken-spot" or "coinbase-spot" or "bitfinex") return (feed == "kraken-spot" ? "Kraken" : feed == "bitfinex" ? "Bitfinex" : "Coinbase") + " spot crypto, 24/7";
         if (IsCrypto(feed)) return feed == "binance-spot" ? "Binance spot crypto, 24/7" : feed == "bybit-linear" ? "Bybit perpetual future, 24/7" : "Binance perpetual future, 24/7";
         if (IsFutures(feed)) return (TradingHub.Market.FuturesCatalog.Find(sym) is { } p ? $"{p.Name} future ({p.Exchange}, Globex hours)" : "CME Group future") + FuturesSource(feed);
         if (feed == CsvImport.FeedId) return "CFD imported from files (1 minute candles converted into trades: no real volume or aggressor side, not usable for order flow)";

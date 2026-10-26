@@ -8,6 +8,9 @@ namespace TradingHub.Charting.Heatmap;
 /// <summary>Everything configurable about the liquidity heatmap (stored with the app's settings).</summary>
 public sealed class HeatmapSettings
 {
+    /// <summary>Marked moments of the replay, by instrument key ("feed:symbol"), in UTC.</summary>
+    public Dictionary<string, List<DateTime>> Bookmarks { get; set; } = new();
+
     /// <summary>How much time fits on the screen.</summary>
     public double WindowMinutes { get; set; } = 5;
 
@@ -102,6 +105,9 @@ public sealed class HeatmapModel
 
     /// <summary>Icebergs of what is on the screen (the live ones, or those of the replay).</summary>
     public IcebergDetector Icebergs => Replay?.Icebergs ?? _liveIcebergs;
+
+    /// <summary>Add / pull / eaten events of the big resting levels (the L3-style list under the heatmap); the window feeds it.</summary>
+    public BookEventDetector BookEvents { get; } = new();
 
     /// <summary>The recorded day being played back (null = live).</summary>
     public DepthReplay? Replay { get; private set; }

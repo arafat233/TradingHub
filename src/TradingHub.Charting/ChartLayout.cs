@@ -14,7 +14,7 @@ public sealed class ChartViewport
     public double ScrollBars { get; set; }
 
     /// <summary>Empty space to the right of the last bar, in pixels.</summary>
-    public double RightMarginPx { get; set; } = 70;
+    public double RightMarginPx { get; set; } = 120; // room for a right-edge profile (Big-order profile) beside the last candle
 
     /// <summary>Empty bars to the right of the last one (derived from RightMarginPx).</summary>
     public int RightMarginBars => Math.Max(1, (int)Math.Ceiling(RightMarginPx / Math.Max(1, BarWidth)));

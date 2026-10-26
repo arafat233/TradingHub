@@ -17,6 +17,7 @@ public enum DomColumn
     [Display(Name = "Session delta")] Delta,
     [Display(Name = "Traded at the bid")] TradedBid,
     [Display(Name = "Traded at the ask")] TradedAsk,
+    [Display(Name = "Cancelled (size pulled without trading)")] Cancelled,
 }
 
 /// <summary>A DOM column: whether it is visible and how much relative width it takes.</summary>
@@ -94,6 +95,7 @@ public sealed class DomSettings
         new() { Column = DomColumn.Delta, Width = 0.9, Visible = false },
         new() { Column = DomColumn.TradedBid, Width = 0.9, Visible = false },
         new() { Column = DomColumn.TradedAsk, Width = 0.9, Visible = false },
+        new() { Column = DomColumn.Cancelled, Width = 0.9, Visible = false },
     };
 
     /// <summary>Fills in missing columns (configurations stored by earlier versions).</summary>

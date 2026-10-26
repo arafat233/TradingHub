@@ -141,8 +141,8 @@ public sealed partial class TradingView : UserControl
         _layoutChoice = new ChoiceButton<PaneLayout>(MaterialIconKind.ViewGridOutline, Layouts.Select(l => (l.Layout, l.Label)),
             "Layout: how many charts to see at once in this tab", l => Layouts.First(x => x.Layout == l).Short);
         _layoutChoice.Changed += l => _ = SetLayoutAsync(l);
-        var popOut = Ui.IconButton(MaterialIconKind.OpenInNew, "Pull the chart into a separate window (⇧⌘D)", () => DetachActive());
-        var newTab = Ui.IconButton(MaterialIconKind.Plus, "New tab (⌘T)", () => _ = NewChartAsync());
+        var popOut = Ui.IconButton(MaterialIconKind.OpenInNew, $"Pull the chart into a separate window ({Plat.Keys(Plat.Cmd | KeyModifiers.Shift, "D")})", () => DetachActive());
+        var newTab = Ui.IconButton(MaterialIconKind.Plus, $"New tab ({Plat.Keys(Plat.Cmd, "T")})", () => _ = NewChartAsync());
         _toolbar = new ChartToolbar(this, false, Ui.Divider(true), _layoutChoice, BuildPanelsButton(), popOut, newTab);
         _svc.BracketsCreated += HookBrackets;
         Content = BuildLayout();
@@ -597,6 +597,479 @@ public sealed partial class TradingView : UserControl
     internal async Task OpenInTabAsync(ChartTab tab, string feedId, string symbol, ChartPeriod period, ChartSettings? settings) =>
         await OpenInTabAsync(tab, feedId, symbol, period, settings, copyIndicatorsFrom: tab);
 
+    /// <summary>Saves the chart as it is on screen (candles, indicators, drawings) to Documents\Trading Hub\Screenshots.</summary>
+    internal string? SaveChartPicture(ChartTab? tab, string? folder = null)
+    {
+        if (tab?.Model is not { } model) return null;
+        try
+        {
+            int w = Math.Max(400, (int)tab.View.Bounds.Width), h = Math.Max(300, (int)tab.View.Bounds.Height);
+            var renderer = new TradingHub.Charting.Rendering.ChartRenderer();
+            var state = new TradingHub.Charting.Rendering.ChartRenderState { Crosshair = false };
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(w, h));
+            renderer.Render(surface.Canvas, model, w, h, state); // the first pass lays the chart out, the second draws it
+            renderer.Render(surface.Canvas, model, w, h, state);
+            var dir = folder ?? Path.Combine(TradingHub.Common.Product.Documents, "Screenshots");
+            Directory.CreateDirectory(dir);
+            var name = string.Concat($"{tab.Symbol}-{DateTime.Now:yyyyMMdd-HHmmss}.png".Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+            var path = Path.Combine(dir, name);
+            using (var image = surface.Snapshot())
+            using (var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 92))
+                File.WriteAllBytes(path, png.ToArray());
+            _status("Picture saved: " + path);
+            return path;
+        }
+        catch (Exception ex)
+        {
+            _status("Could not save the picture: " + ex.Message);
+            CrashLog.Write(ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Journal note: asks for a text and appends it, with the time, the instrument, the last price and a picture of the chart,
+    /// to Documents\Trading Hub\Journal\yyyy-MM-dd.md.
+    /// </summary>
+    internal async Task AddJournalNoteAsync(ChartTab? tab)
+    {
+        if (tab?.Model is not { } model || TopLevel.GetTopLevel(this) is not Window owner) return;
+        var note = await NoteDialog.ShowAsync(owner, "Journal note", $"{tab.Symbol} · {model.Period.DisplayName}: what do you see, what is the idea? A picture of the chart is saved with it.");
+        if (string.IsNullOrWhiteSpace(note)) return;
+        try
+        {
+            var dir = Path.Combine(TradingHub.Common.Product.Documents, "Journal");
+            var picture = SaveChartPicture(tab, Path.Combine(dir, "images"));
+            var tz = model.Settings.TimeZone;
+            var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            var last = model.Data.Trades.Count > 0 ? model.Data.Trades.GetPrice(model.Data.Trades.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) : "-";
+            var entry = $"## {now:HH:mm} · {tab.Symbol} · {model.Period.DisplayName} · last {last}{Environment.NewLine}{Environment.NewLine}{note}{Environment.NewLine}"
+                        + (picture != null ? $"{Environment.NewLine}![chart](images/{Path.GetFileName(picture)}){Environment.NewLine}" : "") + Environment.NewLine;
+            Directory.CreateDirectory(dir);
+            await File.AppendAllTextAsync(Path.Combine(dir, $"{now:yyyy-MM-dd}.md"), entry);
+            _status("Journal note saved (Documents / Trading Hub / Journal)");
+        }
+        catch (Exception ex)
+        {
+            _status("Could not save the note: " + ex.Message);
+            CrashLog.Write(ex);
+        }
+    }
+
+    /// <summary>Position size calculator for the active chart's instrument (the entry starts at the last price).</summary>
+    internal async Task OpenRiskAsync(ChartTab? tab)
+    {
+        if (tab?.Model is not { } model || TopLevel.GetTopLevel(this) is not Window owner) return;
+        var data = model.Data;
+        decimal entry = data.Trades.Count > 0 ? data.Trades.GetPrice(data.Trades.Count - 1) : 0;
+        await RiskDialog.ShowAsync(owner, data.Instrument, entry, _svc.Settings.RiskPerTrade, r =>
+        {
+            if (r == _svc.Settings.RiskPerTrade) return;
+            _svc.Settings.RiskPerTrade = r;
+            _svc.Settings.Save();
+        });
+    }
+
+    /// <summary>Saves a picture of the chart for an alert and adds it to today's journal (Journal\\alerts).</summary>
+    private void SnapshotAlert(AlertInfo a)
+    {
+        try
+        {
+            var tab = AllCharts.FirstOrDefault(t => t.Symbol.Equals(a.Instrument, StringComparison.OrdinalIgnoreCase)) ?? _active;
+            if (tab?.Model == null) return;
+            var dir = Path.Combine(TradingHub.Common.Product.Documents, "Journal");
+            var picture = SaveChartPicture(tab, Path.Combine(dir, "alerts"));
+            if (picture == null) return;
+            var entry = $"## {a.Time:HH:mm} · alert · {a.Instrument}{Environment.NewLine}{Environment.NewLine}{a.Message}{Environment.NewLine}{Environment.NewLine}![chart](alerts/{Path.GetFileName(picture)}){Environment.NewLine}{Environment.NewLine}";
+            File.AppendAllText(Path.Combine(dir, $"{a.Time:yyyy-MM-dd}.md"), entry);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write(ex); // a picture is a bonus: the alert itself must still show
+        }
+    }
+
+    /// <summary>A read-only text window (used for the answers of the tools below).</summary>
+    private void ShowText(string title, string text)
+    {
+        var box = new TextBox { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Text = text, FontSize = 13 };
+        var w = new Window { Title = title, Width = 720, Height = 560, Background = Ui.Bg2, Content = new DockPanel { Margin = new Thickness(14), Children = { box } } };
+        if (TopLevel.GetTopLevel(this) is Window owner) w.Show(owner);
+        else w.Show();
+    }
+
+    /// <summary>"Have we seen this before?": the earlier candles that looked most like the latest one and what price did after them.</summary>
+    internal void ShowSimilarMoments(ChartTab? tab)
+    {
+        if (tab?.Model is not { } model) return;
+        var candles = model.Series.Candles;
+        const int horizon = 30;
+        if (candles.Count < TradingHub.Data.SimilarMoments.Warmup + horizon + 100)
+        {
+            ShowText("Similar moments", $"Not enough candles loaded ({candles.Count}). Load more history first (the clock button on the toolbar): at least a few hours of 1 minute candles, ideally days.");
+            return;
+        }
+
+        int now = candles.Count - 2; // the last closed candle
+        var result = TradingHub.Data.SimilarMoments.Find(candles, now, horizon, 12);
+        var tz = model.Settings.TimeZone;
+        string Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), tz).ToString("dd/MM HH:mm");
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{tab.Symbol} · {model.Period.DisplayName} · the latest closed candle is {Local(candles[now].Time)}");
+        sb.AppendLine($"I compared it with the {candles.Count:N0} candles loaded (recent move, delta, volume, range and position in the last hour) and kept the {result.Matches.Count} most similar, at least 15 candles apart.");
+        sb.AppendLine().AppendLine($"What price did {horizon} candles after each of them:");
+        foreach (var m in result.Matches)
+            sb.AppendLine($"  {Local(candles[m.Index].Time)}   similarity gap {m.Distance:0.0}   {m.AheadTicks:+0;-0;0} ticks");
+        if (result.Matches.Count > 0)
+            sb.AppendLine().AppendLine($"Higher after {result.Up} of {result.Matches.Count}, lower after {result.Down}; median {result.Median:+0;-0;0} ticks.");
+        sb.AppendLine().AppendLine("This describes the loaded past only. The sample is small and the market changes: it is something to look at, not a forecast.");
+        ShowText("Similar moments", sb.ToString());
+    }
+
+    /// <summary>Asks Claude (the user's Claude Code session) about the chart: a picture of it plus the levels, alerts and next event.</summary>
+    internal async Task AskChartAsync(ChartTab? tab)
+    {
+        if (tab?.Model is not { } model || TopLevel.GetTopLevel(this) is not Window owner) return;
+        var question = await NoteDialog.ShowAsync(owner, "Ask Claude about this chart", $"{tab.Symbol} · {model.Period.DisplayName}. A picture of the chart, your saved levels and today's alerts are sent to Claude Code with your question. Nothing else.");
+        if (string.IsNullOrWhiteSpace(question)) return;
+        try
+        {
+            var dir = Path.Combine(AppPaths.Root, "ask-chart");
+            Directory.CreateDirectory(dir);
+            foreach (var old in new DirectoryInfo(dir).GetFiles("*.png").OrderByDescending(f => f.LastWriteTimeUtc).Skip(10)) old.Delete();
+            var picture = SaveChartPicture(tab, dir);
+            if (picture == null) return;
+
+            var ctx = new System.Text.StringBuilder();
+            ctx.AppendLine($"Instrument {tab.Symbol}, chart period {model.Period.DisplayName}, now {DateTime.Now:yyyy-MM-dd HH:mm} local, last price {model.Data.LastPrice}.");
+            if (TodayReport.Load().FirstOrDefault(l => string.Equals(l.Instrument, tab.Symbol, StringComparison.OrdinalIgnoreCase)) is { Levels: { Count: > 0 } levels })
+            {
+                ctx.AppendLine("Remembered big-trade levels price has not come back to (largest first):");
+                foreach (var l in levels.Where(l => !l.Touched && !l.Hidden).OrderByDescending(l => l.Volume).Take(8))
+                    ctx.AppendLine($"  {(l.Buy ? "buy" : "sell")} {l.Volume:0.##} @ {l.Price} ({l.Time.ToLocalTime():dd/MM HH:mm})");
+                ctx.AppendLine(TodayReport.Scoreboard(levels));
+            }
+
+            var alerts = AlertLog.Since(DateTime.Now.Date);
+            if (alerts.Count > 0) ctx.AppendLine("Alerts today: " + string.Join(" | ", alerts.TakeLast(6).Select(a => $"{a.Time:HH:mm} {a.Text}")));
+            if (TradingHub.Indicators.Native.EventCalendar.Next(DateTime.UtcNow) is { } ev) ctx.AppendLine($"Next event: {ev.Name} at {ev.Utc.ToLocalTime():dd/MM HH:mm} local.");
+
+            _status("Asking Claude…");
+            var res = await new ClaudeAgent().RunAsync(new ClaudeAgentRequest
+            {
+                Role = "ask-chart",
+                Prompt = $"Look at the chart picture {Path.GetFileName(picture)} in your folder (use the Read tool).{Environment.NewLine}{Environment.NewLine}Question: {question}{Environment.NewLine}{Environment.NewLine}Data from the trader's platform:{Environment.NewLine}{ctx}",
+                SystemPrompt = "You are a careful order-flow analyst helping a discretionary futures trader read a chart. Answer the question from the picture and the data given only; say when something cannot be seen. Be concise (under 200 words), concrete about prices and times, and do not give trade instructions or promise outcomes.",
+                WorkDir = dir,
+                Tools = new[] { "Read" },
+                PermissionMode = "dontAsk",
+                Model = ClaudeCodeBridge.Model,
+                Effort = "medium",
+                MaxUsd = 1.0,
+                Timeout = TimeSpan.FromMinutes(4),
+            }, CancellationToken.None);
+            if (res.Ok && res.Text.Trim().Length > 0)
+            {
+                _status("Claude answered.");
+                ShowText("Claude's read of " + tab.Symbol, res.Text.Trim());
+            }
+            else _status("Claude did not answer: " + (res.NeedsLogin ? "sign in to Claude Code first (run claude in a terminal and use /login)" : res.Error ?? "no text"));
+        }
+        catch (Exception ex)
+        {
+            _status("Could not ask Claude: " + ex.Message);
+            CrashLog.Write(ex);
+        }
+    }
+
+    private void OpenFlashcards()
+    {
+        var w = new FlashcardWindow();
+        if (TopLevel.GetTopLevel(this) is Window owner) w.Show(owner);
+        else w.Show();
+    }
+
+    /// <summary>Asks Claude to explain the Auction map's profile in plain language, from the picture and the indicator's own numbers.</summary>
+    internal async Task ExplainProfileAsync(ChartTab? tab)
+    {
+        if (tab?.Model is not { } model || TopLevel.GetTopLevel(this) is not Window) return;
+        var map = model.Indicators.Select(s => s.Indicator).OfType<TradingHub.Indicators.Native.AuctionMap>().FirstOrDefault();
+        string facts = map?.Facts ?? "";
+        if (map == null || facts.Length == 0)
+        {
+            _status("Add the Auction map indicator to this chart first (Indicators → Auction map).");
+            return;
+        }
+
+        try
+        {
+            var dir = Path.Combine(AppPaths.Root, "ask-chart");
+            Directory.CreateDirectory(dir);
+            var picture = SaveChartPicture(tab, dir);
+            if (picture == null) return;
+            _status("Asking Claude to explain the profile…");
+            var res = await new ClaudeAgent().RunAsync(new ClaudeAgentRequest
+            {
+                Role = "explain-profile",
+                Prompt = $"Look at the chart picture {Path.GetFileName(picture)} in your folder (use the Read tool): it shows {tab.Symbol} with the Auction map indicator (TPO + volume profile). Explain the auction in plain language, in at most 200 words: where value is, what has been accepted or rejected, what unfinished business is left and how far it is, and what to watch next. Use ONLY the facts below and what you can see; say when something cannot be told. No trade instructions.{Environment.NewLine}{Environment.NewLine}Facts from the platform:{Environment.NewLine}{facts}",
+                SystemPrompt = "You are a market-profile (auction market theory) teacher explaining one session's profile to a discretionary futures trader. Be concrete about prices, concise, and honest about uncertainty. The platform's statistics describe the past only.",
+                WorkDir = dir,
+                Tools = new[] { "Read" },
+                PermissionMode = "dontAsk",
+                Model = ClaudeCodeBridge.Model,
+                Effort = "medium",
+                MaxUsd = 1.0,
+                Timeout = TimeSpan.FromMinutes(4),
+            }, CancellationToken.None);
+            if (res.Ok && res.Text.Trim().Length > 0)
+            {
+                _status("Claude explained the profile.");
+                ShowText("The auction, explained · " + tab.Symbol, res.Text.Trim());
+            }
+            else _status("Claude did not answer: " + (res.NeedsLogin ? "sign in to Claude Code first (run claude in a terminal and use /login)" : res.Error ?? "no text"));
+        }
+        catch (Exception ex)
+        {
+            _status("Could not ask Claude: " + ex.Message);
+            CrashLog.Write(ex);
+        }
+    }
+
+    private Window? _bigOrdersWindow;
+
+    /// <summary>Makes the chart showing an instrument the active one (false if no chart shows it).</summary>
+    internal bool ActivateSymbol(string feedId, string symbol)
+    {
+        var tab = AllCharts.FirstOrDefault(t => t.FeedId == feedId && t.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase));
+        if (tab == null) return false;
+        Activate(tab);
+        return true;
+    }
+
+    /// <summary>Big orders on every open instrument as they print (double click a line to go to its chart).</summary>
+    internal void OpenBigOrders()
+    {
+        if (_bigOrdersWindow != null)
+        {
+            _bigOrdersWindow.Activate();
+            return;
+        }
+
+        var feed = _svc.BigOrders;
+        var list = new ListBox { FontFamily = new FontFamily(Plat.Mono), FontSize = 12 };
+        var sound = new CheckBox { Content = "Sound", IsChecked = false };
+        var tz = TimeZoneInfo.Local;
+        try { tz = TimeZoneInfo.FindSystemTimeZoneById(_svc.Settings.TimeZoneId); } catch (Exception) { /* the machine's own time zone */ }
+        TextBlock Row(BigOrderLine l) => new()
+        {
+            Text = $"{TimeZoneInfo.ConvertTimeFromUtc(l.Time, tz):HH:mm:ss}  {l.Symbol,-8} {(l.Order.Buy ? "BUY " : "SELL")} {l.Order.Volume,8:0.##} @ {l.Order.Price}",
+            Foreground = l.Order.Buy ? Ui.Up : Ui.Down,
+        };
+        foreach (var l in feed.Lines.Reverse()) list.Items.Add(Row(l));
+        void OnAdded(BigOrderLine l)
+        {
+            list.Items.Insert(0, Row(l));
+            while (list.Items.Count > 300) list.Items.RemoveAt(list.Items.Count - 1);
+            if (sound.IsChecked == true) Sound.Play();
+        }
+
+        feed.Added += OnAdded;
+        var note = Ui.Faint("Only instruments that are open on a chart are watched. A big order is far above that instrument's usual (the top 0.3% of recent orders).");
+        list.DoubleTapped += (_, _) =>
+        {
+            if (list.SelectedIndex < 0) return;
+            var l = feed.Lines[feed.Lines.Count - 1 - list.SelectedIndex];
+            if (!ActivateSymbol(l.FeedId, l.Symbol)) _status($"{l.Symbol} is not open on a chart");
+        };
+        var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Margin = new Thickness(0, 0, 0, 8), Children = { sound, note } };
+        var w = new Window
+        {
+            Title = "Big orders",
+            Width = 520,
+            Height = 560,
+            Background = Ui.Bg2,
+            Content = new DockPanel { Margin = new Thickness(12), Children = { Docked(top, Dock.Top), list } },
+        };
+        w.Closed += (_, _) =>
+        {
+            feed.Added -= OnAdded;
+            _bigOrdersWindow = null;
+        };
+        _bigOrdersWindow = w;
+        if (TopLevel.GetTopLevel(this) is Window owner) w.Show(owner);
+        else w.Show();
+
+        static Control Docked(Control c, Dock d)
+        {
+            DockPanel.SetDock(c, d);
+            return c;
+        }
+    }
+
+    private Window? _todayWindow;
+
+    internal void OpenGuide() => ShowText("Guide", TradingHub.App.Services.ViewGuide.Text);
+
+    /// <summary>The Today window: alerts, today's levels per instrument, the level scoreboard and yesterday's recap (it refreshes on its own).</summary>
+    internal void OpenToday()
+    {
+        if (_todayWindow != null)
+        {
+            _todayWindow.Activate();
+            return;
+        }
+
+        var box = new TextBox { IsReadOnly = true, FontFamily = new FontFamily(Plat.Mono), FontSize = 12, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, Text = TodayReport.Build(_svc) };
+        void Refresh() => box.Text = TodayReport.Build(_svc);
+        var refresh = Ui.Button("Refresh", MaterialIconKind.Refresh, Refresh);
+        var mine = Ui.Button("Mine levels from ticks", MaterialIconKind.Pickaxe, async () =>
+        {
+            box.Text = "Reading the recorded ticks and finding big orders... (this can take a minute)";
+            var text = await Task.Run(() =>
+            {
+                try { return LevelTools.Mine(); }
+                catch (Exception ex) { CrashLog.Write(ex); return "Could not mine: " + ex.Message; }
+            });
+            Refresh();
+            box.Text = "MINING RESULT\n" + text + "\n\n" + box.Text;
+        });
+        var lab = Ui.Button("Shadow lab", MaterialIconKind.FlaskOutline, async () =>
+        {
+            ShowText("Shadow lab", "Working... close and reopen this if it stays empty.");
+            var text = await Task.Run(() =>
+            {
+                try { return LevelTools.ShadowLab(); }
+                catch (Exception ex) { CrashLog.Write(ex); return "Could not run the lab: " + ex.Message; }
+            });
+            ShowText("Shadow lab", text);
+        });
+        var brief = Ui.Button("Briefing now", MaterialIconKind.WeatherSunsetUp, () => ShowText("Briefing", Briefing.Compose(_svc)));
+        var edge = Ui.Button("Edge finder", MaterialIconKind.MagnifyScan, async () =>
+        {
+            ShowText("Edge finder", "Working on the recorded ticks (about a minute)... close and reopen this window if it stays empty.");
+            var text = await Task.Run(() =>
+            {
+                try { return Research.RunEdgeFinder(); }
+                catch (Exception ex) { CrashLog.Write(ex); return "Could not run the edge finder: " + ex.Message; }
+            });
+            ShowText("Edge finder", text);
+        });
+        var cross = Ui.Button("Cross-market", MaterialIconKind.SwapHorizontal, async () =>
+        {
+            ShowText("Cross-market", "Working on the recorded ticks (about a minute)... close and reopen this window if it stays empty.");
+            var text = await Task.Run(() =>
+            {
+                try { return Research.RunCrossMarket(); }
+                catch (Exception ex) { CrashLog.Write(ex); return "Could not run the study: " + ex.Message; }
+            });
+            ShowText("Cross-market", text);
+        });
+        Button ResearchButton(string label, MaterialIconKind icon, string title, Func<string> run) => Ui.Button(label, icon, async () =>
+        {
+            ShowText(title, "Working on the recorded ticks (up to a minute)... close and reopen this window if it stays empty.");
+            var text = await Task.Run(() =>
+            {
+                try { return run(); }
+                catch (Exception ex) { CrashLog.Write(ex); return "Could not run: " + ex.Message; }
+            });
+            ShowText(title, text);
+        });
+        var placebo = ResearchButton("Placebo test", MaterialIconKind.DiceMultipleOutline, "Placebo test", ResearchExtra.Placebo);
+        var swing = ResearchButton("Swing baseline", MaterialIconKind.ChartLineVariant, "Swing-level baseline", ResearchExtra.SwingBaseline);
+        var side = ResearchButton("Side accuracy", MaterialIconKind.ScaleBalance, "Side accuracy", ResearchExtra.SideAccuracy);
+        var hyp = ResearchButton("Hypotheses", MaterialIconKind.ClipboardTextClockOutline, "Hypotheses", ResearchExtra.Hypotheses);
+        var atlas = ResearchButton("Event atlas", MaterialIconKind.CalendarAlertOutline, "Event impact atlas", ResearchExtra.EventAtlas);
+        var cost = ResearchButton("Cost map", MaterialIconKind.CashMultiple, "Cost map", () => ResearchHistory.CostMap(_svc));
+        var season = ResearchButton("Seasonality", MaterialIconKind.WeatherSunnyAlert, "Seasonality", ResearchHistory.Seasonality);
+        var rules = ResearchButton("Rule lab", MaterialIconKind.TestTube, "Rule lab", () => ResearchHistory.RuleLab(_svc));
+        var stops = ResearchButton("Stops in nodes", MaterialIconKind.OctagonOutline, "Stops and volume nodes", ResearchAuction.StopsInNodes);
+        var accuracy = ResearchButton("Profile accuracy", MaterialIconKind.TargetVariant, "Profile accuracy", ResearchAuction.ProfileAccuracy);
+        var download = Ui.Button("Download more history", MaterialIconKind.DownloadOutline, async () =>
+        {
+            ShowText("Download more history", "Downloading about 13 months of 1-minute candles for ES.F, NQ.F and SI.F from London Strategic Edge (a few minutes; closed months are stored and not downloaded twice)...");
+            var text = await Task.Run(async () =>
+            {
+                try { return await HistoryDownload.RunAsync(_svc.Connections, new[] { "ES.F", "NQ.F", "SI.F" }); }
+                catch (Exception ex) { CrashLog.Write(ex); return "Could not download: " + ex.Message; }
+            });
+            ShowText("Download more history", text + Environment.NewLine + Environment.NewLine + "Now run Auction claims again to repeat the tests on these markets.");
+        });
+        var claims = ResearchButton("Auction claims", MaterialIconKind.ScaleBalance, "Auction claims test", ResearchAuction.Claims);
+        var opens = ResearchButton("Open & day types", MaterialIconKind.WeatherSunsetUp, "Open location and day types", ResearchAuction.OpenAndDayTypes);
+        var profileCards = Ui.Button("Profile flashcards", MaterialIconKind.CardsOutline, () =>
+        {
+            var w = new ProfileFlashcardWindow();
+            if (TopLevel.GetTopLevel(this) is Window owner) w.Show(owner);
+            else w.Show();
+        });
+        var cards = Ui.Button("Flashcards", MaterialIconKind.CardsOutline, () => OpenFlashcards());
+        var asOf = Ui.Button("As of…", MaterialIconKind.ClockTimeFourOutline, async () =>
+        {
+            if (TopLevel.GetTopLevel(this) is not Window owner) return;
+            var answer = await PromptDialog.ShowAsync(owner, "As of", "Date and local time (yyyy-MM-dd HH:mm)", DateTime.Now.AddHours(-1).ToString("yyyy-MM-dd HH:mm"), "Show");
+            if (answer == null) return;
+            if (!DateTime.TryParseExact(answer.Trim(), "yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var when)) ShowText("As of", "Use the form 2026-10-23 14:30.");
+            else ShowText("As of " + when.ToString("yyyy-MM-dd HH:mm"), AsOf.Build(when));
+        });
+        var export = Ui.Button("Export levels (TradingView + CSV)", MaterialIconKind.Export, () =>
+        {
+            try
+            {
+                var (folder, summary) = LevelExport.Run();
+                Refresh();
+                box.Text = summary + Environment.NewLine + Environment.NewLine + "Files: " + folder + Environment.NewLine + Environment.NewLine + box.Text;
+                Shell.OpenFolder(folder);
+            }
+            catch (Exception ex)
+            {
+                box.Text = "Could not export: " + ex.Message;
+                CrashLog.Write(ex);
+            }
+        });
+        var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        timer.Tick += (_, _) => Refresh();
+        timer.Start();
+        var w = new Window
+        {
+            Title = "Today",
+            Width = 780,
+            Height = 720,
+            Background = Ui.Bg2,
+            Content = new DockPanel { Margin = new Thickness(14), Children = { Docked(new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8, Children = { refresh, mine, lab, edge, cross, placebo, swing, side, hyp, atlas, cost, season, rules, download, claims, opens, stops, accuracy, cards, profileCards, asOf, brief, export } }, Dock.Top), box } },
+        };
+        w.Closed += (_, _) =>
+        {
+            timer.Stop();
+            _todayWindow = null;
+        };
+        _todayWindow = w;
+        if (TopLevel.GetTopLevel(this) is Window owner) w.Show(owner);
+        else w.Show();
+
+        static Control Docked(Control c, Dock d)
+        {
+            c.Margin = new Thickness(0, 0, 0, 10);
+            c.HorizontalAlignment = HorizontalAlignment.Left;
+            DockPanel.SetDock(c, d);
+            return c;
+        }
+    }
+
+    /// <summary>The connection's instrument list; a feed that is not ready yet (starting up, network) is retried instead of leaving the chart empty.</summary>
+    private async Task<IReadOnlyList<Instrument>> InstrumentsWithRetryAsync(ConnectionProfile profile)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try { return await InstrumentPicker.InstrumentsAsync(_svc, profile.Id); }
+            catch (Exception ex) when (attempt < 5)
+            {
+                CrashLog.Write(ex);
+                _status($"{profile.Name} is not ready ({ex.Message}); retrying {attempt}/4…");
+                await Task.Delay(TimeSpan.FromSeconds(3 * attempt));
+            }
+        }
+    }
+
     /// <summary>Loads (or changes) a chart's instrument. Copies the indicators of the chart given.</summary>
     private async Task OpenInTabAsync(ChartTab tab, string feedId, string symbol, ChartPeriod period, ChartSettings? settings, ChartTab? copyIndicatorsFrom)
     {
@@ -609,7 +1082,7 @@ public sealed partial class TradingView : UserControl
                 return;
             }
 
-            var instruments = await InstrumentPicker.InstrumentsAsync(_svc, profile.Id);
+            var instruments = await InstrumentsWithRetryAsync(profile);
             var inst = instruments.FirstOrDefault(i => i.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase));
             if (inst == null)
             {
@@ -1320,8 +1793,15 @@ public sealed partial class TradingView : UserControl
 
     private void ShowAlert(AlertInfo a)
     {
+        if (_svc.Settings.AlertSnapshots) SnapshotAlert(a);
         _status($"🔔 {a.Source}: {a.Message}");
-        Sound.Play();
+        AlertLog.Add(a.Time, $"{a.Instrument} · {a.Source}: {a.Message}");
+        if (!AlertControl.IsMuted)
+        {
+            TelegramNotifier.Notify(_svc.Settings, $"{a.Instrument} · {a.Message}");
+            SpokenAlerts.Say(_svc.Settings, $"{a.Instrument}. {a.Message}");
+            Sound.Play();
+        }
     }
 
     internal async Task RestoreOrDefaultAsync()
@@ -1400,6 +1880,7 @@ public sealed partial class TradingView : UserControl
             }
 
             if ((mainVisible || _panelWindows.ContainsKey("ticket")) && _dockedTrader is { IsEffectivelyVisible: true } docked) docked.Refresh();
+            if (mainVisible && _frame % 30 == 0) RefreshInsights();
         }
 
         if (!mainVisible && !slowFrame && !AnyPanelFloating) return;
@@ -1446,11 +1927,15 @@ public sealed partial class TradingView : UserControl
 /// <summary>System alert sound.</summary>
 internal static class Sound
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool MessageBeep(uint type);
+
     public static void Play(string file = "/System/Library/Sounds/Glass.aiff")
     {
         if (App.Services?.Settings.SoundAlerts == false) return;
         try
         {
+            if (OperatingSystem.IsWindows()) { MessageBeep(0x40); return; }
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("afplay", file) { UseShellExecute = false });
         }
         catch

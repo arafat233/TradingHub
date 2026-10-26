@@ -1,3 +1,4 @@
+using TradingHub.App.Services;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -55,9 +56,9 @@ internal sealed class ChartWindow : Window
 
             if (TradingHub.App.Services.Hotkeys.Match(App.Services.Settings, e, this) is { } action && _host.ExecuteHotkey(action, Chart)) e.Handled = true;
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.W, KeyModifiers.Meta), Command = new Relay(Close) });
-        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.I, KeyModifiers.Meta), Command = new Relay(() => _host.OpenIndicators(Chart)) });
-        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.K, KeyModifiers.Meta), Command = new Relay(() => Toolbar.Picker.Open()) });
+        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.W, Plat.Cmd), Command = new Relay(Close) });
+        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.I, Plat.Cmd), Command = new Relay(() => _host.OpenIndicators(Chart)) });
+        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.K, Plat.Cmd), Command = new Relay(() => Toolbar.Picker.Open()) });
     }
 
     public ChartTab Chart { get; }

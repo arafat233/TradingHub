@@ -4,16 +4,15 @@ using System.Text.Json;
 
 namespace TradingHub.Tests;
 
-/// <summary>Fake London Strategic Edge: the websocket and the REST vault as the service's public client talks to them (never the real service).</summary>
+/// <summary>Fake London Strategic Edge: the websocket and the Data 3.0 REST API as the service's public client talks to them (never the real service).</summary>
 internal static class FakeLse
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static string Epoch(DateTime t) => ((t - DateTime.UnixEpoch).TotalSeconds).ToString("0.000", Inv);
+    /// <summary>Live ticks carry nanosecond ISO times: "2026-10-26T08:31:38.241000000Z".</summary>
+    private static string Ts(DateTime t) => t.ToString("yyyy-MM-ddTHH:mm:ss.fff", Inv) + "000000Z";
 
-    private static string Ts(DateTime t) => t.ToString("yyyy-MM-ddTHH:mm:ss.fff", Inv) + "Z";
-
-    /// <summary>The service as its public client talks to it: welcome → auth → authenticated, subscribe (with "start" it replays, then goes live).</summary>
+    /// <summary>The service as its public client talks to it: welcome → auth → authenticated (with the symbol list), subscribe → live ticks.</summary>
     /// <summary>With <paramref name="oneConnection"/> the server refuses a second websocket like the free plan does; a refusal is noted as "REJECTED" in <paramref name="received"/>.</summary>
     public static FakeHttpServer Server(out List<string> received, bool oneConnection = false)
     {
@@ -24,24 +23,40 @@ internal static class FakeLse
         s.OnHttp = req =>
         {
             if (req.Headers.GetValueOrDefault("x-api-key") != "KEY") return (401, "{\"detail\":\"invalid key\"}");
-            if (req.Route == "/catalog")
-                return (200, "[{\"dataset\":\"stocks\",\"symbol\":\"AAPL\",\"name\":\"Apple Inc.\",\"ticks\":123,\"first_tick\":\"2003-09-10 13:30:00\",\"last_tick\":\"2026-10-20 20:00:00\"}," +
-                             "{\"dataset\":\"fx\",\"symbol\":\"EUR/USD\",\"name\":\"Euro / US Dollar\",\"first_tick\":\"2009-05-01 00:00:00\"},{\"dataset\":\"fx\",\"symbol\":\"USD/JPY\",\"name\":\"Dollar Yen\"},{\"dataset\":\"futures\",\"symbol\":\"ES.F\",\"name\":\"S&P 500 Futures\",\"live\":1},{\"dataset\":\"futures\",\"symbol\":\"FDAX\",\"name\":\"DAX Futures\",\"live\":0},{\"dataset\":\"credit_indices\",\"symbol\":\"CDX\",\"name\":\"credit\"},{\"dataset\":\"fx_derivatives\",\"symbol\":\"EURUSD1M\",\"name\":\"fwd\"}," +
-                             "{\"dataset\":\"crypto\",\"symbol\":\"BTC/USD\",\"name\":\"Bitcoin\",\"first_tick\":\"2017-01-01 00:00:00\"}," +
-                             "{\"dataset\":\"economics\",\"symbol\":\"cpi_yoy\",\"name\":\"US CPI\"},{\"dataset\":\"bonds\",\"symbol\":\"US10Y\",\"name\":\"US 10y\"},{\"dataset\":\"options\",\"symbol\":\"AAPL251219C00300000\",\"name\":\"opt\"}]");
-            if (req.Route == "/usage") return (200, "{\"used\":3,\"limit\":10}");
-            if (req.Route == "/candles")
+            if (req.Route == "/v3/usage") return (200, "{\"plan\":\"free\",\"calls_per_minute\":60,\"weekly\":{\"allowance_bytes\":13421772800,\"used_bytes\":14042}}");
+            if (req.Route == "/v3/pairs")
             {
-                if (req.Query("symbol") != "AAPL" || req.Query("timeframe") != "5m") return (400, "{\"detail\":\"bad filter\"}");
-                // two pages: 5000 rows from the requested start, then 3 (the feed asks for the next page from just after the last row)
-                var start = DateTime.Parse(req.Query("start"), Inv, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
-                bool second = start > new DateTime(2026, 1, 6, 0, 0, 0, DateTimeKind.Utc);
-                int n = second ? 3 : 5000;
-                var from = second ? start : new DateTime(2026, 1, 5, 14, 30, 0, DateTimeKind.Utc);
-                var sb = new StringBuilder("[");
-                for (int i = 0; i < n; i++)
-                    sb.Append(i > 0 ? "," : "").Append(string.Create(Inv, $"{{\"ts\":\"{from.AddMinutes(5 * i):yyyy-MM-dd HH:mm:ss}\",\"open\":{200 + i % 7},\"high\":{201 + i % 7},\"low\":{199 + i % 7},\"close\":\"{200.5 + i % 7}\",\"volume\":{1000 + i}}}"));
-                return (200, sb.Append(']').ToString());
+                // the archive spells the symbols its own way: EUR_USD in forex, BTCUSDT in crypto, GOLD in several stock markets and futures
+                var (folder, symbol) = (req.Query("market"), req.Query("symbol")) switch
+                {
+                    ("us_stocks" or null, "AAPL") => ("us_stocks", "AAPL"),
+                    ("forex" or null, "EUR_USD") => ("forex", "EUR_USD"),
+                    ("crypto" or null, "BTCUSDT") => ("crypto", "BTCUSDT"),
+                    ("futures" or null, "GOLD") => ("futures", "GOLD"),
+                    _ => ("", ""),
+                };
+                return (200, folder.Length == 0 ? "{\"count\":0,\"pairs\":[],\"total\":0}" : $"{{\"count\":1,\"total\":1,\"pairs\":[{{\"folder\":\"{folder}\",\"symbol\":\"{symbol}\"}}]}}");
+            }
+
+            if (req.Route == "/v3/export" && req.Query("timeframe") == "tick")
+            {
+                if (req.Query("market") != "futures" || req.Query("symbol") != "GOLD") return (400, "{\"message\":\"bad filter\"}");
+                var t0 = DateTime.Parse(req.Query("from"), Inv, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+                // trades and a quote: only the trades are history; the times have 9 decimals like the real export
+                string Row(int sec, string price, int size, string kind) => $"\"{t0.AddSeconds(sec):yyyy-MM-dd HH:mm:ss}.123456000\",{price},{size},\"{kind}\"\n";
+                return (200, "\"time\",\"price\",\"size\",\"kind\"\n" + Row(1, "100", 2, "trade") + Row(2, "100.1", 0, "quote") + Row(3, "100.2", 3, "trade") + Row(4, "100.1", 1, "trade"));
+            }
+
+            if (req.Route == "/v3/export")
+            {
+                if (req.Query("market") != "us_stocks" || req.Query("symbol") != "AAPL" || req.Query("timeframe") != "5m" || req.Query("format") != "csv") return (400, "{\"message\":\"bad filter\"}");
+                var from = DateTime.Parse(req.Query("from"), Inv, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+                // the first window has candles, the later one nothing stored (like a holiday stretch): the feed skips it
+                if (from > new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)) return (502, "{\"code\":\"export-failed\",\"message\":\"Omega has no stored data for this selection\"}");
+                var sb = new StringBuilder("\"time\",\"open\",\"high\",\"low\",\"close\",\"volume\",\"trades\"\n");
+                for (int i = 0; i < 3; i++)
+                    sb.Append(string.Create(Inv, $"\"{from.AddMinutes(5 * i):yyyy-MM-dd HH:mm:ss}\",{200 + i},{201 + i},{199 + i},{200.5 + i},{1000 + i},12\n"));
+                return (200, sb.ToString());
             }
 
             return (404, "{}");
@@ -75,25 +90,13 @@ internal static class FakeLse
                 if (action == "auth")
                 {
                     bool ok = doc.RootElement.GetProperty("api_key").GetString() == "KEY";
-                    await FakeHttpServer.SendText(ws, ok ? "{\"type\":\"authenticated\",\"tier\":\"free\",\"symbols\":[]}" : "{\"type\":\"error\",\"code\":\"INVALID_KEY\",\"message\":\"bad key\"}", ct);
+                    await FakeHttpServer.SendText(ws, ok ? "{\"type\":\"authenticated\",\"tier\":\"registered\",\"symbols\":[{\"symbol\":\"AAPL\",\"name\":\"Apple Inc.\",\"category\":\"Stocks\"},{\"symbol\":\"EUR/USD\",\"name\":\"Euro / US Dollar\",\"category\":\"Forex\"},{\"symbol\":\"USD/JPY\",\"name\":\"Dollar Yen\",\"category\":\"Forex\"},{\"symbol\":\"BTC/USD\",\"name\":\"Bitcoin\",\"category\":\"Crypto\"},{\"symbol\":\"XAU/USD\",\"name\":\"Gold\",\"category\":\"Commodities\"},{\"symbol\":\"USB02Y/USD\"}]}" : "{\"type\":\"error\",\"code\":\"INVALID_KEY\",\"message\":\"bad key\"}", ct);
                 }
                 else if (action == "subscribe")
                 {
-                    var now = DateTime.UtcNow;
-                    if (doc.RootElement.TryGetProperty("start", out _))
-                    {
-                        await FakeHttpServer.SendText(ws, "{\"type\":\"replay_started\"}", ct);
-                        // like the real service, "bid" is the trade price and "ask" one step above it: they say nothing about the side, only the price moves do
-                        await FakeHttpServer.SendText(ws, $"{{\"type\":\"tick\",\"symbol\":\"EUR/USD\",\"price\":100.00,\"bid\":100.00,\"ask\":100.01,\"volume\":2,\"ts\":{Epoch(now.AddMinutes(-50))},\"replay\":true}}", ct);
-                        await FakeHttpServer.SendText(ws, $"{{\"type\":\"tick\",\"symbol\":\"EUR/USD\",\"price\":100.05,\"bid\":100.05,\"ask\":100.06,\"volume\":3,\"ts\":{Epoch(now.AddMinutes(-40))},\"replay\":true}}", ct);
-                        await FakeHttpServer.SendText(ws, $"{{\"type\":\"tick\",\"symbol\":\"EUR/USD\",\"price\":99.95,\"bid\":99.95,\"ask\":99.96,\"ts\":{Epoch(now.AddMinutes(-30))},\"replay\":true}}", ct);
-                        await FakeHttpServer.SendText(ws, $"{{\"type\":\"tick\",\"symbol\":\"EUR/USD\",\"price\":99.94,\"ts\":{Epoch(now.AddMinutes(-20))},\"replay\":true}}", ct);
-                        await FakeHttpServer.SendText(ws, "{\"type\":\"replay_complete\"}", ct);
-                    }
-
                     for (int i = 0; i < 3; i++)
                     {
-                        await FakeHttpServer.SendText(ws, $"{{\"type\":\"tick\",\"symbol\":\"EUR/USD.ALIAS\",\"price\":{100.10 + i * 0.02:0.00},\"bid\":{100.10 + i * 0.02:0.00},\"ask\":{100.11 + i * 0.02:0.00},\"volume\":1,\"ts\":\"{Ts(DateTime.UtcNow)}\",\"replay\":false}}", ct);
+                        await FakeHttpServer.SendText(ws, $"{{\"type\":\"tick\",\"symbol\":\"EUR/USD.ALIAS\",\"price\":{100.10 + i * 0.02:0.00},\"bid\":{100.10 + i * 0.02:0.00},\"ask\":{100.11 + i * 0.02:0.00},\"volume\":1,\"ts\":\"{Ts(DateTime.UtcNow)}\"}}", ct);
                         await Task.Delay(40, ct);
                     }
                 }

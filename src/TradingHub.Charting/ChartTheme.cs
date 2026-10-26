@@ -66,7 +66,7 @@ public sealed class ChartTheme
     public SKColor DrawingDefault { get; set; } = new(30, 144, 255);
 
     public string FontFamily { get; set; } = "Helvetica Neue";
-    public string MonoFontFamily { get; set; } = "Menlo";
+    public string MonoFontFamily { get; set; } = OperatingSystem.IsMacOS() ? "Menlo" : "Consolas";
 
     public static ChartTheme Dark { get; } = new();
 

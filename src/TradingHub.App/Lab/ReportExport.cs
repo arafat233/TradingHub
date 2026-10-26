@@ -146,7 +146,7 @@ internal static class ReportExport
             td.n { text-align: right; font-variant-numeric: tabular-nums; }
             figure { margin: 10px 0 18px; page-break-inside: avoid; }
             figure img { width: 100%; border: 1px solid #e3e6ec; border-radius: 8px; }
-            code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-family: Menlo, monospace; font-size: 12px; }
+            code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-family: Menlo, Consolas, monospace; font-size: 12px; }
             hr { border: 0; border-top: 1px solid #e3e6ec; margin: 28px 0; }
             ul { padding-left: 22px; }
             </style></head><body>

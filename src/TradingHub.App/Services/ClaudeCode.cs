@@ -216,6 +216,7 @@ public sealed class ClaudeCodeBridge
     {
         "list_strategies", "compile_strategy", "list_data", "download_data", "run_backtest", "run_optimization", "run_walk_forward", "list_runs",
         "analyze_portfolio", "suggest_portfolio", "live_portfolio", "propose_sizing", "save_report", "list_indicators", "compile_indicator", "chart_snapshot",
+        "today_report", "list_levels", "next_events", "similar_days", "stress_test", "list_accounts", "trade_autopsy", "event_study", "fill_quality",
     };
 
     /// <summary>MCP config that starts Trading Hub in lab mode (the same executable with --mcp).</summary>
@@ -482,6 +483,22 @@ public sealed class ClaudeCodeBridge
         and exits, its drawings and lines) that you look at with Read, plus the list of candles, trades, drawings and log with
         local time. Use it when the user asks you about something they see on their chart ("it marks the breakout at 7:15 but
         enters at 8:45") or to check that what you programmed does what it says: look at the exact candle, the values of its lines and the order.
+
+        ORDER-FLOW IDEAS (when the user has an idea about the tape rather than a finished strategy): test it BEFORE writing any code.
+        1. list_data to see which instruments and how many days of ticks are stored.
+        2. event_study with the event that matches the idea (lean, stacked_imbalance, absorption, big_trade, delta_divergence). It
+           reports basis points before and after costs at 1, 5, 15 and 30 minutes, split into train and test, with the opposite trade, an
+           always-long baseline, splits by time of day, volatility and blocks of days, and a multiple-testing correction. Pass tests_tried
+           with how many events and horizons you have looked at so far on that data (the number grows every time you try another).
+        3. Judge ONLY on the test rows, after the correction: an idea has something only if the test net is positive, the opposite trade
+           does worse, it is positive in most blocks of days, and the corrected p-value is under 0.05 with enough events (at least 100).
+           If you tried several events, say how many; the best of five is not a finding. With fewer than about 15 days of ticks say the
+           sample is short.
+        4. Only if it survives, write it as a strategy (compile_strategy) and run the usual method above, because an event that works
+           on average still has to survive costs, stops and walk-forward as a real strategy. If it does not survive, say plainly that
+           nothing worked and what the numbers were; do not tune thresholds until something looks good.
+        fill_quality shows what the user's fills really cost (slippage against the tape plus commissions) and the round trip in basis points:
+        compare it with the costs a backtest assumed before trusting that backtest.
         """;
 
     /// <summary>Instructions for Claude to write custom indicators (in addition to strategies).</summary>

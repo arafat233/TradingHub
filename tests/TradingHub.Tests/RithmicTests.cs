@@ -135,6 +135,13 @@ public class RithmicTests
 
         public void OnDepth(Instrument instrument, DepthUpdate update) => Depth = update;
 
+        public readonly List<OrderEvent> Orders = new();
+
+        public void OnOrderEvents(Instrument instrument, IReadOnlyList<OrderEvent> events)
+        {
+            lock (Orders) Orders.AddRange(events);
+        }
+
         public void OnStatus(Instrument instrument, FeedStatus status, string? message)
         {
             Status = status;
@@ -176,6 +183,45 @@ public class RithmicTests
         await Until(() => sink.Depth?.Snapshot.BestAskSize == 13m);
         Assert.Equal(Es.ToTicks(5000m), sink.Depth!.Snapshot.BestBidTicks);
         Assert.Equal(2, sink.Depth.Snapshot.Bids.Length);
+    }
+
+    [Fact]
+    public async Task Depth_by_order_becomes_level3_order_events()
+    {
+        using var server = new FakeRithmicServer { LastTradeSsboe = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 2 };
+        using var feed = new RithmicFeed(Settings(server));
+        var sink = new Sink();
+        using var sub = feed.Subscribe(Es, sink);
+        await Until(() => sink.Message?.Contains("ESZ6") == true);
+        await Until(() => server.MboRequests.Count > 0);
+        Assert.Equal("ESZ6", server.MboRequests[0]);
+
+        await server.PushOrders("ESZ6", (1, true, 5000.0, 10, "111"), (1, false, 5000.25, 7, "222"));
+        await Until(() => sink.Orders.Count == 2);
+        await server.PushOrders("ESZ6", (2, true, 5000.0, 4, "111"), (3, false, 5000.25, 0, "222"));
+        await Until(() => sink.Orders.Count == 4);
+
+        OrderEvent[] e;
+        lock (sink.Orders) e = sink.Orders.ToArray();
+        Assert.Equal(new OrderEvent(e[0].Time, OrderEventKind.Add, 111, false, Es.ToTicks(5000m), 10), e[0]);
+        Assert.Equal((OrderEventKind.Add, 222L, true, 7m), (e[1].Kind, e[1].OrderId, e[1].Ask, e[1].Size));
+        Assert.Equal((OrderEventKind.Modify, 4m), (e[2].Kind, e[2].Size));
+        // the delete carries no size: it reports the one the order last had
+        Assert.Equal((OrderEventKind.Remove, 222L, true, 7m), (e[3].Kind, e[3].OrderId, e[3].Ask, e[3].Size));
+    }
+
+    [Fact]
+    public async Task Without_the_order_level_entitlement_the_book_keeps_working_and_no_error_shows()
+    {
+        using var server = new FakeRithmicServer { LastTradeSsboe = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 2, NoMbo = true };
+        using var feed = new RithmicFeed(Settings(server));
+        var sink = new Sink();
+        using var sub = feed.Subscribe(Es, sink);
+        await Until(() => server.MboRequests.Count > 0);
+        await server.PushBook("ESZ6", 7, new[] { (5000.0, 10) }, new[] { (5000.25, 12) });
+        await Until(() => sink.Depth?.Snapshot.Bids.Length == 1);
+        Assert.NotEqual(FeedStatus.Error, sink.Status);
+        Assert.Empty(sink.Orders);
     }
 
     [Fact]

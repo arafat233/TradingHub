@@ -48,6 +48,13 @@ public sealed class DepthHistory
         if (cut > 0) _items.RemoveRange(0, cut);
     }
 
+    /// <summary>Keeps less (or more) book history from now on, and drops what is older at once (the memory guard uses it).</summary>
+    public void SetMaxAge(TimeSpan age)
+    {
+        MaxAge = age;
+        if (_items.Count > 0) Trim(_items[^1].Time);
+    }
+
     /// <summary>Index of the last snapshot at or before <paramref name="time"/> (-1 if every one is later).</summary>
     public int IndexAtOrBefore(DateTime time)
     {

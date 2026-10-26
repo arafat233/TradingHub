@@ -70,6 +70,14 @@ internal static class Rp
     public const int BookAskSize = 154285;
     public const int BookClear = 1, BookNone = 2, BookBegin = 4, BookMiddle = 5;
 
+    // depth by order (Level 3, market by order): one entry per resting order. Needs the MBO entitlement; written from the public
+    // R|Protocol specification and not yet tried against a live server.
+    public const int RequestDepthByOrder = 117;
+    public const int ResponseDepthByOrder = 118;
+    public const int DepthByOrder = 160;
+    public const int DboUpdateType = 110121, DboTransaction = 153612, DboPrice = 154405, DboSize = 154406, DboOrderId = 149238;
+    public const int DboNew = 1, DboChange = 2, DboDelete = 3, DboBuy = 1;
+
     /// <summary>update_bits: last trade, best bid/offer and order book.</summary>
     public const int TradesQuotes = 1 | 2, TradesQuotesBook = 1 | 2 | 4;
 }

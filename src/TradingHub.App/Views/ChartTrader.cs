@@ -46,6 +46,8 @@ internal sealed class ChartTraderPanel : UserControl
     private readonly Border _collapsed = new();
     private readonly TextBlock _realWarning = new() { Text = "REAL ACCOUNT", Foreground = Brushes.OrangeRed, FontWeight = FontWeight.Bold, FontSize = 11, IsVisible = false };
     private readonly TextBlock _accountHint = new() { FontSize = 11, Height = 16, MaxLines = 1, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ui.Warn, IsVisible = false };
+    private readonly TextBlock _copilot = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Warn, IsVisible = false };
+    private DateTime _copilotAt;
     private string _settingsKey = "";
     private bool _syncing;
 
@@ -193,6 +195,7 @@ internal sealed class ChartTraderPanel : UserControl
         body.Children.Add(_account);
         body.Children.Add(_realWarning);
         body.Children.Add(_accountHint);
+        body.Children.Add(_copilot);
         body.Children.Add(Label("Cross trading"));
         body.Children.Add(_cross);
         body.Children.Add(_target);
@@ -426,6 +429,23 @@ internal sealed class ChartTraderPanel : UserControl
         _syncing = false;
     }
 
+    /// <summary>A quiet note from the account's own history (see PreTradeNote); it never blocks anything. Recomputed every 30 s.</summary>
+    private void UpdateCopilot()
+    {
+        if (DateTime.UtcNow - _copilotAt < TimeSpan.FromSeconds(30)) return;
+        _copilotAt = DateTime.UtcNow;
+        string? note = null;
+        try
+        {
+            var fills = _host.Services.Journal.FillsOf(_chart.AccountId);
+            if (fills.Count > 0) note = TradingHub.Data.PreTradeNote.Build(TradingHub.Trading.RoundTrips.Analyze(fills).Trades, DateTime.Now);
+        }
+        catch (Exception) { /* the note is optional */ }
+
+        _copilot.Text = note == null ? "" : "Your history: " + note;
+        _copilot.IsVisible = note != null;
+    }
+
     /// <summary>Called a few times per second: position, result and book prices.</summary>
     public void Refresh()
     {
@@ -442,6 +462,7 @@ internal sealed class ChartTraderPanel : UserControl
         _syncing = false;
         ToolTip.SetTip(_account, (_account.SelectedItem as ComboBoxItem)?.Content as string); // the whole name (the panel is narrow)
         _realWarning.IsVisible = accounts.FirstOrDefault(a => a.Id == _chart.AccountId)?.IsReal == true;
+        UpdateCopilot();
 
         // quantities and stop/target of the instrument (only if the instrument or the account changed)
         string key = inst.Key + "#" + _chart.AccountId;

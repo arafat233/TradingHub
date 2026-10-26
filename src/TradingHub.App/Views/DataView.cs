@@ -107,6 +107,7 @@ internal sealed class DataView : UserControl, IPage
         _symbols.SelectionChanged += (_, _) =>
         {
             _selected = (_symbols.SelectedItem as ListBoxItem)?.Tag as SymbolData;
+            _autoRecord.IsChecked = _selected != null && _svc.Settings.AutoRecord.Contains(AutoKey(_selected));
             FillDays();
         };
         _symbols.Background = Brushes.Transparent;
@@ -134,7 +135,15 @@ internal sealed class DataView : UserControl, IPage
         var replay = Ui.Button("Replay", MaterialIconKind.PlayCircleOutline, () => _ = ReplaySelectedAsync());
         ToolTip.SetTip(replay, "Open the selected day as a replay in Trading (you trade with the simulated account)");
         var delete = Ui.Button("Delete", MaterialIconKind.DeleteOutline, () => _ = DeleteSelectedAsync(), "ghost");
-        var actions = Ui.H(8, delete, replay);
+        var check = Ui.Button("Check quality", MaterialIconKind.ShieldCheckOutline, () => _ = CheckQualityAsync(), "ghost");
+        ToolTip.SetTip(check, "Scan the selected days (or all of them) for bad prints, duplicates and gaps, and repair them");
+        var coverage = Ui.Button("Check coverage", MaterialIconKind.CalendarCheckOutline, () => _ = CheckCoverageAsync(), "ghost");
+        ToolTip.SetTip(coverage, "Which days are missing from this instrument's stored history, and where there are gaps inside the stored days");
+        _autoRecord.Content = "Record in background";
+        _autoRecord.Padding = new Thickness(10, 4);
+        ToolTip.SetTip(_autoRecord, "Opens this instrument every time the app starts, with no chart, so its live ticks are always saved (no gaps while the app is open). Needs its connection to be enabled.");
+        _autoRecord.Click += (_, _) => _ = ToggleAutoRecordAsync();
+        var actions = Ui.H(8, _autoRecord, coverage, check, delete, replay);
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
         DockPanel.SetDock(actions, Dock.Right);
         head.Children.Add(actions);
@@ -657,6 +666,7 @@ internal sealed class DataView : UserControl, IPage
         _daysTitle.Text = $"{_selected.Symbol} · {FeedName(_selected.FeedId)}";
         _daysInfo.Text = $"{_selected.First:dd/MM/yyyy} → {_selected.Last:dd/MM/yyyy} · {Size(_selected.Bytes)}";
         long max = _selected.Days.Max(d => d.Bytes);
+        var thin = DataCoverage.ThinDays(_selected.Days.Select(d => (d.Day, d.Bytes)).ToList(), DateOnly.FromDateTime(DateTime.UtcNow));
         foreach (var d in _selected.Days.OrderByDescending(d => d.Day))
         {
             var date = new TextBlock { Text = d.Day.ToDateTime(TimeOnly.MinValue).ToString("ddd dd/MM/yyyy", CultureInfo.GetCultureInfo("en-US")), Width = 130, VerticalAlignment = VerticalAlignment.Center };
@@ -668,8 +678,47 @@ internal sealed class DataView : UserControl, IPage
             DockPanel.SetDock(size, Dock.Right);
             row.Children.Add(date);
             row.Children.Add(size);
+            if (thin.TryGetValue(d.Day, out double share))
+            {
+                // most of this day was not recorded (the app was closed): the bar tells it, this says why it is short
+                var warn = new TextBlock { Text = $"incomplete? {share:P0} of a usual day", Foreground = Ui.Warn, FontSize = 11, Width = 150, VerticalAlignment = VerticalAlignment.Center };
+                DockPanel.SetDock(warn, Dock.Right);
+                row.Children.Add(warn);
+            }
+
             row.Children.Add(bar);
             _days.Items.Add(new ListBoxItem { Content = row, Tag = d });
+        }
+    }
+
+    private readonly Avalonia.Controls.Primitives.ToggleButton _autoRecord = new();
+
+    private static string AutoKey(SymbolData s) => s.FeedId + "|" + s.Symbol;
+
+    private async Task ToggleAutoRecordAsync()
+    {
+        if (_selected == null)
+        {
+            _autoRecord.IsChecked = false;
+            _status("Choose an instrument first.");
+            return;
+        }
+
+        string key = AutoKey(_selected);
+        var list = _svc.Settings.AutoRecord;
+        if (_autoRecord.IsChecked == true)
+        {
+            if (!list.Contains(key)) list.Add(key);
+            _svc.Settings.Save();
+            var error = await _svc.OpenForRecordingAsync(key);
+            if (error != null) _status($"Saved, but not started now: {error}");
+            else _status($"{_selected.Symbol} is recording in the background (and will every time the app starts).");
+        }
+        else
+        {
+            list.Remove(key);
+            _svc.Settings.Save();
+            _status($"{_selected.Symbol} will not be opened at startup any more (it keeps recording until you close the app if a chart has it open).");
         }
     }
 
@@ -680,7 +729,7 @@ internal sealed class DataView : UserControl, IPage
         var days = SelectedDays();
         if (_selected == null || days.Count == 0)
         {
-            _status("Choose one or more days to delete (⌘ or ⇧ to select several).");
+            _status("Choose one or more days to delete (Ctrl or Shift to select several).");
             return;
         }
 
@@ -690,17 +739,8 @@ internal sealed class DataView : UserControl, IPage
         Refresh();
     }
 
-    private async Task ReplaySelectedAsync()
+    private async Task<Instrument?> ResolveInstrumentAsync()
     {
-        var days = SelectedDays();
-        if (_selected == null || days.Count == 0)
-        {
-            _status("Choose the day you want to replay.");
-            return;
-        }
-
-        var day = days.Min(d => d.Day);
-        var lastDay = days.Max(d => d.Day);
         Instrument? inst = null;
         if (_selected.FeedId == HistorySources.Databento) inst = MarketInfo.FuturesInstrument(_selected.FeedId, _selected.Symbol);
         else
@@ -718,6 +758,106 @@ internal sealed class DataView : UserControl, IPage
             if (inst == null && MarketInfo.IsFutures(_selected.FeedId)) inst = MarketInfo.FuturesInstrument(_selected.FeedId, _selected.Symbol);
         }
 
+        return inst;
+    }
+
+    private async Task CheckCoverageAsync()
+    {
+        if (_selected == null)
+        {
+            _status("Choose an instrument to check.");
+            return;
+        }
+
+        var ds = _selected;
+        _status($"Checking the coverage of {ds.Symbol}…");
+        var (missing, gapDays, gapMinutes) = await Task.Run(() =>
+        {
+            var missing = DataCoverage.MissingDays(ds.Days.Select(d => d.Day), MarketInfo.IsCrypto(ds.FeedId));
+            var inst = new Instrument { Symbol = ds.Symbol, FeedId = ds.FeedId, TickSize = HistorySources.StoredTickSize(AppPaths.Ticks, ds.FeedId, ds.Symbol) ?? 0.01m };
+            int gapDays = 0;
+            double minutes = 0;
+            foreach (var d in ds.Days)
+            {
+                var ticks = TickFile.Read(d.Path);
+                var gaps = DataQuality.Check(ticks, inst, d.Day).Gaps;
+                if (gaps.Count > 0) gapDays++;
+                minutes += gaps.Sum(g => (g.To - g.From).TotalMinutes);
+            }
+
+            return (missing, gapDays, minutes);
+        });
+        string days = missing.Count == 0 ? "no missing days" : $"{missing.Count} missing day(s): " + string.Join(", ", missing.Take(15).Select(d => d.ToString("dd/MM/yy"))) + (missing.Count > 15 ? "…" : "");
+        _status($"{ds.Symbol}: {ds.Days.Count} stored day(s) from {ds.Days.Min(d => d.Day).ToString("dd/MM/yy")} to {ds.Days.Max(d => d.Day).ToString("dd/MM/yy")} · {days} · {gapDays} day(s) with silences totalling {gapMinutes / 60:0.#} h (a silence can be a normal pause). Missing days: download them under Download history.");
+    }
+
+    private async Task CheckQualityAsync()
+    {
+        var days = SelectedDays();
+        if (days.Count == 0 && _selected != null) days = _selected.Days.ToList();
+        if (_selected == null || days.Count == 0)
+        {
+            _status("Choose an instrument (and optionally some days) to check.");
+            return;
+        }
+
+        var inst = await ResolveInstrumentAsync();
+        if (inst == null)
+        {
+            _status($"Could not fetch the details for {_selected.Symbol} (is the connection active?).");
+            return;
+        }
+
+        var (feed, symbol) = (_selected.FeedId, _selected.Symbol);
+        _status($"Checking {days.Count} day(s) of {symbol}…");
+        var reports = await Task.Run(() => days.Select(d => (d.Day, Report: DataQuality.Check(TickFile.Read(d.Path), inst, d.Day))).ToList());
+        var bad = reports.Where(r => r.Report.Fixable > 0).ToList();
+        int gaps = reports.Sum(r => r.Report.Gaps.Count), offGrid = reports.Sum(r => r.Report.OffGrid);
+        string summary = $"{days.Count} day(s) checked · {bad.Sum(r => r.Report.Fixable):N0} bad ticks in {bad.Count} day(s) · {gaps} long silence(s) (gaps are refilled from the feed on loading) · {offGrid:N0} off-grid prices";
+        if (bad.Count == 0)
+        {
+            _status("Data looks clean: " + summary);
+            return;
+        }
+
+        if (!await ConfirmDialog.ShowAsync(_main, "Repair data", summary + "\n\nRemove the bad ticks (spikes, duplicates, zero volume, out of order, wrong day)? The files are rewritten.", "Repair")) return;
+        using var gate = TickFile.TryLock(AppPaths.Ticks, feed, symbol);
+        if (gate == null)
+        {
+            _status($"{symbol} is being recorded right now: close its charts (or Trading Hub elsewhere) and try again.");
+            return;
+        }
+
+        int removed = await Task.Run(() =>
+        {
+            int n = 0;
+            foreach (var (day, _) in bad)
+            {
+                var path = TickFile.DayPath(AppPaths.Ticks, feed, symbol, day);
+                var all = TickFile.Read(path);
+                var clean = DataQuality.Clean(all, inst, day);
+                n += all.Count - clean.Count;
+                HistoricalData.WriteDay(AppPaths.Ticks, inst, day, clean, replace: true);
+            }
+
+            return n;
+        });
+        _status($"Repaired {symbol}: removed {removed:N0} bad ticks from {bad.Count} day(s)");
+        Refresh();
+    }
+
+    private async Task ReplaySelectedAsync()
+    {
+        var days = SelectedDays();
+        if (_selected == null || days.Count == 0)
+        {
+            _status("Choose the day you want to replay.");
+            return;
+        }
+
+        var day = days.Min(d => d.Day);
+        var lastDay = days.Max(d => d.Day);
+        var inst = await ResolveInstrumentAsync();
         if (inst == null)
         {
             _status($"Could not fetch the details for {_selected.Symbol} (is the connection active?).");

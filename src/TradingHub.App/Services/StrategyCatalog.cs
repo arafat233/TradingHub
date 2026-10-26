@@ -248,6 +248,46 @@ public static class StrategyTemplates
             }
             """),
 
+        new("Big-trade level", "Order flow: price's first return to the level of a big market order. It bounces off it (fade) or goes through it (follow).", "BigTradeLevel", true, c => $$"""
+            using TradingHub.Strategies;
+
+            [Strategy("__NAME__", Description = "It trades the first time price comes back to the level of a big market order.")]
+            public class {{c}} : Strategy
+            {
+                [Parameter("Minimum order size (contracts)"), Optimize(20, 200, 20)]
+                public int MinSize { get; set; } = 50;
+
+                [Parameter("Fade the level (off = follow the break)")]
+                public bool Fade { get; set; } = true;
+
+                private readonly HashSet<DateTime> _used = new();
+
+                public {{c}}()
+                {
+                    StopLossTicks = 40;
+                    TakeProfitTicks = 80;
+                }
+
+                // BigTradeLevels fills with every market order of at least this size and marks a level Touched when price returns to it
+                protected override void OnInit() => TrackBigTrades = MinSize;
+
+                protected override void OnBar(Bar bar)
+                {
+                    if (!IsFlat) return;
+                    foreach (var level in BigTradeLevels)
+                    {
+                        if (!level.Touched || !_used.Add(level.Time)) continue;
+
+                        // fading: a level where buyers were aggressive is expected to hold price up (long), a sell level to cap it (short)
+                        bool goLong = Fade ? level.Buy : !level.Buy;
+                        if (goLong) EnterLong();
+                        else EnterShort();
+                        return;
+                    }
+                }
+            }
+            """),
+
         new("VWAP reversion", "It trades the return to the session VWAP when price strays too far, inside a time window only.", "VwapReversion", true, c => $$"""
             using TradingHub.Strategies;
 

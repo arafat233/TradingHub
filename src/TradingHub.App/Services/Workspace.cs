@@ -264,6 +264,22 @@ internal static partial class Workspace
     {
         try
         {
+            var dto = Build(w);
+            // a chart that is still loading (or failed to open) has no model yet: do not replace the saved layout with an empty one
+            if (dto.Pages.Count == 0 && dto.Floating.Count == 0 && w.Tabs.Any(t => t.Model == null && !t.IsReplay)) return;
+            Directory.CreateDirectory(AppPaths.Root);
+            File.WriteAllText(AppPaths.WorkspaceFile, JsonConvert.SerializeObject(dto, Formatting.Indented, Settings));
+            foreach (var t in w.Tabs.Where(Saveable)) SaveDrawings(t);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write(ex);
+        }
+    }
+
+    private static WorkspaceDto Build(TradingView w)
+    {
+        {
             var dto = new WorkspaceDto();
             foreach (var page in w.Pages)
             {
@@ -287,13 +303,7 @@ internal static partial class Workspace
                 });
             }
 
-            Directory.CreateDirectory(AppPaths.Root);
-            File.WriteAllText(AppPaths.WorkspaceFile, JsonConvert.SerializeObject(dto, Formatting.Indented, Settings));
-            foreach (var t in w.Tabs.Where(Saveable)) SaveDrawings(t);
-        }
-        catch (Exception ex)
-        {
-            CrashLog.Write(ex);
+            return dto;
         }
     }
 
@@ -347,7 +357,11 @@ internal static partial class Workspace
     public static async Task<bool> RestoreAsync(TradingView w)
     {
         if (!File.Exists(AppPaths.WorkspaceFile)) return false;
-        var dto = JsonConvert.DeserializeObject<WorkspaceDto>(File.ReadAllText(AppPaths.WorkspaceFile), Settings);
+        return await ApplyAsync(w, JsonConvert.DeserializeObject<WorkspaceDto>(File.ReadAllText(AppPaths.WorkspaceFile), Settings));
+    }
+
+    private static async Task<bool> ApplyAsync(TradingView w, WorkspaceDto? dto)
+    {
         if (dto == null) return false;
         var pages = dto.Pages;
         int activePage = dto.ActivePage;
@@ -393,6 +407,39 @@ internal static partial class Workspace
         if (activate != null) w.Activate(activate);
         w.RefreshLinkButtons();
         return true;
+    }
+
+    // ===================================================================== named layouts
+
+    private static string LayoutsDir => Path.Combine(AppPaths.Root, "Layouts");
+
+    private static string LayoutFile(string name) =>
+        Path.Combine(LayoutsDir, string.Concat(name.Trim().Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)) + ".json");
+
+    public static IReadOnlyList<string> LayoutNames() =>
+        Directory.Exists(LayoutsDir) ? Directory.GetFiles(LayoutsDir, "*.json").Select(f => Path.GetFileNameWithoutExtension(f)).OrderBy(n => n).ToList() : new List<string>();
+
+    /// <summary>Stores everything open (pages, split layouts, floating windows, indicators, strategies) under a name.</summary>
+    public static void SaveLayout(TradingView w, string name)
+    {
+        Directory.CreateDirectory(LayoutsDir);
+        File.WriteAllText(LayoutFile(name), JsonConvert.SerializeObject(Build(w), Formatting.Indented, Settings));
+    }
+
+    public static void DeleteLayout(string name) => File.Delete(LayoutFile(name));
+
+    /// <summary>Replaces what is open with a stored layout. Returns false if it is missing or empty (nothing is closed then).</summary>
+    public static async Task<bool> LoadLayoutAsync(TradingView w, string name)
+    {
+        var file = LayoutFile(name);
+        if (!File.Exists(file)) return false;
+        var dto = JsonConvert.DeserializeObject<WorkspaceDto>(File.ReadAllText(file), Settings);
+        if (dto == null || (dto.Pages.All(p => p.Charts.Count == 0) && dto.Floating.Count == 0)) return false;
+        Save(w); // so the current set of charts is what comes back at the next start if the load fails half way
+        foreach (var t in w.Tabs.ToList()) w.CloseChart(t);
+        bool ok = await ApplyAsync(w, dto);
+        Save(w);
+        return ok;
     }
 
     // ===================================================================== drawings (per instrument)

@@ -33,6 +33,7 @@ internal sealed class ChartToolbar : UserControl
     private readonly ChoiceButton<int> _stepBox;
     private readonly ToggleButton _centerBtn = Ui.IconToggle(MaterialIconKind.CrosshairsGps, "Keep the price in the middle of the chart: the price scale follows the price up and down (off: it just fits the visible candles)");
     private readonly ChoiceButton<double> _historyBox;
+    private readonly TextBlock _stats = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, FontFamily = new Avalonia.Media.FontFamily(Services.Plat.Mono) };
     private ChartTab? _chart;
     private bool _syncing;
     private readonly LinkButton _link;
@@ -118,14 +119,16 @@ internal sealed class ChartToolbar : UserControl
 
         // it lays out on two lines if the window is narrow (it never cuts off buttons)
         var left = new WrapPanel { ItemSpacing = 8, LineSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        foreach (var c in new Control[] { _link, Picker, _historyBox, Ui.Divider(true), Ui.H(4, _periodsHost, _periodMenu), _layoutBox, _stepBox })
+        foreach (var c in new Control[] { _link, Picker, _historyBox, Ui.Divider(true), Ui.H(4, _periodsHost, _periodMenu), _layoutBox, _stepBox, _stats })
         {
             c.VerticalAlignment = VerticalAlignment.Center;
             left.Children.Add(c);
         }
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
+        right.Children.Add(BuildViewsButton());
         right.Children.Add(_styleBox);
+        right.Children.Add(BuildLevelsButton());
         right.Children.Add(Ui.Button("Indicators", MaterialIconKind.FunctionVariant, () => _host.OpenIndicators(_chart)));
         right.Children.Add(Ui.IconButton(MaterialIconKind.ViewColumnOutline, "Edit footprint (columns)", () => _host.OpenFootprintEditor(_chart)));
         right.Children.Add(Ui.IconButton(MaterialIconKind.Fire, "Liquidity heatmap: what rests in the order book at each price over time (needs a connection with depth)", () => _host.OpenHeatmap(_chart)));
@@ -144,6 +147,14 @@ internal sealed class ChartToolbar : UserControl
         Button? templates = null;
         templates = Ui.IconButton(MaterialIconKind.BookmarkMultipleOutline, "Chart templates: save how this chart looks (style, colors, indicators) and apply it to others", () => _host.ShowChartTemplates(_chart, templates!));
         right.Children.Add(templates);
+        right.Children.Add(Ui.IconButton(MaterialIconKind.CameraOutline, "Save the chart as a picture (it goes to Documents / Trading Hub / Screenshots)", () => _host.SaveChartPicture(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.NotebookEditOutline, "Journal note: write what you see and keep it with a picture of the chart", () => _ = _host.AddJournalNoteAsync(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.ArrowExpandVertical, "Big orders: large market orders as they print on every instrument that is open", () => _host.OpenBigOrders()));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.MessageQuestionOutline, "Ask Claude about this chart: it gets a picture of the chart, your levels and today's alerts", () => _ = _host.AskChartAsync(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.TextBoxSearchOutline, "Explain the profile: Claude explains the Auction map's profile in plain language (add the Auction map indicator first)", () => _ = _host.ExplainProfileAsync(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.ChartTimelineVariant, "Similar moments: earlier candles that looked like the latest one, and what price did after them", () => _host.ShowSimilarMoments(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.CalculatorVariantOutline, "Risk: how many contracts for the money you want to risk, from the entry and the stop", () => _ = _host.OpenRiskAsync(_chart)));
+        right.Children.Add(Ui.IconButton(MaterialIconKind.CalendarToday, "Today: alerts, today's big-trade levels per instrument, how the levels have behaved, and yesterday's recap", () => _host.OpenToday()));
         foreach (var c in rightControls) right.Children.Add(c);
 
         var bar = new DockPanel { Margin = new Thickness(12, 8), LastChildFill = true };
@@ -325,6 +336,117 @@ internal sealed class ChartToolbar : UserControl
         Sync();
     }
 
+    /// <summary>One menu to jump between the ways of looking at the market: each entry sets the chart style, opens the window or adds the indicators it needs.</summary>
+    private Button BuildViewsButton()
+    {
+        var menu = new MenuFlyout();
+        void Item(string text, Action act)
+        {
+            var mi = new MenuItem { Header = text };
+            mi.Click += (_, _) => act();
+            menu.Items.Add(mi);
+        }
+
+        Item("Chart (candles)", () => SetStyle(ChartStyle.Candles));
+        Item("Footprint", () => SetStyle(ChartStyle.Footprint));
+        Item("Heatmap", () => _host.OpenHeatmap(_chart));
+        Item("Whales (big orders and net)", () => EnsureIndicators(typeof(TradingHub.Indicators.Native.BigTrades), typeof(TradingHub.Indicators.Native.WhaleNet)));
+        Item("Volume profile", () => EnsureIndicators(typeof(TradingHub.Indicators.Native.SessionVolumeProfile)));
+        Item("Gamma and liquidation levels", () => EnsureIndicators(typeof(TradingHub.Indicators.Native.MarketLevelsLines)));
+        Item("Tape", () => _host.SetPanel("tape", true));
+        menu.Items.Add(new Separator());
+        Item("Guide: how to read these views", () => _host.OpenGuide());
+        var b = Ui.Button("Views", MaterialIconKind.ViewDashboardOutline, () => { });
+        b.Flyout = menu;
+        ToolTip.SetTip(b, "Jump between chart, footprint, heatmap, whales, volume profile, levels and tape. Adds the indicators a view needs if the chart lacks them.");
+        return b;
+    }
+
+    /// <summary>The Levels button: which families of levels the chart draws, whether they are tagged on the price axis, and how the Big Trades indicator decides what is a whale.</summary>
+    private Button BuildLevelsButton()
+    {
+        var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+        flyout.Opening += (_, _) => flyout.Content = LevelsPanel();
+        var b = Ui.Button("Levels", MaterialIconKind.ArrowSplitHorizontal, () => { });
+        b.Flyout = flyout;
+        ToolTip.SetTip(b, "Which levels the chart draws (options, liquidations, your own), tags on the price axis, and how whales are detected.");
+        return b;
+    }
+
+    private Control LevelsPanel()
+    {
+        var panel = Ui.V(6, Ui.H3("Levels on the chart"));
+        var m = _chart?.Model;
+        if (m == null) return panel;
+        panel.Margin = new Thickness(14);
+        panel.Width = 320;
+        var lines = m.Indicators.Select(s => s.Indicator).OfType<TradingHub.Indicators.Native.MarketLevelsLines>().FirstOrDefault();
+        if (lines == null)
+        {
+            panel.Children.Add(Ui.Button("Add the market levels", MaterialIconKind.Plus, () =>
+            {
+                EnsureIndicators(typeof(TradingHub.Indicators.Native.MarketLevelsLines));
+                _host.SetStatus("Market levels added: open the Levels button again to choose which ones.");
+            }));
+        }
+        else
+        {
+            CheckBox Box(string text, bool on, Action<bool> set)
+            {
+                var c = new CheckBox { Content = text, IsChecked = on, FontSize = 12 };
+                c.IsCheckedChanged += (_, _) =>
+                {
+                    set(c.IsChecked == true);
+                    m.Invalidate();
+                };
+                return c;
+            }
+
+            panel.Children.Add(Box("Options (walls, max pain, gamma flip)", lines.ShowOptions, v => lines.ShowOptions = v));
+            panel.Children.Add(Box("Liquidation clusters", lines.ShowLiquidations, v => lines.ShowLiquidations = v));
+            panel.Children.Add(Box("Estimated liquidation prices", lines.ShowLiqEstimate, v => lines.ShowLiqEstimate = v));
+            panel.Children.Add(Box("My levels", lines.ShowMine, v => lines.ShowMine = v));
+            panel.Children.Add(Box("Tags on the price axis", lines.AxisTagsOn, v => lines.AxisTagsOn = v));
+        }
+
+        var big = m.Indicators.Select(s => s.Indicator).OfType<TradingHub.Indicators.Native.BigTrades>().FirstOrDefault();
+        panel.Children.Add(Ui.H3("What is a whale"));
+        if (big == null)
+            panel.Children.Add(Ui.Button("Add Big Trades", MaterialIconKind.Plus, () => EnsureIndicators(typeof(TradingHub.Indicators.Native.BigTrades))));
+        else
+        {
+            var mode = new ComboBox { MinWidth = 220, FontSize = 12 };
+            foreach (var v in Enum.GetValues<WhaleMode>()) mode.Items.Add(v);
+            mode.SelectedItem = big.Detect;
+            mode.SelectionChanged += (_, _) =>
+            {
+                if (mode.SelectedItem is WhaleMode w) big.Detect = w;
+                m.Invalidate();
+            };
+            panel.Children.Add(mode);
+            panel.Children.Add(Ui.Faint("Aggressive: the order's whole size. Sweep: it ate several levels. Level: it hit a known level. BigPrint: one single print was big."));
+        }
+
+        foreach (var tb in panel.Children.OfType<TextBlock>()) tb.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
+        return panel;
+    }
+
+    /// <summary>Adds each indicator the chart does not have yet (a second copy would only double the drawing).</summary>
+    private void EnsureIndicators(params Type[] types)
+    {
+        var m = _chart?.Model;
+        if (m == null) return;
+        foreach (var t in types)
+        {
+            if (m.Indicators.Any(s => s.Indicator.GetType() == t)) continue;
+            var ind = (TradingHub.Indicators.Indicator)Activator.CreateInstance(t)!;
+            bool templated = TradingHub.App.Services.Workspace.ApplyDefaultIndicatorTemplate(_host.Services, ind);
+            m.AddIndicator(ind, applyDefaultColors: !templated);
+        }
+
+        m.Invalidate();
+    }
+
     internal void SetStyle(ChartStyle s)
     {
         if (_chart?.Model == null) return;
@@ -395,6 +517,15 @@ internal sealed class ChartToolbar : UserControl
         }
 
         Picker.SetQuote(data.LastPrice, change, data.Instrument);
+
+        // the session's headline numbers: the last minute's delta, the money delta since the UTC day began and the busiest price
+        var flow = data.Insights.Flow;
+        flow.Update(data.Trades);
+        if (flow.Bars.Count == 0) { _stats.Text = ""; return; }
+        decimal d1 = flow.Bars[^1].Delta, cvd = flow.SessionDeltaMoney;
+        string poc = flow.SessionPocTicks is { } p ? data.Instrument.FromTicks(p).ToString("0.####") : "–";
+        _stats.Text = $"Δ1m {(d1 >= 0 ? "+" : "")}{d1:0.##} · CVD {(cvd >= 0 ? "+" : "−")}{LiquidationClusters.Money(Math.Abs(cvd))} · POC {poc}";
+        _stats.Foreground = cvd >= 0 ? Ui.Up : Ui.Down;
     }
 }
 

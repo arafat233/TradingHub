@@ -145,6 +145,25 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
         return new Trade(0, DateTimeOffset.FromUnixTimeMilliseconds(time).UtcDateTime, price, qty, side == "Buy" ? TradeSide.Buy : TradeSide.Sell);
     }
 
+    /// <summary>
+    /// Bybit's public liquidation stream: {"T": ms, "s": symbol, "S": "Buy" | "Sell", "v": size, "p": bankruptcy price}. "S" is the side of the position
+    /// that was closed: Buy means a long was liquidated (the forced order was a sell).
+    /// </summary>
+    public static List<TradingHub.Data.Liquidation> ParseLiquidations(JsonElement data, Instrument instrument)
+    {
+        var list = new List<TradingHub.Data.Liquidation>();
+        foreach (var l in data.EnumerateArray())
+        {
+            if (!l.TryGetProperty("p", out var p) || !l.TryGetProperty("v", out var v) || !l.TryGetProperty("S", out var side)) continue;
+            decimal price = Dec(p), size = Dec(v);
+            if (price <= 0 || size <= 0) continue;
+            long ms = l.TryGetProperty("T", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetInt64() : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            list.Add(new TradingHub.Data.Liquidation(DateTime.UnixEpoch.AddMilliseconds(ms), instrument.ToTicks(price), size, side.GetString() == "Buy"));
+        }
+
+        return list;
+    }
+
     public IDisposable Subscribe(Instrument instrument, IMarketDataSink sink)
     {
         var sub = new LiveSubscription("Bybit", (st, msg) => sink.OnStatus(instrument, st, msg));
@@ -178,7 +197,7 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
                     await ws.ConnectAsync(new Uri(Ws), connectCts.Token).ConfigureAwait(false);
                 }
 
-                var sub = $"{{\"op\":\"subscribe\",\"args\":[\"publicTrade.{instrument.Symbol}\",\"orderbook.200.{instrument.Symbol}\"]}}";
+                var sub = $"{{\"op\":\"subscribe\",\"args\":[\"publicTrade.{instrument.Symbol}\",\"orderbook.200.{instrument.Symbol}\",\"allLiquidation.{instrument.Symbol}\"]}}";
                 await ws.SendAsync(Encoding.UTF8.GetBytes(sub), WebSocketMessageType.Text, true, conn.Token).ConfigureAwait(false);
 
                 // it backfills what was missed during the drop (Bybit gives the last 1000 trades)
@@ -255,6 +274,11 @@ public sealed class BybitFeed : IMarketDataFeed, ITickerStatsProvider, IKlineHis
                             lastTradeTime = trades[^1].Time;
                             sink.OnTrades(instrument, trades);
                         }
+                    }
+                    else if (topic.StartsWith("allLiquidation.", StringComparison.Ordinal))
+                    {
+                        var liqs = ParseLiquidations(root.GetProperty("data"), instrument);
+                        if (liqs.Count > 0) sink.OnLiquidations(instrument, liqs);
                     }
                     else if (topic.StartsWith("orderbook.", StringComparison.Ordinal))
                     {

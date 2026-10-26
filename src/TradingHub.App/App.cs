@@ -28,7 +28,16 @@ public sealed class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        TradingHub.Data.InsightsState.EdgeFolder = System.IO.Path.Combine(AppPaths.Root, "Insights"); // the edge meters: how the Insights panel's own calls turned out
         Services = new AppServices();
+        foreach (var kv in Services.Settings.MyLevels) TradingHub.Data.MyLevels.Publish(kv.Key, kv.Value); // the chart lines read them without the panel
+        Briefing.Start(Services);
+        LseBackfill.Start(Services);
+        BybitBackfill.Start(Services);
+        NightlyResearch.Start(Services);
+        TelegramBot.Start(Services);
+        Services.Journal.Changed += id => ProcessCoach.OnFill(Services, id);
+        _ = Task.Run(() => DailyRecap.AddCommentAsync(Services));
         TradingHub.App.Services.AppTheme.Apply(Services.Settings.ThemeMode);
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

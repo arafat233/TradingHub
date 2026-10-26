@@ -34,7 +34,7 @@ internal sealed partial class StrategiesView
         try
         {
             var html = ReportExport.Export(_report);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"\"{html}\"") { UseShellExecute = false });
+            TradingHub.App.Services.Plat.Open(html);
             _status($"Report exported: {System.IO.Path.GetFileName(html)} (in the browser: File → Export as PDF)");
         }
         catch (Exception ex)
@@ -105,9 +105,9 @@ internal sealed partial class StrategiesView
         };
         var export = Ui.Button("Export PDF / HTML", MaterialIconKind.FileExportOutline, ExportReport, "primary");
         ToolTip.SetTip(export, "It saves the report as HTML with the charts embedded and opens it in the browser (from there: File → Export as PDF or Print)");
-        var finder = Ui.Button("Show in Finder", MaterialIconKind.FolderOutline, () =>
+        var finder = Ui.Button(OperatingSystem.IsMacOS() ? "Show in Finder" : "Show in Explorer", MaterialIconKind.FolderOutline, () =>
         {
-            if (_report != null) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", $"-R \"{_report.Path}\"") { UseShellExecute = false });
+            if (_report != null) TradingHub.App.Services.Plat.Reveal(_report.Path);
         });
         var bar = Ui.H(8, finder, export);
         bar.HorizontalAlignment = HorizontalAlignment.Right;

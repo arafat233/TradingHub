@@ -17,20 +17,22 @@ public sealed class LseSettings
 }
 
 /// <summary>
-/// Stocks, ETFs, forex, crypto, commodities, indices and futures through London Strategic Edge's free plan: live ticks over a
-/// websocket (it can replay the last 24 hours of ticks before going live) and candles over REST from the vault (US stocks back to
-/// 2003, FX to 2009, crypto to 2017). Long history comes in as candles (like Binance's), the recent day as real ticks.
+/// Stocks, ETFs, forex, crypto, commodities and indices through London Strategic Edge's free plan: live ticks over a websocket and
+/// candles and tick history over the Data 3.0 REST API (download.londonstrategicedge.com/v3). The service removed the websocket's tick replay
+/// and the websocket sends no live futures (only the last stored tick, from the previous close). The free archive, though, holds them in its "futures"
+/// market (GOLD, SP500...) in real time, to the second: <see cref="Futures"/> maps the usual names to those series, and a futures chart gets its
+/// live ticks by polling the tick export every few seconds (<see cref="PollAsync"/>) instead of the websocket.
 /// What the service does not give: the aggressor side of a trade (it comes from the tick rule: the service's "bid" is just the trade price and
 /// its "ask" one step above it, so they say nothing about who hit whom), a trade id, the volume of some markets (forex: each tick counts as 1)
 /// and the order book.
-/// The protocol follows the service's public client (lse-data): auth with {"action":"auth","api_key"}, {"action":"subscribe","symbol","start"?}
-/// and ticks as {"type":"tick","symbol","price","bid","ask","volume","ts","replay"}; REST reads send the key in x-api-key.
+/// The protocol follows the service's public client (lse-data 3.0): auth with {"action":"auth","api_key"} (the answer lists the symbols),
+/// {"action":"subscribe","symbol"} and ticks as {"type":"tick","symbol","price","bid","ask","volume","ts"}; REST reads send the key in X-API-Key.
 /// </summary>
 public sealed class LseFeed : IMarketDataFeed, IKlineHistory
 {
     public const string FeedId = "lse";
     private const string DefaultWs = "wss://data-ws.londonstrategicedge.com";
-    private const string DefaultApi = "https://api.londonstrategicedge.com/vault";
+    private const string DefaultApi = "https://download.londonstrategicedge.com";
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private readonly LseSettings _s;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(90) };
@@ -45,7 +47,7 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
     public LseFeed(LseSettings settings)
     {
         _s = settings;
-        _http.DefaultRequestHeaders.Add("x-api-key", settings.ApiKey.Trim());
+        _http.DefaultRequestHeaders.Add("X-API-Key", settings.ApiKey.Trim());
         _http.DefaultRequestHeaders.Add("User-Agent", "trading-hub (+https://londonstrategicedge.com)");
     }
 
@@ -53,7 +55,7 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
     public string DisplayName => "London Strategic Edge";
     public bool SupportsHistory => true;
     public bool IsLive => true;
-    public string HistoryNote => "the last 24 h as ticks and older history as candles, free, from London Strategic Edge";
+    public string HistoryNote => "ticks and candles, free, from London Strategic Edge";
     public string CacheTag => "lse";
 
     private string Ws => (_s.WsUrl ?? DefaultWs).TrimEnd('/');
@@ -61,7 +63,10 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
 
     // ===================================================================== REST
 
-    private async Task<JsonDocument> GetAsync(string path, CancellationToken ct)
+    /// <summary>The service's "nothing stored for this window" answers: an empty slice of history, not a failure.</summary>
+    private sealed class NoDataException(string message) : Exception(message);
+
+    private async Task<(int Status, string Body)> SendAsync(string path, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_s.ApiKey)) throw new InvalidOperationException("The London Strategic Edge API key is missing (it is free at londonstrategicedge.com/data).");
         for (int attempt = 0; ; attempt++)
@@ -75,7 +80,7 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
             }
             catch (Exception ex) when (attempt < 2 && !ct.IsCancellationRequested && ex is HttpRequestException or IOException or TaskCanceledException)
             {
-                // the catalog is several MB: a dropped connection or a slow answer is worth another try
+                // a dropped connection or a slow answer is worth another try
                 await Task.Delay(TimeSpan.FromSeconds(2 + attempt * 3), ct).ConfigureAwait(false);
                 continue;
             }
@@ -89,28 +94,59 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
 
             if (!resp.IsSuccessStatusCode)
             {
-                string msg = body.TrimStart().StartsWith('<') ? resp.ReasonPhrase ?? "" : body;
+                string msg = body.TrimStart().StartsWith('<') ? resp.ReasonPhrase ?? "" : body, code = "";
                 try
                 {
                     using var err = JsonDocument.Parse(body);
-                    foreach (var k in new[] { "detail", "message", "error" })
-                        if (err.RootElement.ValueKind == JsonValueKind.Object && err.RootElement.TryGetProperty(k, out var m) && m.ValueKind == JsonValueKind.String) { msg = m.GetString() ?? body; break; }
+                    if (err.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        code = Str(err.RootElement, "code");
+                        foreach (var k in new[] { "message", "detail", "error" })
+                            if (err.RootElement.TryGetProperty(k, out var m) && m.ValueKind == JsonValueKind.String) { msg = m.GetString() ?? body; break; }
+                    }
                 }
                 catch (JsonException)
                 {
                 }
 
                 if (msg.Length > 300) msg = msg[..300];
+                if (code is "data-unavailable" or "date-not-trading" || msg.Contains("no stored data", StringComparison.OrdinalIgnoreCase)) throw new NoDataException(msg);
                 throw new HttpRequestException(resp.StatusCode switch
                 {
                     System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => "London Strategic Edge rejected the API key (or your plan does not include that data): " + msg,
-                    System.Net.HttpStatusCode.TooManyRequests => "London Strategic Edge says the hourly allowance is used up: " + msg,
+                    System.Net.HttpStatusCode.TooManyRequests => "London Strategic Edge says the allowance is used up: " + msg,
                     _ => $"London Strategic Edge replied {(int)resp.StatusCode}: {msg}",
                 });
             }
 
-            return JsonDocument.Parse(body);
+            return ((int)resp.StatusCode, body);
         }
+    }
+
+    private async Task<JsonDocument> GetAsync(string path, CancellationToken ct) => JsonDocument.Parse((await SendAsync(path, ct).ConfigureAwait(false)).Body);
+
+    /// <summary>A CSV export: streamed at once, or (a big one) prepared as a job that is polled and then fetched.</summary>
+    private async Task<string> ExportAsync(string path, CancellationToken ct)
+    {
+        var (status, body) = await SendAsync(path, ct).ConfigureAwait(false);
+        if (status != 202) return body;
+        string id;
+        using (var job = JsonDocument.Parse(body)) id = Str(job.RootElement, "job_id");
+        for (int i = 0; i < 150; i++)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+            using var info = await GetAsync("/v3/jobs/" + id, ct).ConfigureAwait(false);
+            switch (Str(info.RootElement, "status"))
+            {
+                case "ready":
+                    string url = Str(info.RootElement, "download_url");
+                    return (await SendAsync(url.Length > 0 ? url : $"/v3/jobs/{id}/file", ct).ConfigureAwait(false)).Body;
+                case "failed" or "expired":
+                    throw new HttpRequestException("London Strategic Edge export " + Str(info.RootElement, "status") + ": " + Str(info.RootElement, "error"));
+            }
+        }
+
+        throw new TimeoutException("London Strategic Edge is still preparing the export");
     }
 
     private static decimal Dec(JsonElement e, string name, decimal fallback = 0)
@@ -147,16 +183,54 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
         return DateTime.UtcNow;
     }
 
-    private static string Iso(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-ddTHH:mm:ss", Inv);
-
     // ===================================================================== instruments
 
-    /// <summary>The tradable classes (the vault also holds economic series, bond yields and option contracts).</summary>
-    private static bool Tradable(string dataset)
+    /// <summary>The futures the app knows by their usual names, and the series of the service's "futures" market that holds each one.</summary>
+    private static readonly (string Symbol, string Series, string Name, decimal Tick, decimal PointValue)[] Futures =
     {
-        var d = dataset.ToLowerInvariant();
-        return d.Length > 0 && !d.Contains("econom") && !d.Contains("bond") && !d.Contains("option") && !d.Contains("rate") && !d.Contains("yield") && !d.Contains("macro") && !d.Contains("credit") && !d.Contains("deriv");
+        // the tick sizes are the smallest price step seen in an hour of each series' real ticks; the values are the contracts' (US dollars per 1.0 of price)
+        ("ES.F", "SP500", "E-mini S&P 500", 0.25m, 50m),
+        ("NQ.F", "NASDAQ100", "E-mini Nasdaq-100", 0.25m, 20m),
+        ("YM.F", "DOW", "E-mini Dow", 1m, 5m),
+        ("RTY.F", "RUSSELL2000", "E-mini Russell 2000", 0.1m, 50m),
+        ("MES.F", "MICROSP500", "Micro E-mini S&P 500", 0.25m, 5m),
+        ("MNQ.F", "MICRONASDAQ100", "Micro E-mini Nasdaq-100", 0.25m, 2m),
+        ("GC.F", "GOLD", "Gold", 0.1m, 100m),
+        ("SI.F", "SILVER", "Silver", 0.005m, 5000m),
+        ("HG.F", "COPPER", "Copper", 0.0005m, 25000m),
+        ("PL.F", "PLATINUM", "Platinum", 0.1m, 50m),
+        ("CL.F", "CRUDEOIL", "Crude Oil (WTI)", 0.01m, 1000m),
+        ("NG.F", "NATGAS", "Natural Gas", 0.001m, 10000m),
+        ("HO.F", "HEATINGOIL", "Heating Oil", 0.0001m, 42000m),
+        ("RB.F", "GASOLINE", "RBOB Gasoline", 0.0001m, 42000m),
+        ("6E.F", "EURUSD", "Euro FX", 0.00005m, 125000m),
+        ("6B.F", "GBPUSD", "British Pound", 0.0001m, 62500m),
+        ("6J.F", "JPYUSD", "Japanese Yen", 0.0000005m, 12500000m),
+        ("6A.F", "AUDUSD", "Australian Dollar", 0.00005m, 100000m),
+        ("6C.F", "CADUSD", "Canadian Dollar", 0.00005m, 100000m),
+        ("6S.F", "CHFUSD", "Swiss Franc", 0.00005m, 125000m),
+        ("ZC.F", "CORN", "Corn", 0.25m, 50m),
+        ("ZS.F", "SOYBEANS", "Soybeans", 0.25m, 50m),
+        ("ZW.F", "WHEAT", "Wheat", 0.25m, 50m),
+        ("LE.F", "LIVECATTLE", "Live Cattle", 0.025m, 400m),
+        ("HE.F", "LEANHOGS", "Lean Hogs", 0.025m, 400m),
+        ("ZN.F", "US10Y", "10-Year T-Note", 0.015625m, 1000m),
+        ("ZB.F", "US30Y", "30-Year T-Bond", 0.03125m, 1000m),
+    };
+
+    /// <summary>The usual futures names this feed knows (ES.F, CL.F...).</summary>
+    public static IReadOnlyList<string> FuturesSymbols => Futures.Select(f => f.Symbol).ToList();
+
+    /// <summary>A futures instrument built from the table, with no network (null for a name that is not in it).</summary>
+    public static Instrument? FuturesInstrument(string symbol)
+    {
+        var f = Array.Find(Futures, x => string.Equals(x.Symbol, symbol.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (f.Symbol == null) return null;
+        return new Instrument { Symbol = f.Symbol, FeedId = FeedId, Exchange = "futures", TickSize = f.Tick, VolumeStep = 1m, PointValue = f.PointValue, QuoteAsset = "USD", Description = f.Name + " Futures" };
     }
+
+    /// <summary>The tradable classes (the symbol list also carries a few uncategorised bond yields).</summary>
+    private static bool Tradable(string category) => category is "stocks" or "etfs" or "forex" or "crypto" or "commodities" or "indices";
 
     /// <summary>
     /// The catalog has no tick size, so it is a sensible one for the class (forex 5 decimals, JPY pairs 3, crypto 4, the rest 2) and the
@@ -165,12 +239,10 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
     public static (decimal Tick, decimal PointValue, decimal VolumeStep) SpecOf(string dataset, string symbol)
     {
         var d = dataset.ToLowerInvariant();
+        foreach (var f in Futures)
+            if (f.Symbol == symbol) return (f.Tick, f.PointValue, 1m);
         switch (symbol)
         {
-            case "ES.F": return (0.25m, 50m, 1m);
-            case "NQ.F": return (0.25m, 20m, 1m);
-            case "GC.F": return (0.1m, 100m, 1m);
-            case "SI.F": return (0.005m, 5000m, 1m);
             case "FDAX": case "FDAX.F": return (0.5m, 25m, 1m);
             case "FESX": case "FESX.F": return (1m, 10m, 1m);
             case "FGBL": case "FGBL.F": case "FGBM": case "FGBM.F": return (0.01m, 1000m, 1m);
@@ -183,22 +255,84 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
 
     public static decimal TickSizeOf(string dataset, string symbol) => SpecOf(dataset, symbol).Tick;
 
+    /// <summary>The live symbols: the service lists them in its answer to the websocket auth (one short connection, through the shared slot).</summary>
     private async Task<List<(string Dataset, string Symbol, string Name, DateTime? First, bool Live)>> CatalogAsync(CancellationToken ct)
     {
         if (_catalog != null) return _catalog;
-        using var doc = await GetAsync("/catalog", ct).ConfigureAwait(false);
-        var list = new List<(string, string, string, DateTime?, bool)>();
-        foreach (var r in doc.RootElement.EnumerateArray())
+        if (string.IsNullOrWhiteSpace(_s.ApiKey)) throw new InvalidOperationException("The London Strategic Edge API key is missing (it is free at londonstrategicedge.com/data).");
+        Interlocked.Increment(ref _historyWaiting);
+        try
         {
-            string symbol = Str(r, "symbol"), dataset = Str(r, "dataset");
-            if (symbol.Length == 0 || !Tradable(dataset)) continue;
-            string first = Str(r, "first_tick");
-            // "live": 1 = the service streams it, 0 = history only
-            bool live = !(r.TryGetProperty("live", out var lv) && lv.ValueKind == JsonValueKind.Number && lv.GetInt32() == 0);
-            list.Add((dataset, symbol, Str(r, "name"), first.Length > 0 && DateTime.TryParse(first, Inv, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var f) ? f : null, live));
+            lock (_lives) foreach (var l in _lives.ToList()) l.Reconnect(); // the live ones step aside and come back on their own
+            await _slot.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                for (int attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        return _catalog = await ReadSymbolsAsync(ct).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex) when (attempt < 4 && IsConcurrencyError(ex.Message))
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2.5), ct).ConfigureAwait(false); // the server may still be noticing a closed connection
+                    }
+                }
+            }
+            finally
+            {
+                _slot.Release();
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _historyWaiting);
+        }
+    }
+
+    private async Task<List<(string Dataset, string Symbol, string Name, DateTime? First, bool Live)>> ReadSymbolsAsync(CancellationToken ct)
+    {
+        using var ws = new ClientWebSocket();
+        using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        idle.CancelAfter(TimeSpan.FromSeconds(60));
+        await ws.ConnectAsync(new Uri(Ws), idle.Token).ConfigureAwait(false);
+        var buf = new byte[1 << 16];
+        var ms = new MemoryStream();
+        await AuthenticateAsync(ws, ms, buf, idle.Token).ConfigureAwait(false);
+        var list = new List<(string, string, string, DateTime?, bool)>();
+        while (true)
+        {
+            var text = await ReceiveAsync(ws, ms, buf, idle.Token).ConfigureAwait(false) ?? throw new InvalidOperationException("London Strategic Edge closed the connection");
+            using var doc = JsonDocument.Parse(text);
+            var m = doc.RootElement;
+            string type = Str(m, "type");
+            if (type == "error") throw new InvalidOperationException("London Strategic Edge: " + (Str(m, "message").Length > 0 ? Str(m, "message") : Str(m, "code")));
+            if (type != "authenticated") continue;
+            if (m.TryGetProperty("symbols", out var syms) && syms.ValueKind == JsonValueKind.Array)
+                foreach (var r in syms.EnumerateArray())
+                {
+                    string symbol = Str(r, "symbol"), category = Str(r, "category").ToLowerInvariant();
+                    if (symbol.Length > 0 && Tradable(category)) list.Add((category, symbol, Str(r, "name"), null, true));
+                }
+
+            break;
         }
 
-        return _catalog = list;
+        try
+        {
+            if (ws.State == WebSocketState.Open)
+            {
+                using var closing = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", closing.Token).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is WebSocketException or OperationCanceledException)
+        {
+        }
+
+        foreach (var f in Futures)
+            if (!list.Any(l => l.Item2 == f.Symbol)) list.Add(("futures", f.Symbol, f.Name + " Futures", null, true));
+        return list;
     }
 
     public async Task<IReadOnlyList<Instrument>> GetInstrumentsAsync(CancellationToken ct)
@@ -256,131 +390,152 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
     private static bool IsConcurrencyError(string message) => message.Contains("concurrent", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Last 24 hours of ticks. The one websocket the free plan allows is shared: the live subscriptions drop their connection (they reconnect
-    /// on their own when this is done, and the replay covers what they missed), the replay uses the slot, and a "concurrent websocket" refusal,
-    /// which can come for a moment after another connection closed, is retried.
+    /// Tick history from the archive's tick export, an hour a request (a busy future is about 15 000 trades an hour). The websocket's own
+    /// replay was removed (REPLAY_REMOVED). The export's "kind" says trade or quote: only trades are kept, and the side comes from the tick rule.
     /// </summary>
     public async Task LoadTradesAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc, long? fromId,
         Func<IReadOnlyList<Trade>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
     {
-        Interlocked.Increment(ref _historyWaiting);
-        try
-        {
-            bool dropped;
-            lock (_lives)
-            {
-                dropped = _lives.Count > 0;
-                foreach (var l in _lives.ToList()) l.Reconnect();
-            }
-
-            await _slot.WaitAsync(ct).ConfigureAwait(false);
-            try
-            {
-                // the server frees the slot when it notices the dropped connection, which can take a moment (a refusal is retried below anyway)
-                if (dropped) await Task.Delay(400, ct).ConfigureAwait(false);
-                for (int attempt = 0; ; attempt++)
-                {
-                    try
-                    {
-                        await ReplayAsync(instrument, fromUtc, toUtc, onBatch, progress, ct).ConfigureAwait(false);
-                        return;
-                    }
-                    catch (InvalidOperationException ex) when (attempt < 4 && IsConcurrencyError(ex.Message))
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(2.5), ct).ConfigureAwait(false);
-                    }
-                }
-            }
-            finally
-            {
-                _slot.Release();
-            }
-        }
-        finally
-        {
-            Interlocked.Decrement(ref _historyWaiting);
-        }
-    }
-
-    private async Task ReplayAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc,
-        Func<IReadOnlyList<Trade>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
-    {
-        var floor = DateTime.UtcNow.AddHours(-24);
-        if (fromUtc < floor) fromUtc = floor;
         if (toUtc > DateTime.UtcNow) toUtc = DateTime.UtcNow;
-        if (toUtc <= fromUtc) return;
-        if (string.IsNullOrWhiteSpace(_s.ApiKey)) throw new InvalidOperationException("The London Strategic Edge API key is missing.");
-        using var ws = new ClientWebSocket();
-        using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        idle.CancelAfter(TimeSpan.FromSeconds(30));
-        await ws.ConnectAsync(new Uri(Ws), idle.Token).ConfigureAwait(false);
-        var buf = new byte[1 << 16];
-        var ms = new MemoryStream();
+        if (toUtc <= fromUtc) { progress?.Report(1); return; }
+        var (market, symbol) = await ResolveAsync(instrument, ct).ConfigureAwait(false);
         long lastId = 0;
         decimal last = 0;
         var side = TradeSide.Buy;
-        var batch = new List<Trade>();
         double total = Math.Max(1, (toUtc - fromUtc).TotalSeconds);
-        bool stop = false;
-        await AuthenticateAsync(ws, ms, buf, idle.Token).ConfigureAwait(false);
-        while (!stop && ws.State == WebSocketState.Open)
+        for (var a = fromUtc; a < toUtc && !ct.IsCancellationRequested; a += TimeSpan.FromHours(1))
         {
-            var text = await ReceiveAsync(ws, ms, buf, idle.Token).ConfigureAwait(false);
-            if (text == null) break;
-            idle.CancelAfter(TimeSpan.FromSeconds(30));
-            using var doc = JsonDocument.Parse(text);
-            var m = doc.RootElement;
-            switch (Str(m, "type"))
+            var b = a.AddHours(1) < toUtc ? a.AddHours(1) : toUtc;
+            string csv;
+            try
             {
-                case "authenticated":
-                    await SendAsync(ws, new { action = "subscribe", symbol = instrument.Symbol, start = Iso(fromUtc) }, idle.Token).ConfigureAwait(false);
-                    break;
-                case "error":
-                    throw new InvalidOperationException("London Strategic Edge: " + (Str(m, "message").Length > 0 ? Str(m, "message") : Str(m, "code")));
-                case "replay_complete":
-                    stop = true;
-                    break;
-                case "tick":
-                {
-                    // a tick that is not a replay means the history is over and the live stream started
-                    if (!(m.TryGetProperty("replay", out var rp) && rp.ValueKind == JsonValueKind.True)) { stop = true; break; }
-                    var time = TimeOf(m); // no symbol check: it is the only subscription, and the server may use an alias (ES.F ticks say SP500.F)
-                    if (time > toUtc) { stop = true; break; }
-                    if (time < fromUtc) break;
-                    decimal price = instrument.RoundPrice(Dec(m, "price")), vol = Dec(m, "volume");
-                    if (price <= 0) break;
-                    batch.Add(new Trade(HistoryBuilder.TimeId(time, ref lastId), time, price, vol > 0 ? vol : 1, HistoryBuilder.TickRule(price, ref last, ref side)));
-                    if (batch.Count >= 5000)
-                    {
-                        if (!onBatch(batch)) return;
-                        progress?.Report(Math.Min(1, (batch[^1].Time - fromUtc).TotalSeconds / total));
-                        batch = new List<Trade>();
-                    }
-
-                    break;
-                }
+                csv = await ExportAsync($"/v3/export?market={market}&symbol={Uri.EscapeDataString(symbol)}&timeframe=tick&from={Q(a)}&to={Q(b)}&format=csv&data=candles", ct).ConfigureAwait(false);
             }
+            catch (NoDataException)
+            {
+                progress?.Report(Math.Min(1, (b - fromUtc).TotalSeconds / total));
+                continue; // nothing stored for this hour (market closed, or ticks not kept for this instrument)
+            }
+
+            var batch = new List<Trade>();
+            foreach (var (time, price, size) in ParseTicks(csv, instrument))
+                batch.Add(new Trade(HistoryBuilder.TimeId(time, ref lastId), time, price, size, HistoryBuilder.TickRule(price, ref last, ref side)));
+
+            if (batch.Count > 0 && !onBatch(batch)) return;
+            progress?.Report(Math.Min(1, (b - fromUtc).TotalSeconds / total));
         }
 
-        if (batch.Count > 0 && !onBatch(batch)) return;
         progress?.Report(1);
+    }
+
+    /// <summary>The trades of a tick export: "time","price","size","kind" with UTC times that have 9 decimals; quotes are skipped, a missing size counts as 1.</summary>
+    internal static List<(DateTime Time, decimal Price, decimal Size)> ParseTicks(string csv, Instrument instrument)
+    {
+        var list = new List<(DateTime, decimal, decimal)>();
+        using var reader = new StringReader(csv);
+        var header = reader.ReadLine()?.Split(',').Select(h => h.Trim().Trim('"').ToLowerInvariant()).ToList();
+        int it = header?.IndexOf("time") ?? -1, ip = header?.IndexOf("price") ?? -1, iz = header?.IndexOf("size") ?? -1, ik = header?.IndexOf("kind") ?? -1;
+        if (it < 0 || ip < 0) return list;
+        for (string? line = reader.ReadLine(); line != null; line = reader.ReadLine())
+        {
+            var f = line.Split(',');
+            if (f.Length <= ip || (ik >= 0 && f.Length > ik && f[ik].Trim().Trim('"') != "trade")) continue;
+            if (!DateTime.TryParse(f[it].Trim().Trim('"'), Inv, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var time)) continue;
+            decimal price = decimal.TryParse(f[ip].Trim().Trim('"'), NumberStyles.Float, Inv, out var pr) ? instrument.RoundPrice(pr) : 0;
+            decimal size = iz >= 0 && f.Length > iz && decimal.TryParse(f[iz].Trim().Trim('"'), NumberStyles.Float, Inv, out var sz) ? sz : 0;
+            if (price > 0) list.Add((time, price, size > 0 ? size : 1));
+        }
+
+        return list;
+    }
+
+    private int _pollers;
+
+    /// <summary>
+    /// Live ticks for a future: the websocket has none, but the tick export is current to the second, so it is asked every few seconds for what came
+    /// after the last trade seen (trades that share the last timestamp are not counted twice). The free plan allows 60 calls a minute: each chart
+    /// polls every 2.5 s, and more charts slow every poll down (1.4 s per chart) so together they stay inside it.
+    /// </summary>
+    private async Task PollAsync(Instrument instrument, IMarketDataSink sink, LiveSubscription live)
+    {
+        var ct = live.Token;
+        Interlocked.Increment(ref _pollers);
         try
         {
-            // a full close (not just our half): the server only frees the one connection the plan allows when it has seen it end
-            if (ws.State == WebSocketState.Open)
+            live.SetChannel("data", FeedStatus.Connecting, "Connecting to London Strategic Edge…");
+            var (market, symbol) = await ResolveAsync(instrument, ct).ConfigureAwait(false);
+            var last = DateTime.UtcNow.AddSeconds(-20);
+            int seenAtLast = 0, failures = 0;
+            long lastId = 0;
+            decimal lastPrice = 0;
+            var side = TradeSide.Buy;
+            while (!ct.IsCancellationRequested)
             {
-                using var closing = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", closing.Token).ConfigureAwait(false);
+                try
+                {
+                    var from = new DateTime(last.Ticks - last.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc);
+                    string csv = await ExportAsync($"/v3/export?market={market}&symbol={Uri.EscapeDataString(symbol)}&timeframe=tick&from={Q(from)}&to={Q(DateTime.UtcNow.AddSeconds(5))}&format=csv&data=candles", ct).ConfigureAwait(false);
+                    var fresh = new List<Trade>();
+                    int atLast = 0;
+                    foreach (var (time, price, size) in ParseTicks(csv, instrument))
+                    {
+                        if (time < last) continue;
+                        if (time == last && ++atLast <= seenAtLast) continue; // already delivered
+                        fresh.Add(new Trade(HistoryBuilder.TimeId(time, ref lastId), time, price, size, HistoryBuilder.TickRule(price, ref lastPrice, ref side)));
+                    }
+
+                    if (fresh.Count > 0)
+                    {
+                        var newest = fresh[^1].Time;
+                        seenAtLast = newest == last ? seenAtLast + fresh.Count : fresh.Count(t => t.Time == newest);
+                        last = newest;
+                        sink.OnTrades(instrument, fresh);
+                    }
+
+                    live.SetChannel("data", FeedStatus.Connected, null);
+                    failures = 0;
+                }
+                catch (NoDataException)
+                {
+                    live.SetChannel("data", FeedStatus.Connected, null); // a quiet moment: nothing traded yet
+                    failures = 0;
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    if (ex is HttpRequestException { Message: var m } && m.Contains("rejected the API key"))
+                    {
+                        live.SetChannel("data", FeedStatus.Error, m); // a bad key never gets better by retrying
+                        return;
+                    }
+
+                    failures++;
+                    live.SetChannel("data", FeedStatus.Reconnecting, $"London Strategic Edge: {ex.Message} (retrying)");
+                }
+
+                double wait = Math.Max(2.5, Volatile.Read(ref _pollers) * 1.4) * (failures > 0 ? Math.Min(6, failures + 1) : 1);
+                await Task.Delay(TimeSpan.FromSeconds(wait), ct).ContinueWith(_ => { }).ConfigureAwait(false);
             }
         }
-        catch (Exception ex) when (ex is WebSocketException or OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            live.SetChannel("data", FeedStatus.Error, ex.Message);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _pollers);
+            live.SetChannel("data", FeedStatus.Disconnected, null);
         }
     }
 
     public IDisposable Subscribe(Instrument instrument, IMarketDataSink sink)
     {
         var sub = new LiveSubscription("London Strategic Edge", (st, msg) => sink.OnStatus(instrument, st, msg));
+        if (instrument.Exchange == "futures")
+        {
+            _ = Task.Run(() => PollAsync(instrument, sink, sub)); // no websocket for futures: see PollAsync
+            return sub;
+        }
+
         lock (_lives) _lives.Add(sub);
         _ = Task.Run(() => RunAsync(instrument, sink, sub));
         return new LseSubscription(this, sub);
@@ -535,63 +690,114 @@ public sealed class LseFeed : IMarketDataFeed, IKlineHistory
 
     // ===================================================================== candles (long history)
 
-    public async Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct)
+    /// <summary>The service does not say how far back an instrument goes.</summary>
+    public Task<DateTime?> FirstAvailableAsync(Instrument instrument, CancellationToken ct) => Task.FromResult<DateTime?>(null);
+
+    private readonly Dictionary<string, (string Market, string Symbol)> _resolved = new();
+
+    /// <summary>
+    /// The websocket and the REST archive spell some symbols differently (BTC/USD streams, BTCUSDT is stored; EUR/USD streams, EUR_USD is stored):
+    /// the archive is asked for the likely spelling in the class's market, then for the symbol anywhere (never the paid or option markets).
+    /// </summary>
+    private async Task<(string Market, string Symbol)> ResolveAsync(Instrument instrument, CancellationToken ct)
     {
-        var cat = await CatalogAsync(ct).ConfigureAwait(false);
-        return cat.FirstOrDefault(c => c.Symbol == instrument.Symbol && (instrument.Exchange.Length == 0 || c.Dataset == instrument.Exchange)).First;
+        string sym = instrument.Symbol;
+        lock (_resolved) if (_resolved.TryGetValue(sym, out var known)) return known;
+        var tries = new List<(string? Market, string Symbol)>();
+        switch (instrument.Exchange.ToLowerInvariant())
+        {
+            case "forex": tries.Add(("forex", sym.Replace('/', '_'))); break;
+            case "crypto": tries.Add(("crypto", sym.Split('/')[0] + "USDT")); break;
+            case "commodities": tries.Add(("commodities", sym)); break;
+            case "indices": tries.Add(("indices", sym)); break;
+            case "futures": tries.Add(("futures", Array.Find(Futures, f => f.Symbol == sym).Series ?? sym)); break;
+            default: tries.Add(("us_stocks", sym)); break;
+        }
+
+        tries.Add((null, sym));
+        foreach (var (market, candidate) in tries)
+        {
+            using var doc = await GetAsync($"/v3/pairs?{(market != null ? "market=" + market + "&" : "")}symbol={Uri.EscapeDataString(candidate)}&limit=20", ct).ConfigureAwait(false);
+            if (!doc.RootElement.TryGetProperty("pairs", out var pairs) || pairs.ValueKind != JsonValueKind.Array) continue;
+            foreach (var p in pairs.EnumerateArray())
+            {
+                string folder = Str(p, "folder");
+                if (folder.Length == 0 || folder is "cme" or "nasdaq" or "us_options" || !string.Equals(Str(p, "symbol"), candidate, StringComparison.OrdinalIgnoreCase)) continue;
+                lock (_resolved) return _resolved[sym] = (folder, Str(p, "symbol"));
+            }
+        }
+
+        throw new InvalidOperationException($"London Strategic Edge has no stored history for {sym}.");
     }
+
+    private static string Q(DateTime utc) => Uri.EscapeDataString(DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-dd HH:mm:ss", Inv));
 
     public async Task LoadKlinesAsync(Instrument instrument, DateTime fromUtc, DateTime toUtc, int minutes, decimal endPrice,
         Func<IReadOnlyList<Kline>, bool> onBatch, IProgress<double>? progress, CancellationToken ct)
     {
         if (toUtc <= fromUtc) return;
+        var (market, symbol) = await ResolveAsync(instrument, ct).ConfigureAwait(false);
         int m = minutes >= 15 ? 15 : minutes >= 5 ? 5 : 1;
-        var start = fromUtc;
+        // about 20 000 rows a request: small enough for the service to stream the answer instead of preparing a job (60 calls a minute allowed)
+        var step = TimeSpan.FromDays(m == 1 ? 14 : m == 5 ? 70 : 200);
         double total = Math.Max(1, (toUtc - fromUtc).TotalSeconds);
-        while (start < toUtc && !ct.IsCancellationRequested)
+        for (var a = fromUtc; a < toUtc && !ct.IsCancellationRequested; a += step)
         {
-            var path = $"/candles?symbol={Uri.EscapeDataString(instrument.Symbol)}&timeframe={m}m&order=asc&limit=5000&start={Uri.EscapeDataString(Iso(start))}&end={Uri.EscapeDataString(Iso(toUtc))}"
-                       + (instrument.Exchange.Length > 0 ? "&dataset=" + Uri.EscapeDataString(instrument.Exchange) : "");
-            using var doc = await GetAsync(path, ct).ConfigureAwait(false);
-            var batch = new List<Kline>();
-            DateTime lastTime = start;
-            int rows = 0;
-            foreach (var b in doc.RootElement.EnumerateArray())
+            var b = a + step < toUtc ? a + step : toUtc;
+            // adjusted=0: prices as they traded, like the live ticks (the default would restate old stock prices for splits)
+            string csv;
+            try
             {
-                rows++;
-                string ts = Str(b, "ts").Length > 0 ? Str(b, "ts") : Str(b, "timestamp");
-                if (ts.Length == 0) continue;
-                var time = Time(ts);
-                lastTime = time;
-                decimal o = Dec(b, "open"), h = Dec(b, "high"), l = Dec(b, "low"), c = Dec(b, "close");
-                if (c <= 0) continue;
-                batch.Add(new Kline(new DateTimeOffset(time).ToUnixTimeMilliseconds(), o, h, l, c, Math.Max(1, Dec(b, "volume")), 0, false));
+                csv = await ExportAsync($"/v3/export?market={market}&symbol={Uri.EscapeDataString(symbol)}&timeframe={m}m&from={Q(a)}&to={Q(b)}&format=csv&adjusted=0&data=candles", ct).ConfigureAwait(false);
+            }
+            catch (NoDataException)
+            {
+                progress?.Report(Math.Min(1, (b - fromUtc).TotalSeconds / total));
+                continue; // nothing stored for this window (weekend, holiday, before the listing)
             }
 
-            if (batch.Count > 0)
-            {
-                if (!onBatch(batch)) return;
-                progress?.Report(Math.Min(1, (lastTime - fromUtc).TotalSeconds / total));
-            }
-
-            if (rows < 5000 || lastTime <= start) break; // the last page, or no progress (it would loop forever)
-            start = lastTime.AddSeconds(1);
+            var batch = ParseCandles(csv);
+            if (batch.Count > 0 && !onBatch(batch)) return;
+            progress?.Report(Math.Min(1, (b - fromUtc).TotalSeconds / total));
         }
 
         progress?.Report(1);
     }
 
-    /// <summary>Tests the key against the allowance endpoint (it uses none of it up) and says what is left of the plan in plain words.</summary>
+    /// <summary>"time","open","high","low","close","volume","trades" with UTC times as "yyyy-MM-dd HH:mm:ss".</summary>
+    internal static List<Kline> ParseCandles(string csv)
+    {
+        var batch = new List<Kline>();
+        using var reader = new StringReader(csv);
+        var header = reader.ReadLine()?.Split(',').Select(h => h.Trim().Trim('"').ToLowerInvariant()).ToList();
+        if (header == null) return batch;
+        int it = header.IndexOf("time"), io = header.IndexOf("open"), ih = header.IndexOf("high"), il = header.IndexOf("low"), ic = header.IndexOf("close"), iv = header.IndexOf("volume");
+        if (it < 0 || ic < 0) return batch;
+        decimal Num(string[] f, int i) => i >= 0 && i < f.Length && decimal.TryParse(f[i].Trim().Trim('"'), NumberStyles.Float, Inv, out var d) ? d : 0;
+        for (string? line = reader.ReadLine(); line != null; line = reader.ReadLine())
+        {
+            var f = line.Split(',');
+            if (f.Length <= ic || !DateTime.TryParse(f[it].Trim().Trim('"'), Inv, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var time)) continue;
+            decimal c = Num(f, ic);
+            if (c <= 0) continue;
+            batch.Add(new Kline(new DateTimeOffset(time).ToUnixTimeMilliseconds(), Num(f, io), Num(f, ih), Num(f, il), c, Math.Max(1, Num(f, iv)), 0, false));
+        }
+
+        return batch;
+    }
+
+    /// <summary>Tests the key against the usage endpoint (it uses none of the allowance up) and says what is left of the plan in plain words.</summary>
     public async Task<(bool Ok, string Message)> TestAsync(CancellationToken ct)
     {
-        using var doc = await GetAsync("/usage", ct).ConfigureAwait(false);
+        using var doc = await GetAsync("/v3/usage", ct).ConfigureAwait(false);
         var u = doc.RootElement;
         if (u.ValueKind != JsonValueKind.Object) return (true, "API key OK.");
         static string Bytes(decimal b) => b >= 1e9m ? $"{b / 1e9m:0.#} GB" : b >= 1e6m ? $"{b / 1e6m:0.#} MB" : $"{b / 1e3m:0.#} KB";
         var parts = new List<string>();
-        if (u.TryGetProperty("bytes_used_month", out _)) parts.Add($"{Bytes(Dec(u, "bytes_used_month"))} of {Bytes(Dec(u, "bytes_cap_month"))} used this month");
-        if (u.TryGetProperty("exports_cap_hour", out _)) parts.Add($"{Dec(u, "exports_this_hour"):0} of {Dec(u, "exports_cap_hour"):0} downloads this hour");
-        if (u.TryGetProperty("calls_per_minute", out _)) parts.Add($"{Dec(u, "calls_per_minute"):0} calls a minute, {Dec(u, "max_rows_per_request"):0} rows a call");
+        if (Str(u, "plan").Length > 0) parts.Add(Str(u, "plan") + " plan");
+        if (u.TryGetProperty("weekly", out var w) && w.ValueKind == JsonValueKind.Object && w.TryGetProperty("allowance_bytes", out _))
+            parts.Add($"{Bytes(Dec(w, "used_bytes"))} of {Bytes(Dec(w, "allowance_bytes"))} downloaded this week");
+        if (u.TryGetProperty("calls_per_minute", out _)) parts.Add($"{Dec(u, "calls_per_minute"):0} calls a minute");
         return (true, "API key OK. " + (parts.Count > 0 ? string.Join(" · ", parts) + "." : ""));
     }
 

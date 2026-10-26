@@ -17,6 +17,12 @@ public interface IMarketDataSink
     void OnTrades(Instrument instrument, IReadOnlyList<Trade> trades);
     void OnDepth(Instrument instrument, DepthUpdate update);
     void OnStatus(Instrument instrument, FeedStatus status, string? message);
+
+    /// <summary>Order-level (Level 3) changes, from feeds that publish individual orders. Most sinks do not need them.</summary>
+    void OnOrderEvents(Instrument instrument, IReadOnlyList<OrderEvent> events) { }
+
+    /// <summary>Forced closings of leveraged positions, from feeds that publish them (Bybit).</summary>
+    void OnLiquidations(Instrument instrument, IReadOnlyList<TradingHub.Data.Liquidation> liquidations) { }
 }
 
 /// <summary>A market data provider (exchange, simulator, replay...).</summary>

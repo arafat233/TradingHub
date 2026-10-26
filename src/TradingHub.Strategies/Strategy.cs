@@ -211,6 +211,54 @@ public abstract class Strategy
     /// An iceberg with <c>Ask</c> true is a resting sell (buyers kept hitting it), false a resting buy.
     /// </summary>
     public IReadOnlyList<IcebergEvent> Icebergs => Host.Icebergs;
+    /// <summary>
+    /// Set it in <c>OnInit</c> to a size to have <see cref="BigTradeLevels"/> filled: every market order (the fills with the
+    /// same time and side) of at least that many contracts is remembered, with its average price. 0 = off.
+    /// </summary>
+    protected decimal TrackBigTrades { get; set; }
+
+    private readonly List<BigTradeLevel> _bigLevels = new();
+    private BigTradeLevel? _bigLive;
+    private decimal _bigVol, _bigPv;
+    private DateTime _bigTime;
+    private TradeSide _bigSide;
+
+    /// <summary>Big orders so far, oldest first (the newest 500 are kept). Check <see cref="BigTradeLevel.Touched"/> to skip the used-up ones.</summary>
+    public IReadOnlyList<BigTradeLevel> BigTradeLevels => _bigLevels;
+
+    private void TrackBig(in Trade t)
+    {
+        decimal tick = TickSize;
+        if (t.Time != _bigTime || t.Side != _bigSide)
+        {
+            // a new order: price coming back to an older level uses it up (the order's own fills do not)
+            foreach (var l in _bigLevels)
+                if (!l.Touched && l.Time < t.Time && Math.Abs(t.Price - l.Price) < Math.Max(tick, 0.0000001m) / 2) l.Touched = true;
+            _bigLive = null;
+            _bigVol = _bigPv = 0;
+            _bigTime = t.Time;
+            _bigSide = t.Side;
+        }
+
+        if (t.Side == TradeSide.None || t.Volume <= 0) return;
+        _bigVol += t.Volume;
+        _bigPv += t.Price * t.Volume;
+        if (_bigVol < TrackBigTrades) return;
+        decimal price = _bigPv / _bigVol;
+        if (tick > 0) price = Math.Round(price / tick) * tick;
+        if (_bigLive == null)
+        {
+            _bigLive = new BigTradeLevel(t.Time, price, _bigVol, t.Side == TradeSide.Buy);
+            _bigLevels.Add(_bigLive);
+            if (_bigLevels.Count > 500) _bigLevels.RemoveAt(0);
+        }
+        else
+        {
+            _bigLive.Price = price;
+            _bigLive.Volume = _bigVol;
+        }
+    }
+
     public decimal TickSize => Host.Instrument.TickSize;
     public bool IsBacktest => Host.IsBacktest;
 
@@ -457,6 +505,7 @@ public abstract class Strategy
         Canvas.Clear();
         WantsTicks = UsesTicks(GetType());
         OnInit();
+        if (TrackBigTrades > 0) WantsTicks = true;
     }
 
     internal void InternalBar(Bar bar)
@@ -466,7 +515,11 @@ public abstract class Strategy
         OnBar(bar);
     }
 
-    internal void InternalTick(in Trade t) => OnTick(t);
+    internal void InternalTick(in Trade t)
+    {
+        if (TrackBigTrades > 0) TrackBig(t);
+        OnTick(t);
+    }
     internal void InternalFilled(StrategyOrder o) => OnOrderFilled(o);
     internal void InternalSession(DateOnly d) => OnSessionStart(d);
     internal void InternalStop() => OnStop();
@@ -520,5 +573,25 @@ public abstract class Strategy
         if (t == typeof(bool)) return je.GetBoolean();
         if (t.IsEnum) return Enum.Parse(t, je.ValueKind == System.Text.Json.JsonValueKind.String ? je.GetString()! : je.GetInt32().ToString());
         return je.GetString() ?? "";
+    }
+}
+
+/// <summary>A big market order remembered by <c>TrackBigTrades</c>: when, at what average price, how many contracts, and which side hit.</summary>
+public sealed class BigTradeLevel
+{
+    public DateTime Time { get; }
+    public decimal Price { get; internal set; }
+    public decimal Volume { get; internal set; }
+    /// <summary>True if the aggressor bought.</summary>
+    public bool Buy { get; }
+    /// <summary>Price has traded back to the level since the order.</summary>
+    public bool Touched { get; internal set; }
+
+    internal BigTradeLevel(DateTime time, decimal price, decimal volume, bool buy)
+    {
+        Time = time;
+        Price = price;
+        Volume = volume;
+        Buy = buy;
     }
 }

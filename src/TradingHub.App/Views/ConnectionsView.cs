@@ -47,6 +47,7 @@ internal sealed class ConnectionsView : UserControl, IPage
         ConnectionKind.Simulator => MaterialIconKind.FlaskOutline,
         ConnectionKind.BinanceFutures or ConnectionKind.BinanceSpot => MaterialIconKind.Bitcoin,
         ConnectionKind.Bybit => MaterialIconKind.CurrencyUsd,
+        ConnectionKind.Kraken or ConnectionKind.Coinbase or ConnectionKind.Bitfinex => MaterialIconKind.Bitcoin,
         ConnectionKind.Rithmic => MaterialIconKind.ChartTimelineVariant,
         ConnectionKind.AmpFutures => MaterialIconKind.ChartBellCurveCumulative,
         ConnectionKind.Tradovate => MaterialIconKind.ChartLineVariant,
@@ -148,13 +149,13 @@ internal sealed class ConnectionsView : UserControl, IPage
             ConnectionKind.BinanceFutures or ConnectionKind.BinanceSpot => string.IsNullOrWhiteSpace(p.ApiKey)
                 ? "public data · no account"
                 : p.Testnet ? "data + testnet account" : p.AllowRealOrders ? "data + REAL account" : "data + real account (read only)",
-            ConnectionKind.Bybit => "public data",
+            ConnectionKind.Bybit or ConnectionKind.Kraken or ConnectionKind.Coinbase or ConnectionKind.Bitfinex => "public data",
             ConnectionKind.Rithmic or ConnectionKind.AmpFutures => string.IsNullOrWhiteSpace(p.RithmicUser) ? "no user configured" : $"{p.RithmicUser} · {p.RithmicSystem}",
             ConnectionKind.Tradovate => string.IsNullOrWhiteSpace(p.TradovateUser) ? "no user configured" : $"{p.TradovateUser} · {(p.Testnet ? "demo" : p.AllowRealOrders ? "REAL" : "real (read only)")}",
             ConnectionKind.CTrader => string.IsNullOrWhiteSpace(p.CTraderClientId) ? "no application configured" : $"{(p.Testnet ? "demo" : "real")}{(p.CTraderLogin > 0 ? " · account " + p.CTraderLogin : "")}",
             ConnectionKind.Oanda => (p.Testnet ? "practice" : "real") + (string.IsNullOrWhiteSpace(p.OandaAccount) ? "" : " · " + p.OandaAccount),
             ConnectionKind.Alpaca => string.IsNullOrWhiteSpace(p.ApiKey) ? "no keys" : $"SIP history · live {p.AlpacaLiveFeed.ToUpperInvariant()}",
-            ConnectionKind.Databento => p.DatabentoLevel2 ? "CME history + live with Level 2" : "CME history + live trades",
+            ConnectionKind.Databento => p.DatabentoMbo ? "CME history + live with Level 3 (every order)" : p.DatabentoLevel2 ? "CME history + live with Level 2" : "CME history + live trades",
             ConnectionKind.DxFeed => p.DxFeedUrl.TrimEnd('/') == TradingHub.Feeds.DxFeed.DxFeedSettings.DemoUrl ? "demo server (delayed)" : $"live · Level 2 {p.DxFeedDomSource}",
             ConnectionKind.LondonStrategicEdge => "free · ticks (24 h) + candles",
             _ => $"{p.IbHost}:{p.IbPort}",
@@ -240,6 +241,17 @@ internal sealed class ConnectionsView : UserControl, IPage
                 break;
             case ConnectionKind.Bybit:
                 dataSection.Children.Add(Note(MaterialIconKind.InformationOutline, "Public data for Bybit's linear (USDT) perpetuals. Trading with a Bybit account is not available yet."));
+                sections.Children.Add(Ui.Card(BybitHistorySection(p, apply)));
+                break;
+            case ConnectionKind.Kraken:
+                dataSection.Children.Add(Note(MaterialIconKind.InformationOutline, $"Public spot data from {p.Kind}: tape, order book and history. No account is needed. Trading is not available yet."));
+                break;
+            case ConnectionKind.Coinbase:
+                dataSection.Children.Add(Note(MaterialIconKind.InformationOutline, "Public spot data from Coinbase: tape, order book and history, no account needed. Trading is not available yet."));
+                sections.Children.Add(Ui.Card(CoinbaseSection(p, apply)));
+                break;
+            case ConnectionKind.Bitfinex:
+                dataSection.Children.Add(Note(MaterialIconKind.InformationOutline, "Public spot data from Bitfinex: tape, order book and history, free, no account. Bitfinex also publishes every individual order (Level 3), so the heatmap's book events show real orders being added, pulled and filled instead of guesses. Trading is not available yet."));
                 break;
             case ConnectionKind.Rithmic:
             case ConnectionKind.AmpFutures:
@@ -316,7 +328,7 @@ internal sealed class ConnectionsView : UserControl, IPage
         delete.Click += async (_, _) =>
         {
             if (TopLevel.GetTopLevel(this) is not Window w) return;
-            if (!await ConfirmDialog.ShowAsync(w, "Delete connection", $"\"{p.Name}\" and its secrets are removed from the Keychain. The recorded data is left untouched.", "Delete", danger: true)) return;
+            if (!await ConfirmDialog.ShowAsync(w, "Delete connection", $"\"{p.Name}\" and its secrets are removed from the secure store (Keychain / Credential Manager). The recorded data is left untouched.", "Delete", danger: true)) return;
             _svc.Connections.ClearSecrets(p);
             _svc.Connections.Invalidate(p);
             _svc.Connections.Profiles.Remove(p);
@@ -378,7 +390,7 @@ internal sealed class ConnectionsView : UserControl, IPage
     {
         var testnet = new ToggleSwitch { IsChecked = p.Testnet, OnContent = "Testnet (test money)", OffContent = "Real account" };
         var key = new TextBox { Text = p.ApiKey, Watermark = "API key" };
-        var secret = new TextBox { PasswordChar = '•', Watermark = string.IsNullOrEmpty(_svc.Connections.GetSecret(p)) ? "API secret" : "•••••••• (stored in the Keychain)" };
+        var secret = new TextBox { PasswordChar = '•', Watermark = string.IsNullOrEmpty(_svc.Connections.GetSecret(p)) ? "API secret" : "•••••••• (stored securely)" };
         var allowReal = new CheckBox { Content = "Allow REAL orders from Trading Hub", IsChecked = p.AllowRealOrders };
         var confirm = new CheckBox { Content = "Ask for confirmation before each real order", IsChecked = p.ConfirmOrders };
         var maxQty = new NumericUpDown { Value = p.MaxOrderQuantity, Minimum = 0, Increment = 0.001m, FormatString = "0.#####", Watermark = "no limit" };
@@ -564,7 +576,7 @@ internal sealed class ConnectionsView : UserControl, IPage
         serverRow.Children.Add(server);
 
         var user = new TextBox { Text = p.RithmicUser, Watermark = "user (Login)" };
-        var pass = new TextBox { PasswordChar = '•', RevealPassword = false, Watermark = string.IsNullOrEmpty(_svc.Connections.GetSecret(p)) ? "password" : "•••••••• (stored in the Keychain)" };
+        var pass = new TextBox { PasswordChar = '•', RevealPassword = false, Watermark = string.IsNullOrEmpty(_svc.Connections.GetSecret(p)) ? "password" : "•••••••• (stored securely)" };
         var reveal = new ToggleButton { Content = Ui.Icon(MaterialIconKind.EyeOutline, 15), Padding = new Thickness(6, 2), MinHeight = 0, VerticalAlignment = VerticalAlignment.Stretch };
         ToolTip.SetTip(reveal, "Show what you type");
         reveal.IsCheckedChanged += (_, _) => pass.RevealPassword = reveal.IsChecked == true;
@@ -634,7 +646,7 @@ internal sealed class ConnectionsView : UserControl, IPage
 
     /// <summary>Secret field: it does not show what is stored, it only says that it is in the Keychain.</summary>
     private TextBox SecretBox(ConnectionProfile p, string? name, string watermark) =>
-        new() { PasswordChar = '•', Watermark = string.IsNullOrEmpty(name == null ? _svc.Connections.GetSecret(p) : _svc.Connections.GetSecret(p, name)) ? watermark : "•••••••• (stored in the Keychain)" };
+        new() { PasswordChar = '•', Watermark = string.IsNullOrEmpty(name == null ? _svc.Connections.GetSecret(p) : _svc.Connections.GetSecret(p, name)) ? watermark : "•••••••• (stored securely)" };
 
     private static Button Link(string text, string url)
     {
@@ -727,7 +739,7 @@ internal sealed class ConnectionsView : UserControl, IPage
                 if (refresh.Length > 0) _svc.Connections.SetSecret(p, "refresh", refresh);
                 _svc.Connections.Save();
                 _svc.Connections.Invalidate(p);
-                token.Watermark = "•••••••• (stored in the Keychain)";
+                token.Watermark = "•••••••• (stored securely)";
                 oauthStatus.Text = "Done: Trading Hub is authorized. Click “Test connection”.";
             }
             catch (Exception ex)
@@ -758,7 +770,7 @@ internal sealed class ConnectionsView : UserControl, IPage
             Note(MaterialIconKind.InformationOutline, "Free with any broker that has cTrader (IC Markets, Pepperstone, FxPro, Fusion Markets…) and a demo account: index CFDs (US100/NAS100, US500, GER40…), forex, gold and oil, with years of tick-by-tick history."),
             Ui.H3("1 · Your application (just once)"),
             Note(MaterialIconKind.ShieldKeyOutline, "Create an application at openapi.ctrader.com (sign in with your cTrader ID) and add this redirect address. Then copy the Client ID and the Secret here."),
-            Ui.H(8, new TextBlock { Text = redirect, FontFamily = new FontFamily("Menlo, monospace"), VerticalAlignment = VerticalAlignment.Center }, copy, Link("Open openapi.ctrader.com", "https://openapi.ctrader.com/apps")),
+            Ui.H(8, new TextBlock { Text = redirect, FontFamily = new FontFamily(Plat.Mono), VerticalAlignment = VerticalAlignment.Center }, copy, Link("Open openapi.ctrader.com", "https://openapi.ctrader.com/apps")),
             TwoColumns(Ui.Field("Client ID", clientId), Ui.Field("Secret", secret)),
             Ui.H3("2 · Authorize your account"),
             Ui.H(10, connect, demo),
@@ -810,7 +822,7 @@ internal sealed class ConnectionsView : UserControl, IPage
             practice,
             TwoColumns(Ui.Field("Token", token), Ui.Field("Account", account)),
             Ui.H(16, Link("Create a practice account", "https://www.oanda.com/demo-account/"), Link("Generate the token (Manage API Access)", "https://www.oanda.com/account/tpa/personal_token")),
-            Note(MaterialIconKind.ShieldKeyOutline, "The token is stored in the Keychain. Trading Hub uses it for data only (it sends no orders to OANDA)."));
+            Note(MaterialIconKind.ShieldKeyOutline, "The token is stored in the Keychain (Credential Manager on Windows). Trading Hub uses it for data only (it sends no orders to OANDA)."));
     }
 
     /// <summary>Alpaca: keys of the practice account (free SIP history from 2016).</summary>
@@ -839,18 +851,64 @@ internal sealed class ConnectionsView : UserControl, IPage
     }
 
     /// <summary>London Strategic Edge: one free API key.</summary>
+    /// <summary>Coinbase: an optional Exchange API key turns on the order-level (Level 3) feed.</summary>
+    private Control CoinbaseSection(ConnectionProfile p, List<Action> apply)
+    {
+        var key = new TextBox { Text = p.ApiKey, Watermark = "API key" };
+        var secret = SecretBox(p, null, "API secret");
+        var pass = SecretBox(p, "passphrase", "Passphrase");
+        apply.Add(() =>
+        {
+            p.ApiKey = (key.Text ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(secret.Text)) _svc.Connections.SetSecret(p, secret.Text.Trim());
+            if (!string.IsNullOrWhiteSpace(pass.Text)) _svc.Connections.SetSecret(p, "passphrase", pass.Text.Trim());
+            secret.Text = "";
+            pass.Text = "";
+        });
+        return Ui.V(14,
+            Ui.H2("Order-level data (optional)"),
+            Note(MaterialIconKind.InformationOutline, "Coinbase only publishes every individual order (Level 3) to signed-in clients. With a Coinbase Exchange API key the heatmap's book events show real orders being added, pulled and filled instead of guesses from the order book. Without a key everything else keeps working."),
+            Ui.Field("API key", key),
+            Ui.Field("API secret", secret),
+            Ui.Field("Passphrase", pass),
+            Ui.H(16, Link("Create a key (Coinbase Exchange)", "https://exchange.coinbase.com/profile/api")),
+            Note(MaterialIconKind.ShieldKeyOutline, "Give the key View permission only: Trading Hub never trades with it. The secret and passphrase are stored in the Keychain (Windows Credential Manager), never in a file. Use Test connection to check the key."));
+    }
+
+    /// <summary>Bybit: the long tick history built in the background from Bybit's free public daily files.</summary>
+    private Control BybitHistorySection(ConnectionProfile p, List<Action> apply)
+    {
+        var symbols = new TextBox { Text = string.Join(", ", p.BybitBackfill), Watermark = "BTCUSDT, ETHUSDT…" };
+        var days = new NumericUpDown { Value = p.BackfillDays, Minimum = 0, Maximum = 1500, Increment = 10, FormatString = "0", Width = 140 };
+        apply.Add(() =>
+        {
+            p.BybitBackfill = (symbols.Text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.ToUpperInvariant()).Distinct().ToList();
+            p.BackfillDays = (int)(days.Value ?? 0);
+        });
+        return Ui.V(14,
+            Ui.H2("Tick history"),
+            Note(MaterialIconKind.InformationOutline, "Bybit publishes every trade of every finished day as a free file, going back years. In the background, a couple of days every 20 minutes, Trading Hub downloads the ones below into your tick folders, so charts, backtests and the event tester have months of data instead of weeks. A day is 20 to 150 MB to download and about 6 MB stored. Set the days to 0 to turn it off."),
+            Ui.Field("Perpetuals to keep", symbols),
+            Ui.Field("How many days back", days));
+    }
+
     private Control LseSection(ConnectionProfile p, List<Action> apply)
     {
         var key = SecretBox(p, null, "API key");
+        var keep = new TextBox { Text = string.Join(", ", p.LseBackfill), Watermark = "ES.F, NQ.F, GC.F…" };
+        ToolTip.SetTip(keep, "Futures whose finished days are downloaded in the background, a few a round, so their tick history keeps growing (the free archive only keeps the last weeks). Available: " + string.Join(" ", TradingHub.Feeds.LondonStrategicEdge.LseFeed.FuturesSymbols));
         apply.Add(() =>
         {
             if (!string.IsNullOrWhiteSpace(key.Text)) _svc.Connections.SetSecret(p, key.Text.Trim());
             key.Text = "";
+            p.LseBackfill = (keep.Text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => x.ToUpperInvariant()).Where(x => TradingHub.Feeds.LondonStrategicEdge.LseFeed.FuturesInstrument(x) != null).Distinct().ToList();
         });
         return Ui.V(14,
             Ui.H2("London Strategic Edge"),
-            Note(MaterialIconKind.InformationOutline, "Free stocks, ETFs, forex, crypto, commodities, indices and futures. Live ticks over a websocket (one key streams up to 16 symbols), the last 24 hours as ticks and long history as candles (US stocks back to 2003, forex to 2009, crypto to 2017). The free plan allows 10 downloads an hour. The picker lists everything in the service's catalog; which symbols your free plan actually serves is up to the service."),
+            Note(MaterialIconKind.InformationOutline, "Free stocks, ETFs, forex, crypto, commodities, indices and the ES, NQ, GC and SI futures. Live ticks over a websocket (one connection per key, up to 16 symbols), tick history and candles from the service's archive. The free plan allows 60 calls a minute and a weekly download allowance. The picker lists the symbols the service streams; which of them your free plan serves is up to the service."),
             Ui.Field("API key", key),
+            Ui.Field("Keep the tick history of these futures", keep, "Their finished days are downloaded in the background (a few days every 20 minutes) into the tick folders, so the history keeps growing. Leave empty to turn it off."),
             Ui.H(16, Link("Get a free key", "https://londonstrategicedge.com/data")),
             Note(MaterialIconKind.ShieldKeyOutline, "The key is stored in the Keychain (Windows Credential Manager on Windows), never in a file. Trading Hub uses it for data only."));
     }
@@ -860,12 +918,14 @@ internal sealed class ConnectionsView : UserControl, IPage
     {
         var key = SecretBox(p, null, "API key (db-…)");
         var level2 = new ToggleSwitch { IsChecked = p.DatabentoLevel2, OnContent = "Live trades + Level 2 (MBP-10, top 10 levels)", OffContent = "Live trades only (cheaper)" };
+        var mbo = new ToggleSwitch { IsChecked = p.DatabentoMbo, OnContent = "Level 3: every order (MBO) — overrides Level 2, streams the most data", OffContent = "No order-by-order data" };
         var products = new TextBox { Text = string.Join(", ", p.DatabentoProducts), Watermark = "ES, NQ, MES, MNQ, GC, MGC…" };
         apply.Add(() =>
         {
             if (!string.IsNullOrWhiteSpace(key.Text)) _svc.Connections.SetSecret(p, key.Text.Trim());
             key.Text = "";
             p.DatabentoLevel2 = level2.IsChecked == true;
+            p.DatabentoMbo = mbo.IsChecked == true;
             p.DatabentoProducts = (products.Text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.ToUpperInvariant()).Distinct().ToList();
         });
         return Ui.V(14,
@@ -876,6 +936,7 @@ internal sealed class ConnectionsView : UserControl, IPage
             Ui.H2("Live data"),
             Note(MaterialIconKind.InformationOutline, "Live CME futures on charts, DOM and tape (continuous front month, it rolls on its own). Live is a separate Databento licence (CME, non-professional) plus usage; Level 2 streams much more data than trades only, so it costs more. “Test connection” tells you whether your key has live access."),
             level2,
+            mbo,
             Ui.Field("Products", products),
             Note(MaterialIconKind.ShieldCheckOutline, "It is used from Data → “CME futures with Databento”: Trading Hub computes the cost first and only downloads if you confirm. It is stored separately (“Databento” in Data) and in backtests you choose Databento only, Rithmic only or both combined (Rithmic first, with Databento filling the gaps)."));
     }
