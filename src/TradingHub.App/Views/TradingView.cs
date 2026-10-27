@@ -39,6 +39,10 @@ public sealed class ChartTab
     public string AccountId { get; set; } = "sim";
     public double HistoryHours { get; set; }
 
+    /// <summary>"All the history" (or a long saved span): a week is loaded and older chunks are fetched as the chart is scrolled to its left edge.</summary>
+    public bool AutoExtend { get; set; }
+    public DateTime AutoExtendFrom { get; set; }
+
     /// <summary>Link group by color (0 = not linked).</summary>
     public int LinkGroup { get; set; }
 
@@ -1478,27 +1482,39 @@ public sealed partial class TradingView : UserControl
     /// Loads history up to <paramref name="hours"/> back (or the whole history). If something is still
     /// loading, it waits and carries on. What is not on disk is fetched from the exchange: the recent part as ticks and the old part as candles.
     /// </summary>
+    private const double LazyChunkHours = 168;
+    private const int MaxAutoTrades = 10_000_000; // the memory budget of the lazy load
+
+    /// <summary>Called from Tick: when the chart is scrolled to its oldest loaded bar, fetches an older chunk (doubling the span each time).</summary>
+    private void AutoExtendHistory(ChartTab t)
+    {
+        if (!t.AutoExtend || t.Model is not { } m) return;
+        var d = m.Data;
+        if (d.IsLoadingHistory || d.IsExtending || d.Trades.Count == 0 || m.FirstVisibleBar > 20) return;
+        var first = d.Trades.FirstTime;
+        if (d.Trades.Count > MaxAutoTrades || t.AutoExtendFrom == first)
+        {
+            t.AutoExtend = false;
+            _status(d.Trades.Count > MaxAutoTrades ? $"{t.Symbol}: stopped loading older history at {d.Trades.Count:N0} trades (memory limit)." : $"{t.Symbol}: that is all the history available.");
+            return;
+        }
+
+        t.AutoExtendFrom = first;
+        d.ExtendHistory(first.AddHours(-Math.Max(LazyChunkHours, (d.Feed.Now - first).TotalHours)));
+    }
+
     internal async Task LoadHistoryAsync(ChartTab chart, double hours, bool quiet = false)
     {
         var data = chart.Model?.Data;
         if (data == null) return;
         chart.HistoryHours = hours;
         string what = ChartToolbar.SpanText(hours);
-        DateTime from;
-        try
-        {
-            if (hours == ChartToolbar.AllHistory)
-            {
-                if (!quiet) _status($"Looking for where {chart.Symbol}'s history starts…");
-                from = data.Feed is IKlineHistory k ? await k.FirstAvailableAsync(data.Instrument, CancellationToken.None) ?? data.Feed.Now.AddYears(-5) : data.Feed.Now.AddYears(-5);
-            }
-            else from = data.Feed.Now.AddHours(-hours);
-        }
-        catch (Exception ex)
-        {
-            _status($"Could not query {chart.Symbol}'s history: {ex.Message}");
-            return;
-        }
+        // "All" and long saved spans loaded everything at once (GC.F: 13 months of ticks, ~3 GB, frozen UI): load a week, then
+        // Tick -> AutoExtendHistory brings older chunks in as the chart is scrolled to its left edge.
+        chart.AutoExtend = hours == ChartToolbar.AllHistory || (quiet && hours > LazyChunkHours);
+        chart.AutoExtendFrom = default;
+        if (chart.AutoExtend) hours = LazyChunkHours;
+        DateTime from = data.Feed.Now.AddHours(-hours);
 
         // waits for whatever is loading to finish (for example, the initial history)
         for (int i = 0; i < 2400 && (data.IsLoadingHistory || data.IsExtending); i++) await Task.Delay(250);
@@ -1877,6 +1893,7 @@ public sealed partial class TradingView : UserControl
                 if (c.Trader != null && (c.Window != null || mainVisible)) c.Trader.Refresh();
                 UpdateTradeMarks(c);
                 UpdateStrategySignals(c);
+                AutoExtendHistory(c);
             }
 
             if ((mainVisible || _panelWindows.ContainsKey("ticket")) && _dockedTrader is { IsEffectivelyVisible: true } docked) docked.Refresh();

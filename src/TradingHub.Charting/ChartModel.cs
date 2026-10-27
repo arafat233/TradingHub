@@ -582,11 +582,15 @@ public sealed class ChartModel : IIndicatorHost, IIndicatorDataProvider, IDispos
 
     // =================================================================== accumulated trades
 
+    public const int MaxCumulativeTicks = 500_000;
+
     private List<CumulativeTrade> BuildCumulativeTrades(DateTime from, DateTime to)
     {
         var res = new List<CumulativeTrade>();
         var store = Data.Trades;
-        int i = store.LowerBound(from);
+        // Runs on the UI thread and allocates per tick: a year of ticks froze the app. Only the newest ticks are built.
+        // ponytail: fixed cap; make it a setting if someone needs older bubbles.
+        int i = Math.Max(store.LowerBound(from), store.Count - MaxCumulativeTicks);
         CumulativeTrade? cur = null;
         long curTime = 0;
         for (; i < store.Count; i++)

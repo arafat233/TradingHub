@@ -14,6 +14,12 @@ public sealed class IcebergEvent
 
     /// <summary>Everything traded against it so far.</summary>
     public decimal Volume { get; set; }
+
+    /// <summary>How many times it was refilled (order-level detection only).</summary>
+    public int Refills { get; set; }
+
+    /// <summary>The exchange kept the same order id across refills (a native iceberg), as opposed to new orders posted after each fill.</summary>
+    public bool Native { get; init; }
 }
 
 /// <summary>
