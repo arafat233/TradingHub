@@ -76,6 +76,31 @@ next candle confirming; the wall subsample here is n=16. Seven days of BTC also 
 per wick pattern, which leaves room for a real but modest effect. It is a null result on a narrow test, not
 a refutation.
 
+## Reading it on a chart
+
+`BigTradeRead.cs` is the same classification as an indicator: copy it into `~/Documents/Trading Hub/Indicators`
+and it appears under «My indicators». It never trades and never signals; it labels what a large order meant.
+
+| Mark | Reading |
+|---|---|
+| chevron + `EXH` | exhaustion: reached the extreme and nobody followed. The attacker ran out. |
+| chevron + `REJ` | rejection: the wick was built by the other side. The defender hit back. |
+| small bar + `ABS` | absorbed in the body. Effort, no result. |
+| small bar + `ACC` | accepted in the body. Effort = result. |
+
+Only the two wick readings draw a line, because only they claim a price: red for a ceiling, green for a floor,
+coloured by what it means rather than by who swung. Dashed while the next candle is still forming, solid once it
+confirmed, faded with a cross where a close finally went through. A ring marks a print sitting on a prior-session
+level, a double ring exhaustion and rejection on the same extreme.
+
+Labels are drawn outside the candle with a leader back to the price: the built-in **Big Trades** bubble already
+occupies that pixel, and the two of them on top of each other is unreadable. The two indicators answer different
+questions and are meant to be used together - Big Trades says a whale traded here and whether the level held,
+this one says whether the whale won.
+
+`Draw the bare extreme` puts a faint tick on every candle's high and low. The study below found the marked levels
+held no better than those ticks, so leave it on until the chart convinces you otherwise.
+
 ## Running it
 
 In the app: copy `BubbleStudy.cs` into `~/Documents/Trading Hub/Strategies` and compile (⌘B). It writes one
