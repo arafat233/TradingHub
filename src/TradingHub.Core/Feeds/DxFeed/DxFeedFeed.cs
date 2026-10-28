@@ -68,38 +68,16 @@ public sealed class DxFeedFeed : IMarketDataFeed
         return s.Length > 1 && Codes.Contains(s[^1]) ? s[..^1] : s;
     }
 
-    private static string Mic(string exchange) => exchange switch
-    {
-        "CBOT" => "XCBT",
-        "NYMEX" => "XNYM",
-        "COMEX" => "XCEC",
-        _ => "XCME",
-    };
+    private static string Mic(string exchange) => FuturesContracts.Mic(exchange);
 
     /// <summary>
-    /// The dxFeed symbol to use: an exact one from Products, or the front month. Indices roll with <see cref="FuturesRolls"/>;
-    /// gold (Feb, Apr, Jun, Aug, Oct, Dec) moves to the next contract on the 25th of the month before.
+    /// The dxFeed symbol to use: an exact one from Products, or the front month (see <see cref="FuturesContracts.FrontMonth"/>).
     /// </summary>
     public string? DxSymbol(string root, string exchange, DateTime utc)
     {
         var exact = _s.Products.FirstOrDefault(x => x.Trim().StartsWith('/') && RootOf(x.Trim()).Equals(root, StringComparison.OrdinalIgnoreCase));
         if (exact != null) return exact.Trim();
-        int year, month;
-        if (FuturesRolls.Supports(root))
-        {
-            var c = FuturesRolls.On(root, utc).Symbol; // ESZ6
-            month = Codes.IndexOf(c[^2]) + 1;
-            year = utc.Year - utc.Year % 10 + (c[^1] - '0');
-            if (year < utc.Year) year += 10;
-        }
-        else if (root is "GC" or "MGC")
-        {
-            (year, month) = (utc.Year, utc.Month + utc.Month % 2); // this month if even, otherwise the next one
-            if (utc >= new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-1).AddDays(24)) month += 2;
-            if (month > 12) (year, month) = (year + 1, month - 12);
-        }
-        else return null; // ponytail: only indices and gold roll on their own; anything else is typed exactly in Products
-
+        if (FuturesContracts.FrontMonth(root, utc) is not var (year, month)) return null;
         return $"/{root}{Codes[month - 1]}{year % 100:00}:{Mic(exchange)}";
     }
 

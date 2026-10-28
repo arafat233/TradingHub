@@ -56,6 +56,7 @@ internal sealed class ConnectionsView : UserControl, IPage
         ConnectionKind.Alpaca => MaterialIconKind.Finance,
         ConnectionKind.Databento => MaterialIconKind.DatabaseArrowDownOutline,
         ConnectionKind.DxFeed => MaterialIconKind.Layers,
+        ConnectionKind.Ironbeam => MaterialIconKind.ChartLineVariant,
         ConnectionKind.LondonStrategicEdge => MaterialIconKind.CloudDownloadOutline,
         _ => MaterialIconKind.Bank,
     };
@@ -78,6 +79,7 @@ internal sealed class ConnectionsView : UserControl, IPage
                 ConnectionKind.Alpaca => "free US stocks and ETFs (SPY, QQQ)",
                 ConnectionKind.Databento => "CME futures history since 2010, and live with Level 2",
                 ConnectionKind.DxFeed => "CME futures live with Level 2 (your dxFeed token)",
+                ConnectionKind.Ironbeam => "CME futures live with Level 2 and trade side (your Ironbeam login)",
                 ConnectionKind.LondonStrategicEdge => "free stocks, forex, crypto and indices: live ticks and history (your free key)",
                 _ => null,
             };
@@ -158,6 +160,7 @@ internal sealed class ConnectionsView : UserControl, IPage
             ConnectionKind.Databento => p.DatabentoMbo ? "CME history + live with Level 3 (every order)" : p.DatabentoLevel2 ? "CME history + live with Level 2" : "CME history + live trades",
             ConnectionKind.DxFeed => p.DxFeedUrl.TrimEnd('/') == TradingHub.Feeds.DxFeed.DxFeedSettings.DemoUrl ? "demo server (delayed)" : $"live · Level 2 {p.DxFeedDomSource}",
             ConnectionKind.LondonStrategicEdge => "free · ticks (24 h) + candles",
+            ConnectionKind.Ironbeam => string.IsNullOrWhiteSpace(p.IronbeamUser) ? "no user configured" : $"{p.IronbeamUser} · {(p.Testnet ? "demo" : "live")} · Level 2",
             _ => $"{p.IbHost}:{p.IbPort}",
         };
         return prefix + detail;
@@ -171,10 +174,11 @@ internal sealed class ConnectionsView : UserControl, IPage
         if (kind is ConnectionKind.Alpaca) p.Name = n > 1 ? $"Alpaca {n}" : "Alpaca";
         if (kind is ConnectionKind.Databento) p.Name = "Databento";
         if (kind is ConnectionKind.DxFeed) p.Name = n > 1 ? $"dxFeed {n}" : "dxFeed";
+        if (kind is ConnectionKind.Ironbeam) p.Name = n > 1 ? $"Ironbeam {n}" : "Ironbeam";
         if (kind is ConnectionKind.LondonStrategicEdge) p.Name = "London Strategic Edge";
         // the first one of each type uses its data's id (so the tick files end up with a clear name)
         string defaultId = ConnectionProfile.DefaultId(kind);
-        if (kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.DxFeed or ConnectionKind.LondonStrategicEdge
+        if (kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.DxFeed or ConnectionKind.LondonStrategicEdge or ConnectionKind.Ironbeam
             && _svc.Connections.Profiles.All(x => x.Id != defaultId))
             p.Id = defaultId;
         if (kind == ConnectionKind.Simulator) p.HistoryHours = 6;
@@ -281,6 +285,9 @@ internal sealed class ConnectionsView : UserControl, IPage
             case ConnectionKind.DxFeed:
                 sections.Children.Add(Ui.Card(DxFeedSection(p, apply)));
                 break;
+            case ConnectionKind.Ironbeam:
+                sections.Children.Add(Ui.Card(IronbeamSection(p, apply)));
+                break;
             case ConnectionKind.LondonStrategicEdge:
                 dataSection.Children.Add(Note(MaterialIconKind.InformationOutline, "No order book and no trade side from this service: each trade's side is inferred from the tick rule (whether the price rose or fell), so the footprint, delta and CVD are estimates, and the heatmap needs a feed with depth. The last 24 hours come as real ticks, older history as candles."));
                 sections.Children.Add(Ui.Card(LseSection(p, apply)));
@@ -292,7 +299,7 @@ internal sealed class ConnectionsView : UserControl, IPage
         var save = Ui.Button("Save", MaterialIconKind.ContentSaveOutline, () => { }, "primary");
         var delete = Ui.Button("Delete", MaterialIconKind.DeleteOutline, () => { }, "ghost");
         delete.IsVisible = _svc.Connections.Profiles.Count(x => x.Kind == p.Kind) > 1 || p.Kind is ConnectionKind.InteractiveBrokers or ConnectionKind.AmpFutures
-            or ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.DxFeed or ConnectionKind.LondonStrategicEdge;
+            or ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.DxFeed or ConnectionKind.LondonStrategicEdge or ConnectionKind.Ironbeam;
 
         void Save()
         {
@@ -963,6 +970,35 @@ internal sealed class ConnectionsView : UserControl, IPage
             TwoColumns(Ui.Field("Level 2 source", source), Ui.Field("Products", products)),
             Note(MaterialIconKind.InformationOutline, "Indices (ES, NQ, YM, RTY and micros) and gold (GC, MGC) use the front month on their own. Anything else, type its exact dxFeed symbol, for example /CLZ26:XNYM. glbx is CME Globex by price level (lower case: dxFeed rejects GLBX); “Test connection” tells you whether Level 2 is arriving."),
             Note(MaterialIconKind.ShieldKeyOutline, "The token is stored in the Credential Manager / Keychain. Trading Hub uses dxFeed for data only (it sends no orders)."));
+    }
+
+    /// <summary>Ironbeam: user, password and API key of your account, demo or live server, and the futures it offers.</summary>
+    private Control IronbeamSection(ConnectionProfile p, List<Action> apply)
+    {
+        var demo = new ToggleSwitch { IsChecked = p.Testnet, OnContent = "Demo server", OffContent = "Live server" };
+        var user = new TextBox { Text = p.IronbeamUser, Watermark = "Ironbeam user" };
+        var pass = SecretBox(p, null, "password");
+        var key = SecretBox(p, "apikey", "API key (from your Ironbeam account)");
+        var products = new TextBox { Text = string.Join(", ", p.IronbeamProducts), Watermark = "ES, NQ, MES, MNQ, GC, MGC, XNYM:CL.Z26…" };
+        apply.Add(() =>
+        {
+            p.Testnet = demo.IsChecked == true;
+            p.IronbeamUser = (user.Text ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(pass.Text)) _svc.Connections.SetSecret(p, pass.Text);
+            pass.Text = "";
+            if (!string.IsNullOrWhiteSpace(key.Text)) _svc.Connections.SetSecret(p, "apikey", key.Text.Trim());
+            key.Text = "";
+            p.IronbeamProducts = (products.Text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().ToList();
+        });
+        return Ui.V(14,
+            Ui.H2("Ironbeam"),
+            Note(MaterialIconKind.InformationOutline, "Live CME futures from Ironbeam's API: every trade with its aggressor side and the order book by price level (Level 2) in the DOM and the heatmap. There is no history download: the chart fills from the moment it connects."),
+            demo,
+            TwoColumns(Ui.Field("User", user), Ui.Field("Password", pass)),
+            Ui.Field("API key", key),
+            Ui.Field("Products", products, "Indices (ES, NQ, YM, RTY and micros) and gold (GC, MGC) use the front month on their own. For anything else type the exact symbol, for example XNYM:CL.Z26."),
+            Note(MaterialIconKind.AlertOutline, "This connection was built from Ironbeam's published API and tested against a simulated server, not an Ironbeam account. \u201cTest connection\u201d signs in and tells you whether trades and Level 2 arrive; whether Ironbeam sends the whole book or only the changed levels is not documented, so check the book against another source the first time."),
+            Note(MaterialIconKind.ShieldKeyOutline, "The password and API key are stored in the Credential Manager / Keychain. Trading Hub uses Ironbeam for data only (it sends no orders)."));
     }
 
     private Control IbSection(ConnectionProfile p, List<Action> apply)

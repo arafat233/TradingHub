@@ -178,6 +178,7 @@ public enum ConnectionKind
     [Display(Name = "Kraken")] Kraken,
     [Display(Name = "Coinbase")] Coinbase,
     [Display(Name = "Bitfinex")] Bitfinex,
+    [Display(Name = "Ironbeam")] Ironbeam,
 }
 
 /// <summary>A configured connection (the secrets go to the keychain, not to this file).</summary>
@@ -245,6 +246,10 @@ public sealed class ConnectionProfile
     public string DxFeedDomSource { get; set; } = "glbx";
     public List<string> DxFeedProducts { get; set; } = new TradingHub.Feeds.DxFeed.DxFeedSettings().Products;
 
+    // Ironbeam: the login user (the password and the API key go to the keychain; Testnet = the demo server) and the futures it offers on charts
+    public string IronbeamUser { get; set; } = "";
+    public List<string> IronbeamProducts { get; set; } = new TradingHub.Feeds.Ironbeam.IronbeamSettings().Products;
+
     // Interactive Brokers
     public string IbHost { get; set; } = "127.0.0.1";
     public int IbPort { get; set; } = 7497;
@@ -275,6 +280,7 @@ public sealed class ConnectionProfile
         ConnectionKind.Databento => "databento",
         ConnectionKind.DxFeed => TradingHub.Feeds.DxFeed.DxFeedFeed.FeedId,
         ConnectionKind.LondonStrategicEdge => TradingHub.Feeds.LondonStrategicEdge.LseFeed.FeedId,
+        ConnectionKind.Ironbeam => TradingHub.Feeds.Ironbeam.IronbeamFeed.FeedId,
         _ => "ib",
     };
 
@@ -291,6 +297,7 @@ public sealed class ConnectionProfile
         ConnectionKind.Databento => "databento",
         ConnectionKind.DxFeed => TradingHub.Feeds.DxFeed.DxFeedFeed.FeedId,
         ConnectionKind.LondonStrategicEdge => TradingHub.Feeds.LondonStrategicEdge.LseFeed.FeedId,
+        ConnectionKind.Ironbeam => TradingHub.Feeds.Ironbeam.IronbeamFeed.FeedId,
         _ => Guid.NewGuid().ToString("N")[..8],
     };
 
@@ -427,6 +434,7 @@ public sealed class ConnectionManager
                 Gateway = Environment.GetEnvironmentVariable("TRADINGHUB_DATABENTO_LIVE") is { Length: > 0 } g ? g : null,
             }),
             ConnectionKind.DxFeed => new TradingHub.Feeds.DxFeed.DxFeedFeed(DxFeedSettingsOf(p)),
+            ConnectionKind.Ironbeam => new TradingHub.Feeds.Ironbeam.IronbeamFeed(IronbeamSettingsOf(p)),
             ConnectionKind.LondonStrategicEdge => new TradingHub.Feeds.LondonStrategicEdge.LseFeed(new()
             {
                 ApiKey = GetSecret(p),
@@ -532,6 +540,17 @@ public sealed class ConnectionManager
         Products = p.DxFeedProducts,
     };
 
+    /// <summary>Ironbeam settings: user in the profile, password and API key in the keychain (TRADINGHUB_IRONBEAM_URL points it at another server in the tests).</summary>
+    public TradingHub.Feeds.Ironbeam.IronbeamSettings IronbeamSettingsOf(ConnectionProfile p) => new()
+    {
+        Demo = p.Testnet,
+        Username = p.IronbeamUser,
+        Password = GetSecret(p),
+        ApiKey = GetSecret(p, "apikey"),
+        BaseUrl = Environment.GetEnvironmentVariable("TRADINGHUB_IRONBEAM_URL") is { Length: > 0 } u ? u : null,
+        Products = p.IronbeamProducts,
+    };
+
     public TradingHub.Feeds.Databento.DatabentoClient DatabentoOf(ConnectionProfile p) =>
         new(GetSecret(p), Environment.GetEnvironmentVariable("TRADINGHUB_DATABENTO_URL") is { Length: > 0 } u ? u : null);
 
@@ -602,6 +621,8 @@ public sealed class ConnectionManager
                     return await ((TradingHub.Feeds.Alpaca.AlpacaFeed)GetFeed(p.Id)).TestAsync(ct);
                 case ConnectionKind.DxFeed:
                     return await ((TradingHub.Feeds.DxFeed.DxFeedFeed)GetFeed(p.Id)).TestAsync(ct);
+                case ConnectionKind.Ironbeam:
+                    return await ((TradingHub.Feeds.Ironbeam.IronbeamFeed)GetFeed(p.Id)).TestAsync(ct);
                 case ConnectionKind.LondonStrategicEdge:
                     if (string.IsNullOrWhiteSpace(GetSecret(p))) return (false, "The London Strategic Edge API key is missing (it is free at londonstrategicedge.com/data).");
                     return await ((TradingHub.Feeds.LondonStrategicEdge.LseFeed)GetFeed(p.Id)).TestAsync(ct);

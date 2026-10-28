@@ -54,6 +54,7 @@ key's public identifier (for example, the Binance API key or the Alpaca Key ID) 
 | Alpaca | US stocks and ETFs | API key ID and secret key | No (data only) |
 | Databento | CME futures history since 2010 | API key (pay per use) | No (history only) |
 | London Strategic Edge | Free stocks, ETFs, forex, crypto, indices: live ticks, 24 h of ticks, older history as candles | A free API key | No (data only) |
+| Ironbeam | CME futures live: every trade with its aggressor side and Level 2 | User, password and API key of your Ironbeam account | No (data only) |
 | Interactive Brokers | For now, only a connection test | TWS or IB Gateway with the API enabled | No |
 
 Any connection with data can be traded with the **simulated account**.
@@ -195,6 +196,24 @@ commodities, indices and futures. It only asks for a free **API key**, stored in
   example the service's own Python client) has to wait: it shows «the free plan allows only 1 websocket per key at a time» and keeps retrying
   until the first one is closed.
 - **Test connection** checks the key against the service's usage endpoint and uses none of your allowance.
+
+## Ironbeam
+
+CME futures live from [Ironbeam's API](https://docs.ironbeamapi.com/): every trade with its **real aggressor side** and the order book by
+price level (Level 2), so the DOM, the heatmap, the recorded book and the footprint work on it. Ironbeam says Level 2 is free for its users.
+
+- It asks for your **user**, **password** and **API key** (password and key are stored in the Keychain / Credential Manager), and whether to use the
+  **demo** or the **live** server.
+- **Products**: indices (ES, NQ, YM, RTY and the micros) and gold (GC, MGC) use the front month on their own. For anything else type the exact
+  symbol in the form Ironbeam uses, for example `XNYM:CL.Z26` (exchange, product, month code and two-digit year).
+- **Live only**: Ironbeam's trade history returns at most 100 trades, so there is no history download. The chart fills from the moment it
+  connects, and recording ticks and the book works like on the other live feeds.
+- **Test connection** signs in, opens a stream for the first product and says whether trades and Level 2 arrive. An account without depth
+  still connects and the test tells you so.
+- **Not verified on a real account**: this connection was written from Ironbeam's published API (field names, aggressor side 1 = buy and
+  2 = sell, depth levels with a row number) and tested against a simulated server. Ironbeam does not document whether a depth message carries
+  the whole book or only the levels that changed, so each message is applied level by level; compare the book with another source the first
+  time. Orders are not sent: it is data only.
 
 ## Interactive Brokers
 

@@ -214,14 +214,14 @@ internal sealed class SettingsView : UserControl, IPage
     {
         var handle = new TextBlock
         {
-            Text = "@ralphtradesz",
+            Text = "@arafat233",
             Foreground = Ui.Accent,
             FontWeight = FontWeight.SemiBold,
             TextDecorations = TextDecorations.Underline,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
         };
-        handle.PointerPressed += (_, _) => Shell.OpenUrl("https://x.com/ralphtradesz");
-        ToolTip.SetTip(handle, "x.com/ralphtradesz");
+        handle.PointerPressed += (_, _) => Shell.OpenUrl("https://github.com/arafat233");
+        ToolTip.SetTip(handle, "github.com/arafat233");
         return Ui.H(6, new TextBlock { Text = "Created by", Classes = { "faint", "small" }, VerticalAlignment = VerticalAlignment.Center }, handle);
     }
 

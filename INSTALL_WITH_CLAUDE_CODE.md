@@ -12,7 +12,7 @@ Applications and leaves it connected to your Claude subscription. You don't need
 
 1. Download the project. With Git:
    ```bash
-   git clone https://github.com/ralphtradesz/trading-hub.git
+   git clone https://github.com/arafat233/TradingHub.git
    ```
    or from GitHub: **Code → Download ZIP** and unzip it.
 2. Open a Terminal in that folder and start Claude Code:

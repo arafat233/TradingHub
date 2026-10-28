@@ -147,6 +147,8 @@ internal sealed partial class LiveView
     {
         "rithmic" => "CME future · Rithmic",
         "tradovate" => "CME future · Tradovate",
+        "dxfeed" => "CME future · dxFeed",
+        "ironbeam" => "CME future · Ironbeam",
         "binance-futures" => "Binance perpetual",
         "binance-spot" => "Binance spot",
         "bybit-linear" => "Bybit perpetual",

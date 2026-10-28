@@ -272,7 +272,7 @@ public sealed partial class HeatmapRenderer
         if (hist.Count == 0)
         {
             if (m.Replay is { Loading: true }) { Message(canvas, width, heatH, "Loading the recorded book…", "Reading the day from disk."); DrawTimeAxis(canvas, m, plotW, heatH + volH + cvdH); return; }
-            Message(canvas, width, heatH, "Waiting for the order book…", "The heatmap needs a connection that sends depth (Rithmic, dxFeed, Databento, Tradovate, Binance, Bybit or the Simulator).");
+            Message(canvas, width, heatH, "Waiting for the order book…", "The heatmap needs a connection that sends depth (Rithmic, dxFeed, Ironbeam, Databento, Tradovate, Binance, Bybit or the Simulator).");
             DrawTimeAxis(canvas, m, plotW, heatH + volH + cvdH);
             return;
         }

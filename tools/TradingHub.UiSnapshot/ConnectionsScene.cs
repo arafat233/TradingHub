@@ -50,6 +50,7 @@ internal static class ConnectionsScene
         using var databento = FakeBrokers.Databento();
         using var alpaca = FakeBrokers.Alpaca();
         using var lse = TradingHub.Tests.FakeLse.Server(out _);
+        using var ironbeam = TradingHub.Tests.FakeIronbeam.Server(out _);
         using var tradovate = new FakeTradovate();
         using var ctrader = new FakeCTrader();
         Environment.SetEnvironmentVariable("TRADINGHUB_OANDA_REST", oanda.Http);
@@ -59,6 +60,7 @@ internal static class ConnectionsScene
         Environment.SetEnvironmentVariable("TRADINGHUB_DATABENTO_LIVE", "127.0.0.1:9");
         Environment.SetEnvironmentVariable("TRADINGHUB_LSE_WS", lse.Ws);
         Environment.SetEnvironmentVariable("TRADINGHUB_LSE_API", lse.Http);
+        Environment.SetEnvironmentVariable("TRADINGHUB_IRONBEAM_URL", ironbeam.Http + "/v2");
         Environment.SetEnvironmentVariable("TRADINGHUB_ALPACA_DATA", alpaca.Http);
         Environment.SetEnvironmentVariable("TRADINGHUB_ALPACA_TRADING", alpaca.Http);
         Environment.SetEnvironmentVariable("TRADINGHUB_ALPACA_STREAM", alpaca.Ws + "/v2/iex");
@@ -70,14 +72,17 @@ internal static class ConnectionsScene
         var svc = App.Services;
         var conns = svc.Connections;
         Check(!AppPaths.Root.StartsWith(TradingHub.Common.Product.AppData, StringComparison.Ordinal), "data in a temporary folder (never the real one)");
-        conns.Profiles.RemoveAll(p => p.Kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.LondonStrategicEdge);
+        conns.Profiles.RemoveAll(p => p.Kind is ConnectionKind.Tradovate or ConnectionKind.CTrader or ConnectionKind.Oanda or ConnectionKind.Alpaca or ConnectionKind.Databento or ConnectionKind.LondonStrategicEdge or ConnectionKind.Ironbeam);
         var pOanda = new ConnectionProfile { Id = "oanda", Kind = ConnectionKind.Oanda, Name = "OANDA", Testnet = true };
         var pDb = new ConnectionProfile { Id = "databento", Kind = ConnectionKind.Databento, Name = "Databento" };
         var pTv = new ConnectionProfile { Id = "tradovate", Kind = ConnectionKind.Tradovate, Name = "Tradovate", Testnet = true, TradovateUser = "demo", TradovateCid = "123" };
         var pCt = new ConnectionProfile { Id = "ctrader", Kind = ConnectionKind.CTrader, Name = "IC Markets", Testnet = true, CTraderClientId = "ID" };
         var pAl = new ConnectionProfile { Id = "alpaca", Kind = ConnectionKind.Alpaca, Name = "Alpaca", ApiKey = "KEY" };
         var pLse = new ConnectionProfile { Id = "lse", Kind = ConnectionKind.LondonStrategicEdge, Name = "London Strategic Edge" };
-        conns.Profiles.AddRange(new[] { pTv, pCt, pOanda, pAl, pDb, pLse });
+        var pIb = new ConnectionProfile { Id = "ironbeam", Kind = ConnectionKind.Ironbeam, Name = "Ironbeam", Testnet = true, IronbeamUser = "me", IronbeamProducts = new() { TradingHub.Tests.FakeIronbeam.EsSymbol } };
+        conns.Profiles.AddRange(new[] { pTv, pCt, pOanda, pAl, pDb, pLse, pIb });
+        conns.SetSecret(pIb, "pw");
+        conns.SetSecret(pIb, "apikey", "key-1");
         conns.SetSecret(pLse, "KEY");
         conns.SetSecret(pOanda, "TOKEN");
         conns.SetSecret(pDb, "db-KEY");
@@ -87,13 +92,13 @@ internal static class ConnectionsScene
         conns.SetSecret(pCt, "token", "TOKEN");
         conns.SetSecret(pAl, "SECRET");
         conns.Save();
-        foreach (var q in new[] { pTv, pCt, pOanda, pAl, pDb, pLse }) conns.Invalidate(q); // a feed made before the test keys existed (a saved chart opening at start-up) would keep an empty key
+        foreach (var q in new[] { pTv, pCt, pOanda, pAl, pDb, pLse, pIb }) conns.Invalidate(q); // a feed made before the test keys existed (a saved chart opening at start-up) would keep an empty key
         Check(conns.GetSecret(pTv, "apisecret") == "SEC", "the secrets go to the test keychain (a separate file)");
         Check(pCt.MarketDataId == "ctrader" && pDb.HasMarketData && pTv.HasMarketData && !new ConnectionProfile { Kind = ConnectionKind.InteractiveBrokers }.HasMarketData,
             "data ids and connections with no charts (only IB; Databento has live data)");
 
         // ----- test each connection
-        foreach (var p in new[] { pTv, pCt, pOanda, pAl, pDb, pLse })
+        foreach (var p in new[] { pTv, pCt, pOanda, pAl, pDb, pLse, pIb })
         {
             var t = conns.TestAsync(p, CancellationToken.None);
             Await(t);
@@ -105,7 +110,7 @@ internal static class ConnectionsScene
         window.Navigate("connections");
         pump(1);
         var cview = window.GetType().GetField("_pages", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window) is Dictionary<string, Control> pages ? pages["connections"] : null;
-        foreach (var (p, name) in new[] { (pTv, "tradovate"), (pCt, "ctrader"), (pOanda, "oanda"), (pAl, "alpaca"), (pDb, "databento"), (pLse, "lse") })
+        foreach (var (p, name) in new[] { (pTv, "tradovate"), (pCt, "ctrader"), (pOanda, "oanda"), (pAl, "alpaca"), (pDb, "databento"), (pLse, "lse"), (pIb, "ironbeam") })
         {
             Call(cview!, "Select", p);
             Shot("connection_" + name);

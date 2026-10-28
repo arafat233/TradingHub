@@ -6,8 +6,6 @@
 Footprint charts, DOM trading, professional anti-overfitting backtesting and AI-powered strategies,
 with your data and your keys always on your own computer.
 
-Created by [**@ralphtradesz**](https://x.com/ralphtradesz)
-
 On Windows? [See how to port it with Claude](#on-windows).
 
 [![MIT + Commons Clause license](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-amber.svg)](LICENSE)
@@ -113,7 +111,7 @@ You need an Apple Silicon Mac with macOS 12 or newer (for Windows, see [On Windo
 ```bash
 curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
 bash /tmp/dotnet-install.sh --channel 10.0
-git clone https://github.com/ralphtradesz/trading-hub.git
+git clone https://github.com/arafat233/TradingHub.git
 cd trading-hub
 ./build-app.sh --install
 ```
@@ -133,7 +131,7 @@ PC, in stages, with the tests green at every step.
    with your Claude account.
 2. Clone the repository and open a terminal in the folder:
    ```bash
-   git clone https://github.com/ralphtradesz/trading-hub.git
+   git clone https://github.com/arafat233/TradingHub.git
    cd trading-hub
    claude
    ```
@@ -267,8 +265,3 @@ add them yourself from their public source (see [More indicators](#more-indicato
 
 ---
 
-<div align="center">
-
-Made with care by [**@ralphtradesz**](https://x.com/ralphtradesz)
-
-</div>

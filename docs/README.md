@@ -39,6 +39,5 @@ getting-started tour.
 
 ---
 
-Trading Hub is free and its code is public (MIT license with Commons Clause: it can be used and modified, not sold) and
-it was created by [@ralphtradesz](https://x.com/ralphtradesz). If it is useful to you, you can
+Trading Hub is free and its code is public (MIT license with Commons Clause: it can be used and modified, not sold). If it is useful to you, you can
 [support the project](../README.md#support-the-project).
