@@ -1,0 +1,91 @@
+bars: 71066  train 42164 (2025-09-19 to 2026-04-30)  test 28902 (2026-05-01 to 2026-10-16)
+median cost per round trip (spread proxy + commission): 0.35 points; median 5-min move 1.90; median 60-min move 7.10
+
+== delta extreme (top/bottom 10%)   (test bars: buy 12.4%  wait 73.1%  sell 14.6%)
+    5 min  TRAIN n= 8368  hit=47.6%  gross=-0.004  t=-0.09  net=-0.438  t_net=-9.21
+           TEST  n= 7649  hit=47.5%  gross=-0.019  t=-0.51  net=-0.410  t_net=-10.91
+   15 min  TRAIN n= 5572  hit=48.6%  gross=+0.010  t=+0.09  net=-0.421  t_net=-3.87
+           TEST  n= 4714  hit=49.0%  gross=-0.108  t=-1.34  net=-0.496  t_net=-6.10
+   30 min  TRAIN n= 3817  hit=47.7%  gross=-0.005  t=-0.03  net=-0.433  t_net=-2.26
+           TEST  n= 3016  hit=49.3%  gross=-0.103  t=-0.69  net=-0.490  t_net=-3.31
+   60 min  TRAIN n= 2333  hit=49.0%  gross=+0.200  t=+0.57  net=-0.233  t_net=-0.66
+           TEST  n= 1770  hit=48.6%  gross=+0.206  t=+0.73  net=-0.183  t_net=-0.65
+
+== big trades net (>=1 big sweep)   (test bars: buy 15.5%  wait 68.3%  sell 16.3%)
+    5 min  TRAIN n=18671  hit=48.4%  gross=-0.020  t=-0.43  net=-0.441  t_net=-9.21
+           TEST  n= 9138  hit=48.3%  gross=-0.038  t=-0.82  net=-0.417  t_net=-8.95
+   15 min  TRAIN n= 9145  hit=49.3%  gross=-0.021  t=-0.19  net=-0.446  t_net=-4.02
+           TEST  n= 5059  hit=49.7%  gross=+0.051  t=+0.52  net=-0.329  t_net=-3.36
+   30 min  TRAIN n= 5356  hit=49.7%  gross=-0.004  t=-0.02  net=-0.435  t_net=-2.17
+           TEST  n= 3181  hit=50.0%  gross=+0.120  t=+0.70  net=-0.262  t_net=-1.53
+   60 min  TRAIN n= 2962  hit=49.8%  gross=+0.255  t=+0.70  net=-0.187  t_net=-0.51
+           TEST  n= 1835  hit=49.2%  gross=+0.148  t=+0.49  net=-0.238  t_net=-0.78
+
+== stacked imbalance   (test bars: buy 18.0%  wait 63.0%  sell 19.0%)
+    5 min  TRAIN n=17429  hit=48.2%  gross=+0.017  t=+0.32  net=-0.449  t_net=-8.37
+           TEST  n=10648  hit=47.5%  gross=-0.151  t=-3.74  net=-0.542  t_net=-13.40
+   15 min  TRAIN n= 9173  hit=48.3%  gross=-0.166  t=-1.52  net=-0.615  t_net=-5.63
+           TEST  n= 5897  hit=49.2%  gross=-0.091  t=-1.03  net=-0.480  t_net=-5.42
+   30 min  TRAIN n= 5440  hit=48.6%  gross=-0.161  t=-0.83  net=-0.608  t_net=-3.15
+           TEST  n= 3579  hit=50.0%  gross=-0.150  t=-0.94  net=-0.540  t_net=-3.41
+   60 min  TRAIN n= 3005  hit=47.5%  gross=-0.897  t=-2.44  net=-1.350  t_net=-3.66
+           TEST  n= 1991  hit=49.9%  gross=-0.074  t=-0.25  net=-0.466  t_net=-1.60
+
+== bar momentum (top/bottom 10%)   (test bars: buy 6.7%  wait 86.5%  sell 6.8%)
+    5 min  TRAIN n= 8551  hit=47.2%  gross=-0.003  t=-0.03  net=-0.589  t_net=-5.97
+           TEST  n= 3877  hit=46.9%  gross=-0.122  t=-1.46  net=-0.533  t_net=-6.36
+   15 min  TRAIN n= 5092  hit=47.0%  gross=-0.049  t=-0.26  net=-0.593  t_net=-3.11
+           TEST  n= 2639  hit=47.5%  gross=-0.083  t=-0.53  net=-0.486  t_net=-3.09
+   30 min  TRAIN n= 3354  hit=48.6%  gross=+0.415  t=+1.36  net=-0.111  t_net=-0.36
+           TEST  n= 1891  hit=49.3%  gross=-0.301  t=-1.18  net=-0.702  t_net=-2.75
+   60 min  TRAIN n= 2091  hit=49.1%  gross=+0.461  t=+1.01  net=-0.050  t_net=-0.11
+           TEST  n= 1252  hit=49.5%  gross=-0.155  t=-0.37  net=-0.553  t_net=-1.34
+
+== vote: >=2 of 3 agree   (test bars: buy 13.9%  wait 70.9%  sell 15.2%)
+    5 min  TRAIN n=13555  hit=47.8%  gross=-0.013  t=-0.24  net=-0.448  t_net=-8.45
+           TEST  n= 8377  hit=47.6%  gross=-0.118  t=-2.65  net=-0.503  t_net=-11.29
+   15 min  TRAIN n= 8006  hit=48.8%  gross=-0.047  t=-0.42  net=-0.480  t_net=-4.23
+           TEST  n= 5108  hit=49.4%  gross=-0.065  t=-0.70  net=-0.448  t_net=-4.85
+   30 min  TRAIN n= 5022  hit=48.7%  gross=+0.096  t=+0.47  net=-0.342  t_net=-1.69
+           TEST  n= 3267  hit=50.6%  gross=-0.004  t=-0.02  net=-0.389  t_net=-2.42
+   60 min  TRAIN n= 2873  hit=49.3%  gross=+0.078  t=+0.22  net=-0.366  t_net=-1.02
+           TEST  n= 1882  hit=50.1%  gross=+0.119  t=+0.41  net=-0.270  t_net=-0.92
+
+== vote: all 3 agree   (test bars: buy 4.3%  wait 90.6%  sell 5.1%)
+    5 min  TRAIN n= 4512  hit=47.6%  gross=+0.064  t=+0.71  net=-0.362  t_net=-4.01
+           TEST  n= 2721  hit=47.0%  gross=-0.181  t=-2.22  net=-0.565  t_net=-6.96
+   15 min  TRAIN n= 3579  hit=47.9%  gross=+0.093  t=+0.54  net=-0.331  t_net=-1.94
+           TEST  n= 2144  hit=49.4%  gross=-0.018  t=-0.12  net=-0.401  t_net=-2.72
+   30 min  TRAIN n= 2759  hit=47.7%  gross=+0.395  t=+1.51  net=-0.032  t_net=-0.12
+           TEST  n= 1691  hit=50.7%  gross=+0.158  t=+0.70  net=-0.225  t_net=-1.00
+   60 min  TRAIN n= 1929  hit=47.6%  gross=+0.436  t=+1.02  net=+0.004  t_net=+0.01
+           TEST  n= 1194  hit=49.7%  gross=+0.390  t=+1.03  net=+0.005  t_net=+0.01
+
+Average signed forward move by class, TEST months, every bar (points, gross; positive buy = price rose after a buy call)
+   vote: >=2 of 3 agree                5 min:  after BUY -0.080   after WAIT -0.034   after SELL +0.153
+   vote: >=2 of 3 agree               15 min:  after BUY -0.035   after WAIT -0.091   after SELL +0.153
+   vote: >=2 of 3 agree               30 min:  after BUY -0.127   after WAIT -0.102   after SELL +0.021
+   vote: >=2 of 3 agree               60 min:  after BUY -0.266   after WAIT -0.162   after SELL -0.071
+   delta extreme (top/bottom 10%)      5 min:  after BUY +0.018   after WAIT -0.029   after SELL +0.050
+   delta extreme (top/bottom 10%)     15 min:  after BUY -0.052   after WAIT -0.072   after SELL +0.090
+   delta extreme (top/bottom 10%)     30 min:  after BUY -0.104   after WAIT -0.116   after SELL +0.081
+   delta extreme (top/bottom 10%)     60 min:  after BUY +0.045   after WAIT -0.198   after SELL -0.152
+
+Vote >=2 of 3, 15-minute hold, by month (thresholds from the train months):
+            n  gross   cost    net
+m                                 
+2025-09   443 -0.058  0.204 -0.263
+2025-10  1304  0.104  0.324 -0.220
+2025-11   990  0.162  0.330 -0.168
+2025-12  1144 -0.091  0.297 -0.388
+2026-01  1177 -0.425  0.401 -0.826
+2026-02   923  0.092  0.740 -0.647
+2026-03  1130 -0.123  0.619 -0.742
+2026-04   895  0.009  0.482 -0.472
+2026-05   533 -0.013  0.474 -0.487
+2026-06   790  0.240  0.451 -0.211
+2026-07  1078 -0.196  0.406 -0.603
+2026-08  1087 -0.000  0.355 -0.355
+2026-09  1085 -0.271  0.338 -0.608
+2026-10   535 -0.012  0.301 -0.313
+months with positive gross: 5 of 14;  with positive net: 0 of 14

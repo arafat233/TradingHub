@@ -311,7 +311,7 @@ public sealed partial class HeatmapRenderer
         _fill.Color = new SKColor(16, 22, 30);
         canvas.DrawRect(x, y, w, h, _fill);
         decimal hidBid = 0, hidAsk = 0;
-        foreach (var e in m.Icebergs.Events)
+        foreach (var e in m.AllIcebergs)
         {
             if (e.Last < m.StartTime || e.Start > m.EndTime) continue;
             if (e.Ask) hidAsk += e.Volume; else hidBid += e.Volume;

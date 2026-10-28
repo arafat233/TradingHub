@@ -85,7 +85,18 @@ on the chart immediately.
    - That column's own **Background colors** and **Text colors** (automatic = the theme's).
 4. In **General options**: each candle's totals, a box at the POC, marking imbalances, the imbalance ratio and minimum
    volume (3 times by default), the strong-delta threshold, the minimum volume for highlighting and whether the colors
-   are proportional to each candle or to everything visible.
+   are proportional to each candle or to everything visible. Three options make a candle easier to read at a glance:
+   - **Mark stacked imbalances**: a bar on the candle's right edge where 3 or more rows in a row are imbalanced the same
+     way (green = buyers, in the outer lane; red = sellers, next to it). A single imbalance is easy to miss, a stack is not.
+   - **Summary under each candle**: two lines at the bottom of the chart. The top one is the candle's delta as a % of its
+     volume, on a background that grows with it (green buyers, red sellers). The bottom one shows its volume against the
+     visible average (1.5x is half as much again) and a triangle for the POC: up if it is in the top third of the candle,
+     down in the bottom third, a diamond in the middle.
+   - **Hide small numbers**: *Hide numbers below* drops the numbers of levels under a fraction of the candle's POC volume
+     (0.1 = 10 %), and *Hide small numbers when zoomed out* does it automatically when the rows are small. The POC and the
+     imbalanced levels always keep their numbers and the colors still show every level.
+
+   These are reading aids: our own tests found no forward edge in the imbalances or the delta (see `research/flow-study`).
 5. Enter a **Template name** and click **Save as template** to use it on other charts.
 
 ## Moving around the chart

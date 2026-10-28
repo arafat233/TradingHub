@@ -53,6 +53,9 @@ internal sealed class FootprintRenderer
         public long PocRow;
         public decimal PocVolume;
 
+        /// <summary>Levels with less volume than this keep no number (the POC, imbalanced and highlighted ones always do).</summary>
+        public decimal HideBelow;
+
         public LevelData Get(long r) => r < AggMin || r > AggMax ? default : Agg[r - AggMin];
 
         /// <summary>Aggregated row of a price in ticks.</summary>
@@ -155,13 +158,24 @@ internal sealed class FootprintRenderer
 
         // maximums over what is visible (if the colors are not per candle) - over the aggregated rows
         var visible = new Stats();
-        decimal visMaxVol = 0;
+        decimal visMaxVol = 0, sumVol = 0;
+        int volCount = 0;
         for (int i = Math.Max(0, layout.FirstVisible); i <= Math.Min(layout.LastVisible, series.Count - 1); i++)
         {
             ctx.Aggregate(series[i]);
             for (long r = ctx.AggMin; r <= ctx.AggMax; r++) visible.Take(ctx.Agg[r - ctx.AggMin]);
             visMaxVol = Math.Max(visMaxVol, ctx.PocVolume);
+            if (!series[i].IsSynthetic && series[i].Trades > 0)
+            {
+                sumVol += series[i].Volume;
+                volCount++;
+            }
         }
+
+        decimal avgVolume = volCount > 0 ? sumVol / volCount : 0;
+        // with small rows (a small manual row size, or zoomed out) the numbers crowd each other: keep only the ones that matter (a fraction of the POC) unless the user turned that off
+        decimal hideFraction = Math.Max(L.HideNumbersBelow, L.AutoDeclutter && rowH < 13 ? 0.2m : 0m);
+        var summaryFont = RenderContext.GetFont(t.FontFamily, 9, true, false);
 
         ctx.Decimals = ChooseDecimals(visMaxVol, model.Instrument.VolumeDecimals);
         ctx.BaseOff = -ctx.Font.Metrics.Ascent / 2f - ctx.Font.Metrics.Descent / 2f;
@@ -202,6 +216,7 @@ internal sealed class FootprintRenderer
             }
 
             ctx.Aggregate(c);
+            ctx.HideBelow = ctx.PocVolume * hideFraction;
             ctx.MinRow = Math.Max(ctx.AggMin, botRow);
             ctx.MaxRow = Math.Min(ctx.AggMax, topRow);
             if (L.ProportionPerCandle)
@@ -235,10 +250,108 @@ internal sealed class FootprintRenderer
             }
 
             if (model.Settings.ShowValueArea) DrawValueArea(canvas, ctx, slotLeft + slotW - 3, slotLeft + slotW);
+            if (L.ShowStackedImbalances) DrawStacks(canvas, ctx, slotLeft, slotW);
 
             DrawTotals(canvas, ctx, c, slotLeft, slotW, totalsFont, totDecimals, rowH);
+            if (L.ShowSummary) DrawSummary(canvas, ctx, c, slotLeft, slotW, avgVolume, summaryFont);
         }
     }
+
+    /// <summary>Height reserved at the bottom of the chart for the summary under each candle.</summary>
+    internal const float SummaryHeight = 30;
+
+    /// <summary>
+    /// Two lines at the bottom of the chart for each candle. Top: delta as a % of the candle's volume on a background that grows with it.
+    /// Bottom: its volume against the visible average (1.5x) and a triangle for the POC (upper third, lower third, a diamond in the middle).
+    /// </summary>
+    private void DrawSummary(SKCanvas canvas, Ctx x, TradingHub.Data.Candle c, float slotLeft, float slotW, decimal avgVolume, SKFont font)
+    {
+        if (slotW < 14 || c.Volume <= 0) return;
+        var t = x.T;
+        float bottom = x.Main.Rect.Bottom - 2, h = (SummaryHeight - 4) / 2f, top = bottom - 2 * h;
+        float left = slotLeft + 1, w = slotW - 2;
+
+        // delta % of the candle's volume
+        decimal pct = c.Delta / c.Volume;
+        float strength = (float)Math.Min(1m, Math.Abs(pct) / 0.5m);
+        _fill.Color = (pct >= 0 ? t.Ask : t.Bid).WithAlpha((byte)(35 + 170 * strength));
+        canvas.DrawRect(new SKRect(left, top, left + w, top + h - 1), _fill);
+        if (w >= 30)
+        {
+            string txt = (pct > 0 ? "+" : "") + Math.Round(pct * 100, 0) + "%";
+            _text.Color = t.Text;
+            float tw = RenderContext.MeasureWidth(font, txt);
+            canvas.DrawText(txt, left + w / 2 - tw / 2, Baseline(top, h - 1, font), font, _text);
+        }
+
+        // volume against the visible average, and where the POC is inside the candle
+        float y2 = top + h;
+        _fill.Color = t.Text.WithAlpha(22);
+        canvas.DrawRect(new SKRect(left, y2, left + w, y2 + h - 1), _fill);
+        if (avgVolume > 0 && w >= 34)
+        {
+            decimal rel = c.Volume / avgVolume;
+            string txt = rel.ToString(rel >= 10 ? "0" : "0.0") + "x";
+            _text.Color = rel >= 1.5m ? t.Text : t.Text.WithAlpha(150);
+            canvas.DrawText(txt, left + 2, Baseline(y2, h - 1, rel >= 1.5m ? font : x.Small), rel >= 1.5m ? font : x.Small, _text);
+        }
+
+        long lo = x.RowOfTicks(c.LowTicks), hi = x.RowOfTicks(c.HighTicks);
+        if (hi > lo && x.PocVolume > 0)
+        {
+            double frac = (double)(x.PocRow - lo) / (hi - lo);
+            float mx = left + w - 6, my = y2 + (h - 1) / 2f, s = 3.5f;
+            using var path = new SKPath();
+            if (frac >= 2.0 / 3) { path.MoveTo(mx, my - s); path.LineTo(mx + s, my + s); path.LineTo(mx - s, my + s); }
+            else if (frac <= 1.0 / 3) { path.MoveTo(mx, my + s); path.LineTo(mx + s, my - s); path.LineTo(mx - s, my - s); }
+            else { path.MoveTo(mx, my - s); path.LineTo(mx + s, my); path.LineTo(mx, my + s); path.LineTo(mx - s, my); }
+            path.Close();
+            _fill.Color = t.Poc;
+            canvas.DrawPath(path, _fill);
+        }
+    }
+
+    /// <summary>
+    /// A bar along the candle where several rows in a row (<see cref="FootprintLayout.StackedImbalanceLength"/>) are imbalanced the same way:
+    /// buyers (ask imbalances) in the outer lane of the right edge, sellers (bid imbalances) in the lane next to it, with a small cap at each end.
+    /// </summary>
+    private void DrawStacks(SKCanvas canvas, Ctx x, float slotLeft, float slotW)
+    {
+        if (x.AggMax < x.AggMin || slotW < 12) return;
+        int need = Math.Max(2, x.L.StackedImbalanceLength);
+        long runAskStart = 0, runBidStart = 0;
+        int runAsk = 0, runBid = 0;
+        for (long r = x.AggMin; r <= x.AggMax + 1; r++)
+        {
+            var d = r <= x.AggMax ? x.Get(r) : default;
+            var (a, b) = d.IsEmpty ? (false, false) : Imbalance(x, r, d);
+            if (a) { if (runAsk++ == 0) runAskStart = r; }
+            else { if (runAsk >= need) DrawStack(canvas, x, runAskStart, r - 1, true, slotLeft, slotW); runAsk = 0; }
+            if (b) { if (runBid++ == 0) runBidStart = r; }
+            else { if (runBid >= need) DrawStack(canvas, x, runBidStart, r - 1, false, slotLeft, slotW); runBid = 0; }
+        }
+    }
+
+    private void DrawStack(SKCanvas canvas, Ctx x, long fromRow, long toRow, bool buyers, float slotLeft, float slotW)
+    {
+        fromRow = Math.Max(fromRow, x.MinRow);
+        toRow = Math.Min(toRow, x.MaxRow);
+        if (toRow < fromRow) return;
+        float yTop = (float)(x.Main.Y(x.Center(toRow)) - x.RowH / 2), yBottom = (float)(x.Main.Y(x.Center(fromRow)) + x.RowH / 2);
+        // the right edge keeps its 3 px for the value area; buyers' bar sits just inside it and sellers' next to it (the left edge is the thin candle)
+        float bx = buyers ? slotLeft + slotW - 7 : slotLeft + slotW - 13;
+        _fill.Color = buyers ? x.T.ImbalanceAsk : x.T.ImbalanceBid;
+        canvas.DrawRect(new SKRect(bx, yTop, bx + 3, yBottom), _fill);
+        // a short cap at each end, pointing in towards the cells
+        float capLeft = bx - 3, capRight = bx + 3;
+        canvas.DrawRect(new SKRect(capLeft, yTop, capRight, yTop + 1.5f), _fill);
+        canvas.DrawRect(new SKRect(capLeft, yBottom - 1.5f, capRight, yBottom), _fill);
+    }
+
+    private static float Baseline(float top, float height, SKFont f) => top + height / 2 - (f.Metrics.Ascent + f.Metrics.Descent) / 2;
+
+    /// <summary>Whether a level keeps its number: big enough, or the POC, or imbalanced or highlighted.</summary>
+    private static bool NumberVisible(Ctx x, long r, in LevelData d, bool emphasised) => d.Volume >= x.HideBelow || r == x.PocRow || emphasised;
 
     /// <summary>Delta above and volume below the candle.</summary>
     private void DrawTotals(SKCanvas canvas, Ctx ctx, TradingHub.Data.Candle c, float slotLeft, float slotW, SKFont totalsFont, int totDecimals, double rowH)
@@ -317,6 +430,7 @@ internal sealed class FootprintRenderer
             CellBackground(canvas, x, col, cell, d);
             if (!showText) continue;
             var (askImb, bidImb) = Imbalance(x, r, d);
+            if (!NumberVisible(x, r, d, askImb || bidImb)) continue;
             bool isPoc = r == x.PocRow;
             DrawValueText(canvas, x, col, d, cell, yc + x.BaseOff, askImb && x.L.ShowImbalances, bidImb && x.L.ShowImbalances, isPoc, ColumnTextAlign.Center, false);
         }
@@ -362,6 +476,7 @@ internal sealed class FootprintRenderer
 
             if (!showText) continue;
             var (askImb, bidImb) = col.Value == FootprintValue.BidAsk ? Imbalance(x, r, d) : (false, false);
+            if (!NumberVisible(x, r, d, askImb || bidImb || hl != 0)) continue;
             var cell = new SKRect(left, (float)(yc - x.RowH / 2), right, (float)(yc + x.RowH / 2));
             DrawValueText(canvas, x, col, d, cell, yc + x.BaseOff, askImb && x.L.ShowImbalances, bidImb && x.L.ShowImbalances, r == x.PocRow, col.Align, hl != 0);
         }
@@ -463,7 +578,7 @@ internal sealed class FootprintRenderer
                 }
             }
 
-            if (numbers)
+            if (numbers && NumberVisible(x, r, d, hl != 0))
             {
                 var shown = col.Value == FootprintValue.BidAsk ? FootprintValue.Volume : col.Value;
                 string txt = ValueString(shown, d, x.Decimals);

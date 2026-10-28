@@ -12,8 +12,11 @@ namespace TradingHub.Data;
 /// </summary>
 public sealed class OrderIcebergDetector
 {
-    /// <summary>A new order must appear within this time after a fill to count as its refill (synthetic).</summary>
-    public TimeSpan Reload { get; set; } = TimeSpan.FromMilliseconds(100);
+    /// <summary>
+    /// A new order must appear within this time after a fill to count as its refill (synthetic). Zotikov and Antonov use 0.3 s on CME; Christensen and
+    /// Woodmansey measured the exchange's own refills at 76 ms on average (sd 98 ms), so 0.3 s also covers a client's round trip.
+    /// </summary>
+    public TimeSpan Reload { get; set; } = TimeSpan.FromMilliseconds(300);
 
     /// <summary>Allowed difference between the size of the filled order and the one that replaces it.</summary>
     public double SizeTolerance { get; set; } = 0.25;
@@ -28,6 +31,7 @@ public sealed class OrderIcebergDetector
         public DateTime Start, Last;
         public decimal Total;
         public int Refills;
+        public decimal Peak;
         public bool Native;
         public IcebergEvent? Event;
     }
@@ -87,6 +91,7 @@ public sealed class OrderIcebergDetector
         if (!soon || !alike) return;
         o.Chain = lf.Chain;
         lf.Chain.Refills++;
+        if (lf.Chain.Peak == 0) lf.Chain.Peak = lf.Clip;
         lf.Chain.Last = e.Time;
         Flag(lf.Chain, e.Time, e.Ask, e.PriceTicks, MinSyntheticRefills);
         _lastFill.Remove((e.Ask, e.PriceTicks));
@@ -114,6 +119,7 @@ public sealed class OrderIcebergDetector
             // native refill: the same order got its display size back after trades
             o.Chain ??= new Chain { Start = e.Time, Total = o.Filled, Native = true };
             o.Chain.Refills++;
+            if (o.Chain.Peak == 0) o.Chain.Peak = e.Size;
             o.Chain.Last = e.Time;
             Flag(o.Chain, e.Time, o.Ask, o.Ticks, MinNativeReloads);
         }
@@ -141,6 +147,7 @@ public sealed class OrderIcebergDetector
             ev.Last = c.Last;
             ev.Volume = c.Total;
             ev.Refills = c.Refills;
+            ev.Peak = c.Peak;
         }
     }
 
@@ -148,7 +155,7 @@ public sealed class OrderIcebergDetector
     {
         Touch(c);
         if (c.Event != null || c.Refills < min) return;
-        c.Event = new IcebergEvent { Start = c.Start, Last = time, Ticks = ticks, Ask = ask, Volume = c.Total, Refills = c.Refills, Native = c.Native };
+        c.Event = new IcebergEvent { Start = c.Start, Last = time, Ticks = ticks, Ask = ask, Volume = c.Total, Refills = c.Refills, Peak = c.Peak, Native = c.Native };
         Events.Add(c.Event);
     }
 

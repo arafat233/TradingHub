@@ -167,6 +167,25 @@ public sealed class FootprintLayout
     [Display(Name = "Imbalance: minimum volume")]
     public decimal ImbalanceMinVolume { get; set; }
 
+    /// <summary>A bar along the candle where several rows in a row are imbalanced the same way: a push, easier to see than one number.</summary>
+    [Display(Name = "Mark stacked imbalances", Description = "A bar beside the candle where several rows in a row are imbalanced: green = buyers, red = sellers, on the candle's right edge")]
+    public bool ShowStackedImbalances { get; set; } = true;
+
+    [Display(Name = "Stacked imbalance: rows in a row", Description = "How many consecutive imbalanced rows make a stack")]
+    public int StackedImbalanceLength { get; set; } = 3;
+
+    /// <summary>Two lines at the bottom of the chart for each candle: delta as a % of its volume, volume against the visible average, and where its POC sits.</summary>
+    [Display(Name = "Summary under each candle", Description = "Delta as a % of the candle's volume (colored), its volume against the visible average (1.5x = half as much again) and a triangle: POC in the upper or lower third, a diamond in the middle")]
+    public bool ShowSummary { get; set; } = true;
+
+    /// <summary>When the rows are small, only the numbers that matter are drawn (the big levels, the POC and the imbalanced ones).</summary>
+    [Display(Name = "Hide small numbers when zoomed out", Description = "With small rows only the large levels, the POC and imbalances keep their numbers; the colors still show every level")]
+    public bool AutoDeclutter { get; set; } = true;
+
+    /// <summary>Numbers of levels with less volume than this fraction of the candle's POC are not drawn (0 = all). The POC and imbalanced levels always keep theirs.</summary>
+    [Display(Name = "Hide numbers below", Description = "A fraction of the candle's POC volume (0.1 = 10%); 0 shows every number. The POC and imbalanced levels are always shown")]
+    public decimal HideNumbersBelow { get; set; }
+
     /// <summary>For "strong delta": |delta| / level volume (0.45 ~ 72/28).</summary>
     [Display(Name = "Strong delta from", Description = "|delta| / the level's volume (0.45 ≈ 72% on one side)")]
     public decimal StrongDeltaRatio { get; set; } = 0.45m;

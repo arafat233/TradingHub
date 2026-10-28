@@ -253,6 +253,9 @@ public sealed class ChartRenderer
         // combined mode writes the delta above and the volume below each candle: leave room
         if (footprint && model.Settings.Layout.ShowTotals && main.Rect.Height > 100)
             margin += rangeV * 26 / main.Rect.Height;
+        // the summary under each candle takes the bottom of the chart: keep the price range clear of it
+        if (footprint && model.Settings.Layout.ShowSummary && main.Rect.Height > 160)
+            margin += rangeV * FootprintRenderer.SummaryHeight / main.Rect.Height;
         main.Top = mid + rangeV / 2 + margin;
         main.Bottom = mid - rangeV / 2 - margin;
         vp.PriceTop = main.Top;

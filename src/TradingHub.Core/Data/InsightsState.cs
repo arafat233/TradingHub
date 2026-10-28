@@ -97,8 +97,8 @@ public sealed class InsightsState
         if (whales is { Prints: > 0 } w && Math.Abs(w.Net) >= 2 * w.Threshold)
             extra.Add(new Chip($"Large traders net {(w.Net > 0 ? "buying" : "selling")} {LiquidationClusters.Money(Math.Abs(w.Net))} ({w.Prints} prints, 30 min)", w.Net > 0 ? 1 : -1));
         _icebergs.Update(_data.DepthHistory, _data.Trades, 0);
-        if (_icebergs.Events.LastOrDefault(e => e.Last >= now.AddSeconds(-30)) is { } ice)
-            extra.Add(new Chip($"Possible iceberg {(ice.Ask ? "offer" : "bid")} at {inst.FromTicks(ice.Ticks):0.####}: {ice.Volume:0.##} traded into it", ice.Ask ? -1 : 1));
+        if (IcebergEvents.Merge(_icebergs.Events, _data.OrderIcebergs.Events).LastOrDefault(e => e.Last >= now.AddSeconds(-30)) is { } ice)
+            extra.Add(new Chip($"Possible iceberg {(ice.Ask ? "offer" : "bid")} at {inst.FromTicks(ice.Ticks):0.####}: {ice.Volume:0.##} traded into it{(ice.PredictedHidden > 0 ? $", ~{ice.PredictedHidden:0.##} more expected" : "")}",ice.Ask ? -1 : 1));
         if (PullStats.Hotspot(events, now, TimeSpan.FromMinutes(10)) is { } pull)
             extra.Add(new Chip($"{(pull.Ask ? "Offer" : "Bid")} at {inst.FromTicks(pull.Ticks):0.####} pulled {pull.Count}× in 10 min", 0));
         string? regimeTip = null;

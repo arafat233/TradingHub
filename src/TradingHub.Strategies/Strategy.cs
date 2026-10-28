@@ -207,7 +207,8 @@ public abstract class Strategy
     internal bool WantsIcebergs => TrackIcebergs;
 
     /// <summary>
-    /// Iceberg orders found so far (levels that absorbed much more than they showed; needs the book and TrackIcebergs).
+    /// Iceberg orders found so far (levels that absorbed much more than they showed; needs the book and TrackIcebergs). Strategies keep this absorption rule
+    /// only, so older backtests give the same results; the charts also use a refill rule.
     /// An iceberg with <c>Ask</c> true is a resting sell (buyers kept hitting it), false a resting buy.
     /// </summary>
     public IReadOnlyList<IcebergEvent> Icebergs => Host.Icebergs;

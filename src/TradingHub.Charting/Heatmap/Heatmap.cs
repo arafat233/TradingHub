@@ -106,6 +106,9 @@ public sealed class HeatmapModel
     /// <summary>Icebergs of what is on the screen (the live ones, or those of the replay).</summary>
     public IcebergDetector Icebergs => Replay?.Icebergs ?? _liveIcebergs;
 
+    /// <summary>What to draw: the order-level icebergs of a live feed that sends orders, plus the tape-based ones for the levels they did not see.</summary>
+    public IEnumerable<IcebergEvent> AllIcebergs => Replay != null ? Icebergs.Events : IcebergEvents.Merge(Icebergs.Events, Data.OrderIcebergs.Events);
+
     /// <summary>Add / pull / eaten events of the big resting levels (the L3-style list under the heatmap); the window feeds it.</summary>
     public BookEventDetector BookEvents { get; } = new();
 
@@ -477,7 +480,7 @@ public sealed partial class HeatmapRenderer
     {
         var font = RenderContext.GetFont("Arial", 10, true, false);
         int n = 0;
-        foreach (var e in m.Icebergs.Events)
+        foreach (var e in m.AllIcebergs)
         {
             if (e.Last < m.StartTime || e.Start > m.EndTime || e.Ticks > m.TopTicks || e.Ticks <= m.TopTicks - rows) continue;
             n++;
@@ -490,6 +493,7 @@ public sealed partial class HeatmapRenderer
             _stroke.StrokeWidth = 1.5f;
             canvas.DrawRect(x1, y - 1, x2 - x1, m.TickPx + 2, _stroke);
             string label = e.Volume >= 1000 ? $"{e.Volume / 1000:0.#}k" : e.Volume.ToString("0");
+            if (e.PredictedHidden > 0) label += $" (~{e.PredictedHidden:0} more)";
             _aa.Color = SKColors.White;
             canvas.DrawText(label, x2 + 3, y + m.TickPx / 2 + 3.5f, font, _aa);
         }

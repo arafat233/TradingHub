@@ -67,6 +67,11 @@ public sealed class FootprintEditorWindow : Window
             _layout.ShowPoc = c.ShowPoc;
             _layout.ShowImbalances = c.ShowImbalances;
             _layout.ImbalanceRatio = c.ImbalanceRatio;
+            _layout.ShowStackedImbalances = c.ShowStackedImbalances;
+            _layout.StackedImbalanceLength = c.StackedImbalanceLength;
+            _layout.ShowSummary = c.ShowSummary;
+            _layout.AutoDeclutter = c.AutoDeclutter;
+            _layout.HideNumbersBelow = c.HideNumbersBelow;
             _layout.StrongDeltaRatio = c.StrongDeltaRatio;
             _layout.HighlightMinVolumeFraction = c.HighlightMinVolumeFraction;
             _layout.ProportionPerCandle = c.ProportionPerCandle;

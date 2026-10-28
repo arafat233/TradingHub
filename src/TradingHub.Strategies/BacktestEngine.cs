@@ -88,7 +88,7 @@ public sealed class BacktestEngine : IStrategyHost
             if (_s.UseBook && _data.DepthRoot != null)
             {
                 _depth = new DepthCursor(_data.DepthRoot, _inst.FeedId, _inst.Symbol);
-                if (_strategy.WantsIcebergs) _icebergs = new IcebergDetector { Keep = TimeSpan.FromHours(4) };
+                if (_strategy.WantsIcebergs) _icebergs = new IcebergDetector { Keep = TimeSpan.FromHours(4), RatioRule = true, MinRefills = 0 };
                 Log("Using the recorded order book");
             }
 

@@ -181,6 +181,101 @@ public class HeatmapTests
         d.Update(data.DepthHistory, data.Trades, 0); // nothing new: it does not count the same trades twice
         Assert.Single(d.Events);
     }
+
+    [Fact]
+    public void A_level_that_shows_the_same_size_again_after_being_cleared_is_an_iceberg_with_that_peak()
+    {
+        var t = DateTime.UtcNow;
+        long ask = Es.ToTicks(5000.25m);
+        void Feed(IcebergDetector d, params decimal[] shown)
+        {
+            // each trade clears what was displayed; the next book shows `shown` again
+            for (int i = 0; i < shown.Length; i++)
+                d.OnTrade(t.AddSeconds(i), ask, shown[i], true, Book(t, 4999.75m, 5000.25m, (5000.25m, shown[i])), minVolume: 1000);
+        }
+
+        var same = new IcebergDetector { MinRefills = 3 };
+        Feed(same, 5, 5, 5, 5);                         // too small for the volume minimum: only the refill rule can flag it
+        var ev = Assert.Single(same.Events);
+        Assert.Equal(5, ev.Peak);
+        Assert.Equal(3, ev.Refills);
+
+        var off = new IcebergDetector { MinRefills = 0 };
+        Feed(off, 5, 5, 5, 5);
+        Assert.Empty(off.Events);
+
+        var varied = new IcebergDetector { MinRefills = 3 };             // a different size each time is not a repeating peak
+        Feed(varied, 5, 12, 3, 20);
+        Assert.Empty(varied.Events);
+    }
+
+    [Fact]
+    public void A_level_found_by_both_detectors_is_counted_once_as_the_order_level_one()
+    {
+        var t = DateTime.UtcNow;
+        long ask = Es.ToTicks(5000.25m);
+        IcebergEvent Ev(long ticks, int startSec, int endSec, bool a = true) =>
+            new() { Start = t.AddSeconds(startSec), Last = t.AddSeconds(endSec), Ticks = ticks, Ask = a, Volume = 50 };
+        var orders = new List<IcebergEvent> { Ev(ask, 0, 20) };
+        var tape = new List<IcebergEvent>
+        {
+            Ev(ask, 5, 25),                    // same level, overlapping: the same iceberg
+            Ev(ask + 1, 5, 25),                // another price
+            Ev(ask, 5, 25, a: false),          // the other side
+            Ev(ask, 300, 320),                 // much later
+        };
+
+        var all = IcebergEvents.Merge(tape, orders).ToList();
+        Assert.Equal(4, all.Count);
+        Assert.Same(orders[0], all[0]);
+        Assert.DoesNotContain(tape[0], all);
+    }
+
+    [Fact]
+    public void An_iceberg_that_traded_more_than_a_whole_peak_without_refilling_is_marked_over_and_stops_predicting()
+    {
+        var t = DateTime.UtcNow;
+        long ask = Es.ToTicks(5000.25m);
+        var d = new IcebergDetector { MinRefills = 3 };
+        for (int i = 0; i < 4; i++)
+            d.OnTrade(t.AddSeconds(i), ask, 5, true, Book(t, 4999.75m, 5000.25m, (5000.25m, 5)), minVolume: 1000);
+        var ev = Assert.Single(d.Events);
+        Assert.True(ev.Active);
+
+        // 20 lots hit a level that shows 5 and nothing refills it: more than a whole peak traded since the last refill
+        d.OnTrade(t.AddSeconds(5), ask, 20, true, Book(t, 4999.75m, 5000.25m, (5000.25m, 5)), minVolume: 1000);
+        Assert.False(ev.Active);
+        Assert.Equal(0, ev.PredictedHidden);
+    }
+
+    [Fact]
+    public void Hidden_volume_is_predicted_from_the_icebergs_with_the_same_peak_that_finished_before()
+    {
+        var t = DateTime.UtcNow;
+        long ask = Es.ToTicks(5000.25m);
+        var d = new IcebergDetector { MinRefills = 3 };
+        void Run(int fills, int run)
+        {
+            for (int i = 0; i < fills; i++)
+            {
+                var at = t.AddSeconds(run * 100 + i);
+                d.OnTrade(at, ask, 5, true, Book(at, 4999.75m, 5000.25m, (5000.25m, 5)), minVolume: 1000);
+            }
+        }
+
+        Run(4, 0);                                       // the first one has nothing to learn from
+        Assert.Equal(0, Assert.Single(d.Events).PredictedHidden);
+        for (int r = 1; r <= 5; r++) Run(10, r);         // five that went on to 50 lots
+        Run(4, 6);                                       // a new one, 20 traded so far
+        var live = d.Events[^1];
+        Assert.Equal(5, live.Peak);
+        Assert.Equal(30, live.PredictedHidden);          // the middle of the totals above 20 (all 50), minus 20
+
+        var model = new HiddenVolumeModel();
+        for (int i = 0; i < HiddenVolumeModel.MinSamples - 1; i++) model.Learn(5, 50);
+        Assert.Equal(0, model.Remaining(5, 20));         // too few examples: no guess
+        Assert.Equal(0, model.Remaining(100, 20));       // nothing known about that peak size
+    }
 }
 
 public class HeatmapPanelTests

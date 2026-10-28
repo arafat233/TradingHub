@@ -44,6 +44,9 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
     /// <summary>Big orders added, pulled, flashed and eaten, from feeds that publish individual orders (Level 3); empty on the others.</summary>
     public OrderFlowDetector OrderFlow { get; } = new();
 
+    /// <summary>Icebergs seen in the real order events (empty on feeds that do not send them).</summary>
+    public OrderIcebergDetector OrderIcebergs { get; } = new() { Keep = TimeSpan.FromHours(4) };
+
     /// <summary>The liquidations of the last 24 hours (feeds that publish them), oldest first.</summary>
     public List<Liquidation> Liquidations { get; } = new();
 
@@ -502,6 +505,7 @@ public sealed class InstrumentData : IMarketDataSink, IDisposable
             var batch = new List<OrderEvent>();
             while (_orderEvents.TryDequeue(out var oe)) batch.Add(oe);
             OrderFlow.Apply(batch);
+            foreach (var oe in batch) OrderIcebergs.OnEvent(oe);
         }
 
         OrderFlow.Resolve(Trades, Feed.Now);

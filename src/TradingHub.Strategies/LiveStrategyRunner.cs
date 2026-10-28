@@ -485,7 +485,7 @@ public sealed class LiveStrategyRunner : IStrategyHost, IDisposable
         _builder.Append(t, p, store.GetVolume(i), store.GetSide(i));
         if (_warmup) return;
         Trail(store.GetPrice(i));
-        if (_strategy.WantsIcebergs) (_icebergs ??= new IcebergDetector { Keep = TimeSpan.FromHours(4) }).OnTrade(store.GetTime(i), store.GetPriceTicks(i), store.GetVolume(i), store.GetSide(i) == TradeSide.Buy, BookNow);
+        if (_strategy.WantsIcebergs) (_icebergs ??= new IcebergDetector { Keep = TimeSpan.FromHours(4), RatioRule = true, MinRefills = 0 }).OnTrade(store.GetTime(i), store.GetPriceTicks(i), store.GetVolume(i), store.GetSide(i) == TradeSide.Buy, BookNow);
         if (_strategy.WantsTicks) _strategy.InternalTick(store.Get(i));
     }
 
