@@ -6,7 +6,7 @@ namespace TradingHub.App.Lab;
 /// <summary>A lab report (Markdown) with the verdict on the strategy.</summary>
 public sealed record LabReport(string Path, string Title, string? Strategy, string Verdict, DateTime Created);
 
-/// <summary>Reports in ~/Documents/Trading Hub/Estrategias/Reportes (Claude writes them, the app reads them).</summary>
+/// <summary>Reports in ~/Documents/Trading Hub/Strategies/Reports (Claude writes them, the app reads them).</summary>
 internal static class ReportStore
 {
     private static string IndexPath => System.IO.Path.Combine(AppPaths.Reports, "index.json");

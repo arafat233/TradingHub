@@ -5,7 +5,7 @@ using TradingHub.Scripting;
 namespace TradingHub.App.Services;
 
 /// <summary>
-/// The user's own indicators: it compiles the .cs files in ~/Documents/Trading Hub/Indicadores on startup and
+/// The user's own indicators: it compiles the .cs files in ~/Documents/Trading Hub/Indicators on startup and
 /// every time they change (hot reload), and adds them to the catalog.
 /// </summary>
 public sealed class UserScripts : IDisposable

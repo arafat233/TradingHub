@@ -19,7 +19,7 @@ public sealed class StrategyFile
     public Strategy Create() => (Strategy)Activator.CreateInstance(Type ?? throw new InvalidOperationException("The strategy is not compiled."))!;
 }
 
-/// <summary>The user's strategies: files in ~/Documents/Trading Hub/Estrategias, compiled with Roslyn.</summary>
+/// <summary>The user's strategies: files in ~/Documents/Trading Hub/Strategies, compiled with Roslyn.</summary>
 public sealed class StrategyCatalog
 {
     private readonly ScriptCompiler _compiler = new();

@@ -29,19 +29,40 @@ public static class AppPaths
     /// Folder visible for the user's own indicators (.cs). TRADINGHUB_INDICATORS_DIR changes it (tests); with
     /// TRADINGHUB_DATA_DIR and without it, one inside that folder: a test never writes in the real folder.
     /// </summary>
-    public static string UserIndicators { get; } = TestFolder("TRADINGHUB_INDICATORS_DIR", "Indicadores") ?? Path.Combine(TradingHub.Common.Product.Documents, "Indicadores");
+    public static string UserIndicators { get; } = TestFolder("TRADINGHUB_INDICATORS_DIR", "Indicators") ?? Translated(TradingHub.Common.Product.Documents, "Indicators", "Indicadores");
 
     /// <summary>Folder visible for the strategies (.cs). TRADINGHUB_STRATEGIES_DIR changes it (tests), same as the indicators.</summary>
-    public static string Strategies { get; } = TestFolder("TRADINGHUB_STRATEGIES_DIR", "Estrategias") ?? Path.Combine(TradingHub.Common.Product.Documents, "Estrategias");
+    public static string Strategies { get; } = TestFolder("TRADINGHUB_STRATEGIES_DIR", "Strategies") ?? Translated(TradingHub.Common.Product.Documents, "Strategies", "Estrategias");
 
     private static string? TestFolder(string variable, string name) =>
         Environment.GetEnvironmentVariable(variable) is { Length: > 0 } dir ? dir
         : Environment.GetEnvironmentVariable("TRADINGHUB_DATA_DIR") is { Length: > 0 } data ? Path.Combine(data, name)
         : null;
 
+    /// <summary>
+    /// These folders kept their Spanish names when the codebase was translated, so the docs sent people to
+    /// «Indicators» while the app only ever read «Indicadores»: a file dropped there did nothing and said nothing.
+    /// The English name is the one from now on, and a folder still under the old name is renamed once so that
+    /// nothing the user wrote is lost. If both exist the old one is left alone (a rename would have to merge) and
+    /// only the new one is read, which is also what someone who just created it by hand expects.
+    /// </summary>
+    private static string Translated(string root, string name, string legacy)
+    {
+        string path = Path.Combine(root, name), old = Path.Combine(root, legacy);
+        try
+        {
+            if (!Directory.Exists(path) && Directory.Exists(old)) Directory.Move(old, path);
+        }
+        catch (Exception)
+        {
+            return Directory.Exists(old) ? old : path;   // locked or read-only: keep using the old one
+        }
+
+        return path;
+    }
 
     /// <summary>Lab reports (Markdown), inside the strategies folder.</summary>
-    public static string Reports => Path.Combine(Strategies, "Reportes");
+    public static string Reports { get; } = Translated(Strategies, "Reports", "Reportes");
 }
 
 /// <summary>An indicator available to add.</summary>
